@@ -202,10 +202,13 @@ async def test_capture_packets_round_trips(fake_robot: tuple[FakeRobot, int]) ->
     assert (packets["device_id"], packets["stamp"], packets["request_stamp"]) == (DEVICE_ID, STAMP, STAMP + 1)
     header, request = codec.parse(TOKEN, bytes.fromhex(packets["request_hex"]))
     assert request == packets["request"] == robot.requests[0]
-    assert request["method"] == "miIO.info"
+    assert request["method"] == "get_properties"
+    assert request["params"] == [{"did": "3.1", "siid": 3, "piid": 1}]
     assert (header.device_id, header.stamp) == (DEVICE_ID, STAMP + 1)
     header, reply = codec.parse(TOKEN, bytes.fromhex(packets["reply_hex"]))
+    assert reply == packets["reply"]
     assert reply["id"] == request["id"]
+    assert TOKEN_HEX not in json.dumps(packets)
     assert header.stamp == packets["reply_stamp"]
 
 

@@ -227,9 +227,13 @@ class _Udp(asyncio.DatagramProtocol):
 
 
 async def capture_packets(host: str, token_hex: str, *, port: int = 54321) -> dict[str, Any]:
-    """One real miIO.info request and its reply as hex, on a socket of its own."""
+    """One real battery_level read and its reply as hex, on a socket of its own.
+
+    The payloads hold nothing identifying, so the packets can become a public fixture; the token can't.
+    """
     token = bytes.fromhex(token_hex)
-    payload = {"id": secrets.randbelow(9000) + 1, "method": "miIO.info", "params": []}
+    params = [{"did": "3.1", "siid": 3, "piid": 1}]
+    payload = {"id": secrets.randbelow(9000) + 1, "method": "get_properties", "params": params}
     transport, udp = await asyncio.get_running_loop().create_datagram_endpoint(_Udp, remote_addr=(host, port))
     try:
         async with asyncio.timeout(PACKET_TIMEOUT):
@@ -252,8 +256,10 @@ async def capture_packets(host: str, token_hex: str, *, port: int = 54321) -> di
         "request_stamp": session.stamp + 1,
         "reply_stamp": header.stamp,
         "request": payload,
+        "reply": decoded,
         "request_hex": request.hex(),
         "reply_hex": reply.hex(),
+        "note": "encrypted with the robot's token, which is only in device.json and is never committed",
     }
 
 
