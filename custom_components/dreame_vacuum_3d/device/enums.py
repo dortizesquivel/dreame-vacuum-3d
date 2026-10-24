@@ -410,3 +410,30 @@ class MopWashLevel(IntEnum):
     DAILY = 1
     DEEP = 2
 
+
+class CleanWaterTankStatus(IntEnum):
+    """Dock clean-water tank."""
+
+    UNKNOWN = -1
+    INSTALLED = 0
+    NOT_INSTALLED = 1
+    LOW_WATER = 2
+    CHECKING = 3
+
+
+class DirtyWaterTankStatus(IntEnum):
+    """Dock dirty-water tank."""
+
+    UNKNOWN = -1
+    INSTALLED = 0
+    NOT_INSTALLED_OR_FULL = 1
+
+
+class DustBagStatus(IntEnum):
+    """Dock dust bag."""
+
+    UNKNOWN = -1
+    INSTALLED = 0
+    NOT_INSTALLED = 1
+    CHECK = 2
+

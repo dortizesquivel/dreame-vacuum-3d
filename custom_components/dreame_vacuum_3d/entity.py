@@ -26,7 +26,7 @@ class DreameEntity(CoordinatorEntity[DreameDataUpdateCoordinator]):
         self.entity_description = description
         did = str(coordinator.config_entry.data[CONF_DID])
         self._attr_unique_id = f"{did}_{description.key}"
-        self._attr_translation_key = description.key
+        self._attr_translation_key = description.translation_key or description.key
         self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, did)})
 
     @property

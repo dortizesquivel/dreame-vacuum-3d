@@ -109,6 +109,233 @@
           }
         }
       }
+    },
+    "sensor": {
+      "state": {
+        "name": "Estado",
+        "state": {
+          "sweeping": "Aspirando",
+          "idle": "Inactivo",
+          "paused": "En pausa",
+          "error": "Error",
+          "returning": "Volviendo",
+          "charging": "Cargando",
+          "mopping": "Fregando",
+          "drying": "Secando",
+          "washing": "Lavando",
+          "returning_to_wash": "Returning To Wash",
+          "building": "Building",
+          "sweeping_and_mopping": "Aspirando y fregando",
+          "charging_completed": "Charging Completed",
+          "upgrading": "Upgrading",
+          "clean_summon": "Clean Summon",
+          "station_reset": "Station Reset",
+          "returning_install_mop": "Returning Install Mop",
+          "returning_remove_mop": "Returning Remove Mop",
+          "water_check": "Water Check",
+          "clean_add_water": "Clean Add Water",
+          "washing_paused": "Washing Paused",
+          "auto_emptying": "Auto Emptying",
+          "remote_control": "Remote Control",
+          "smart_charging": "Smart Charging",
+          "second_cleaning": "Second Cleaning",
+          "human_following": "Human Following",
+          "spot_cleaning": "Limpieza puntual",
+          "returning_auto_empty": "Returning Auto Empty",
+          "waiting_for_task": "Waiting For Task",
+          "station_cleaning": "Station Cleaning",
+          "returning_to_drain": "Returning To Drain",
+          "draining": "Draining",
+          "auto_water_draining": "Auto Water Draining",
+          "emptying": "Emptying",
+          "dust_bag_drying": "Dust Bag Drying",
+          "dust_bag_drying_paused": "Dust Bag Drying Paused",
+          "heading_to_extra_cleaning": "Heading To Extra Cleaning",
+          "extra_cleaning": "Extra Cleaning",
+          "finding_pet_paused": "Finding Pet Paused",
+          "finding_pet": "Finding Pet",
+          "shortcut": "Shortcut",
+          "monitoring": "Monitoring",
+          "monitoring_paused": "Monitoring Paused",
+          "initial_deep_cleaning": "Initial Deep Cleaning",
+          "initial_deep_cleaning_paused": "Initial Deep Cleaning Paused",
+          "sanitizing": "Sanitizing",
+          "sanitizing_with_dry": "Sanitizing With Dry",
+          "changing_mop": "Changing Mop",
+          "changing_mop_paused": "Changing Mop Paused",
+          "floor_maintaining": "Floor Maintaining",
+          "floor_maintaining_paused": "Floor Maintaining Paused",
+          "remote_pickup": "Remote Pickup",
+          "arranging_items": "Arranging Items",
+          "pet_guarding": "Pet Guarding",
+          "pet_guarding_paused": "Pet Guarding Paused",
+          "installing_mop": "Installing Mop",
+          "uninstalling_mop": "Uninstalling Mop",
+          "intelligent_recharging": "Intelligent Recharging",
+          "assisted_cleaning": "Assisted Cleaning",
+          "entering_dock": "Entering Dock",
+          "leaving_dock": "Leaving Dock",
+          "navigating_to_climber": "Navigating To Climber",
+          "docking_to_climber": "Docking To Climber",
+          "climber_docked": "Climber Docked",
+          "climber_navigating": "Climber Navigating",
+          "climbing_stairs": "Climbing Stairs",
+          "climbing_stairs_completed": "Climbing Stairs Completed",
+          "climber_at_dock": "Climber At Dock",
+          "climber_leaving_dock": "Climber Leaving Dock"
+        }
+      },
+      "status": {
+        "name": "Estado operativo",
+        "state": {
+          "idle": "Inactivo",
+          "paused": "En pausa",
+          "cleaning": "Limpiando",
+          "back_home": "Volviendo a la base",
+          "partial_cleaning": "Partial Cleaning",
+          "follow_wall": "Follow Wall",
+          "charging": "Cargando",
+          "ota": "Ota",
+          "fct": "Fct",
+          "wifi_set": "Wifi Set",
+          "power_off": "Power Off",
+          "factory": "Factory",
+          "error": "Error",
+          "remote_control": "Remote Control",
+          "sleeping": "Durmiendo",
+          "self_repair": "Self Repair",
+          "factory_funcion_test": "Factory Funcion Test",
+          "standby": "Standby",
+          "segment_cleaning": "Limpieza por habitaciones",
+          "zone_cleaning": "Limpieza por zona",
+          "spot_cleaning": "Limpieza puntual",
+          "fast_mapping": "Fast Mapping",
+          "cruising_path": "Cruising Path",
+          "cruising_point": "Cruising Point",
+          "summon_clean": "Summon Clean",
+          "shortcut": "Shortcut",
+          "person_follow": "Person Follow",
+          "pet_guarding": "Pet Guarding",
+          "auto_arrangement": "Auto Arrangement",
+          "smart_arrangement": "Smart Arrangement",
+          "zoned_arrangement": "Zoned Arrangement",
+          "water_check": "Water Check"
+        }
+      },
+      "error": {
+        "name": "Error",
+        "state": {
+          "no_error": "Sin error"
+        }
+      },
+      "battery_level": {
+        "name": "Batería"
+      },
+      "cleaning_time": {
+        "name": "Tiempo de limpieza"
+      },
+      "cleaned_area": {
+        "name": "Área limpiada"
+      },
+      "total_cleaning_time": {
+        "name": "Tiempo total de limpieza"
+      },
+      "total_cleaned_area": {
+        "name": "Área total limpiada"
+      },
+      "cleaning_count": {
+        "name": "Recuento de limpiezas"
+      },
+      "main_brush_left": {
+        "name": "Cepillo principal"
+      },
+      "main_brush_time_left": {
+        "name": "Tiempo restante del cepillo principal"
+      },
+      "side_brush_left": {
+        "name": "Cepillo lateral"
+      },
+      "side_brush_time_left": {
+        "name": "Tiempo restante del cepillo lateral"
+      },
+      "filter_left": {
+        "name": "Filtro"
+      },
+      "filter_time_left": {
+        "name": "Tiempo restante del filtro"
+      },
+      "sensor_dirty_left": {
+        "name": "Sensores"
+      },
+      "sensor_dirty_time_left": {
+        "name": "Tiempo restante de sensores"
+      },
+      "mop_pad_left": {
+        "name": "Mopa"
+      },
+      "mop_pad_time_left": {
+        "name": "Tiempo restante de la mopa"
+      },
+      "silver_ion_left": {
+        "name": "Ion de plata"
+      },
+      "silver_ion_time_left": {
+        "name": "Tiempo restante del ion de plata"
+      },
+      "detergent_left": {
+        "name": "Detergente"
+      },
+      "detergent_time_left": {
+        "name": "Tiempo restante del detergente"
+      },
+      "clean_water_tank_status": {
+        "name": "Depósito de agua limpia",
+        "state": {
+          "installed": "Instalado",
+          "not_installed": "No instalado",
+          "low_water": "Agua baja",
+          "checking": "Comprobando"
+        }
+      },
+      "dirty_water_tank_status": {
+        "name": "Depósito de agua sucia",
+        "state": {
+          "installed": "Instalado",
+          "not_installed_or_full": "No instalado o lleno"
+        }
+      },
+      "dust_bag_status": {
+        "name": "Bolsa de polvo",
+        "state": {
+          "installed": "Instalado",
+          "not_installed": "No instalado",
+          "check": "Revisar"
+        }
+      },
+      "channel": {
+        "name": "Canal de conexión",
+        "state": {
+          "local": "Local",
+          "cloud": "Nube"
+        }
+      }
+    },
+    "binary_sensor": {
+      "charging": {
+        "name": "Cargando"
+      },
+      "mop_attached": {
+        "name": "Mopa puesta"
+      },
+      "clean_water_problem": {
+        "name": "Problema de agua limpia"
+      },
+      "dirty_water_problem": {
+        "name": "Problema de agua sucia"
+      },
+      "dust_bag_problem": {
+        "name": "Problema de bolsa de polvo"
+      }
     }
   }
 }
