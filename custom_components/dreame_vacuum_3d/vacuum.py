@@ -12,11 +12,35 @@ from homeassistant.components.vacuum import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+import voluptuous as vol
 
 from .coordinator import DreameDataUpdateCoordinator
 from .device.enums import DreameVacuumState, SuctionLevel, parse_enum
 from .entity import DreameEntity
+
+# Portions of service schemas derived from Tasshack/dreame-vacuum (MIT), see NOTICE.
+_OPTIONAL_INT_OR_LIST = vol.Any(vol.Coerce(int), [vol.Coerce(int)])
+_CONSUMABLES = (
+    "main_brush",
+    "side_brush",
+    "filter",
+    "tank_filter",
+    "sensor",
+    "mop_pad",
+    "silver_ion",
+    "detergent",
+    "squeegee",
+    "onboard_dirty_water_tank",
+    "dirty_water_channel",
+    "deodorizer",
+    "wheel",
+    "scale_inhibitor",
+    "fluffing_roller",
+    "roller_mop_filter",
+    "water_outlet_filter",
+)
 
 # Portions of the state map derived from Tasshack/dreame-vacuum (MIT), see NOTICE.
 _STATE_TO_ACTIVITY: dict[DreameVacuumState, VacuumActivity] = {
@@ -89,6 +113,13 @@ _FAN_SPEEDS = tuple(level.name.lower() for level in SuctionLevel if level is not
 VACUUM_DESCRIPTION = StateVacuumEntityDescription(key="vacuum", name=None)
 
 
+def _optional_cleaning_level(value: object) -> int | list[int] | None:
+    """Treat missing / empty Tasshack defaults as unset (device supplies defaults)."""
+    if value is None or value == "":
+        return None
+    return value  # type: ignore[return-value]
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -96,9 +127,77 @@ async def async_setup_entry(
 ) -> None:
     """Set up the vacuum entity when state is available on the device."""
     coordinator: DreameDataUpdateCoordinator = entry.runtime_data.coordinator
+    platform = entity_platform.async_get_current_platform()
+    _register_entity_services(platform)
     if "state" not in coordinator.device.available:
         return
     async_add_entities([DreameVacuumEntity(coordinator, VACUUM_DESCRIPTION)])
+
+
+def _register_entity_services(platform: entity_platform.EntityPlatform) -> None:
+    """Register Tasshack-compatible entity services under this integration domain."""
+    platform.async_register_entity_service(
+        "vacuum_clean_segment",
+        {
+            vol.Required("segments"): vol.Any(vol.Coerce(int), [vol.Coerce(int)]),
+            vol.Optional("repeats"): _OPTIONAL_INT_OR_LIST,
+            vol.Optional("suction_level"): _OPTIONAL_INT_OR_LIST,
+            vol.Optional("water_volume"): _OPTIONAL_INT_OR_LIST,
+        },
+        "async_clean_segment",
+    )
+    platform.async_register_entity_service(
+        "vacuum_clean_zone",
+        {
+            vol.Required("zone"): vol.Any(
+                [vol.ExactSequence([vol.Coerce(int)] * 4)],
+                vol.ExactSequence([vol.Coerce(int)] * 4),
+            ),
+            vol.Optional("repeats"): _OPTIONAL_INT_OR_LIST,
+            vol.Optional("suction_level"): _OPTIONAL_INT_OR_LIST,
+            vol.Optional("water_volume"): _OPTIONAL_INT_OR_LIST,
+        },
+        "async_clean_zone",
+    )
+    platform.async_register_entity_service(
+        "vacuum_clean_spot",
+        {
+            vol.Required("points"): vol.Any(
+                [vol.ExactSequence([vol.Coerce(int)] * 2)],
+                vol.ExactSequence([vol.Coerce(int)] * 2),
+            ),
+            vol.Optional("repeats"): _OPTIONAL_INT_OR_LIST,
+            vol.Optional("suction_level"): _OPTIONAL_INT_OR_LIST,
+            vol.Optional("water_volume"): _OPTIONAL_INT_OR_LIST,
+        },
+        "async_clean_spot_points",
+    )
+    platform.async_register_entity_service(
+        "vacuum_goto",
+        {
+            vol.Required("x"): vol.Coerce(int),
+            vol.Required("y"): vol.Coerce(int),
+        },
+        "async_goto",
+    )
+    platform.async_register_entity_service(
+        "vacuum_remote_control_move_step",
+        {
+            vol.Required("rotation"): vol.All(vol.Coerce(int), vol.Range(min=-360, max=360)),
+            vol.Required("velocity"): vol.All(vol.Coerce(int), vol.Range(min=-600, max=600)),
+        },
+        "async_remote_control_move_step",
+    )
+    platform.async_register_entity_service(
+        "vacuum_select_map",
+        {vol.Required("map_id"): cv.positive_int},
+        "async_select_map",
+    )
+    platform.async_register_entity_service(
+        "vacuum_reset_consumable",
+        {vol.Required("consumable"): vol.In(_CONSUMABLES)},
+        "async_reset_consumable",
+    )
 
 
 class DreameVacuumEntity(DreameEntity, StateVacuumEntity):
@@ -176,3 +275,82 @@ class DreameVacuumEntity(DreameEntity, StateVacuumEntity):
         self._sync_from_device()
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
+
+    async def async_clean_segment(
+        self,
+        segments: int | list[int],
+        repeats: int | list[int] = 1,
+        suction_level: int | list[int] | str | None = None,
+        water_volume: int | list[int] | str | None = None,
+    ) -> None:
+        """Clean rooms by segment id (Node-RED: segments: 6)."""
+        await self.device.clean_segment(
+            segments,
+            repeats=repeats if repeats not in (None, "") else 1,
+            **_cleaning_kwargs(suction_level, water_volume),
+        )
+        await self.coordinator.async_request_refresh()
+
+    async def async_clean_zone(
+        self,
+        zone: list[int] | list[list[int]],
+        repeats: int | list[int] = 1,
+        suction_level: int | list[int] | str | None = None,
+        water_volume: int | list[int] | str | None = None,
+    ) -> None:
+        """Clean one or more rectangles."""
+        await self.device.clean_zone(
+            zone,
+            repeats=repeats if repeats not in (None, "") else 1,
+            **_cleaning_kwargs(suction_level, water_volume),
+        )
+        await self.coordinator.async_request_refresh()
+
+    async def async_clean_spot_points(
+        self,
+        points: list[int] | list[list[int]],
+        repeats: int | list[int] = 1,
+        suction_level: int | list[int] | str | None = None,
+        water_volume: int | list[int] | str | None = None,
+    ) -> None:
+        """Clean around map points (entity service; distinct from VacuumEntity.clean_spot)."""
+        await self.device.clean_spot(
+            points,
+            repeats=repeats if repeats not in (None, "") else 1,
+            **_cleaning_kwargs(suction_level, water_volume),
+        )
+        await self.coordinator.async_request_refresh()
+
+    async def async_goto(self, x: int, y: int) -> None:
+        """Drive to a map coordinate."""
+        await self.device.goto(x, y)
+        await self.coordinator.async_request_refresh()
+
+    async def async_remote_control_move_step(self, rotation: int, velocity: int) -> None:
+        """Nudge the robot while remote-controlling."""
+        await self.device.remote_control_move_step(rotation=rotation, velocity=velocity)
+
+    async def async_select_map(self, map_id: int) -> None:
+        """Select a multi-floor map."""
+        await self.device.select_map(map_id)
+        await self.coordinator.async_request_refresh()
+
+    async def async_reset_consumable(self, consumable: str) -> None:
+        """Reset a consumable life counter."""
+        await self.device.reset_consumable(consumable)
+        await self.coordinator.async_request_refresh()
+
+
+def _cleaning_kwargs(
+    suction_level: int | list[int] | str | None,
+    water_volume: int | list[int] | str | None,
+) -> dict[str, int | list[int]]:
+    """Map optional Tasshack service fields onto device kwargs."""
+    out: dict[str, int | list[int]] = {}
+    suction = _optional_cleaning_level(suction_level)
+    water = _optional_cleaning_level(water_volume)
+    if suction is not None:
+        out["suction"] = suction
+    if water is not None:
+        out["water"] = water
+    return out
