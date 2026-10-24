@@ -1,0 +1,25 @@
+{
+  "_comment": "Synthetic identity (two-factor) replies shaped like Xiaomi's; no real account data.",
+  "list_phone": {"code": 0, "flag": 4, "options": [4], "result": "ok"},
+  "list_email": {"code": 0, "flag": 8, "options": [8], "result": "ok"},
+  "list_flag_only": {"code": 0, "flag": 8, "options": [], "result": "ok"},
+  "verify_phone": {"code": 0, "maskedPhone": "+49*****1234", "result": "ok"},
+  "verify_email": {"code": 0, "maskedEmail": "u***@example.com", "result": "ok"},
+  "sent": {"code": 0, "result": "ok"},
+  "too_frequent": {"code": 70021, "description": "Too frequent, try again in 60 seconds", "result": "error"},
+  "limit": {"code": 70022, "description": "Daily limit", "result": "error"},
+  "send_error": {"code": 10017, "description": "Unknown error", "result": "error"},
+  "wrong_code": {"code": 70014, "description": "Wrong verification code", "result": "error"},
+  "verified": {
+    "code": 0,
+    "result": "ok",
+    "location": "https://account.xiaomi.com/identity/finish?sid=xiaomiio&context=c3ludGhldGljLWNvbnRleHQ"
+  },
+  "verified_without_location": {"code": 0, "result": "ok"},
+  "result_check": {
+    "code": 0,
+    "location": "https://account.xiaomi.com/pass/serviceLoginAuth2/end?d=synthetic-device&nonce=synthetic-nonce"
+  },
+  "pragma": {"nonce": 1234567890, "ssecurity": "dGVzdC1zc2VjdXJpdHkxNg==", "psecurity": "c3ludGhldGljLXBzZWN1cml0eQ=="},
+  "sts_location": "https://sts.api.io.mi.com/sts?d=synthetic-device&nonce=synthetic-nonce&clientSign=c3ludGhldGlj"
+}

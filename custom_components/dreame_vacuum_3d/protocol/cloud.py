@@ -1,4 +1,4 @@
-"""Async Xiaomi cloud client: account login and the RC4-encrypted app API.
+"""Async Xiaomi cloud client: account login (captcha, two-factor) and the RC4-encrypted app API.
 
 Portions derived from Tasshack/dreame-vacuum (MIT), see NOTICE.
 """
@@ -12,6 +12,7 @@ from http.cookies import SimpleCookie
 import json
 import locale
 import logging
+import re
 import secrets
 import string
 import time
@@ -37,6 +38,9 @@ _API_HEADERS = {
 }
 _AUTH_ERROR_CODES = (2, 3)
 _AUTH_ERROR_MESSAGES = ("auth err", "invalid signature", "SERVICETOKEN_EXPIRED")
+_AUTH_START = "fe/service/identity/authStart"
+_IDENTITY_URL = f"{ACCOUNT_URL}/identity"
+_STS_URL = re.compile(r'(https://[a-zA-Z0-9-]*\.?sts\.api\.io\.mi\.com/sts[^"\'\s]*)')
 
 
 @dataclass
@@ -105,6 +109,19 @@ def _absolute(url: str) -> str:
     return url if url.startswith("http") else ACCOUNT_URL + url
 
 
+def _check_sent(data: dict[str, Any]) -> None:
+    """Raise the error key matching a refused verification code request."""
+    code = data.get("code")
+    if code == 0:
+        return
+    text = f"{data.get('description') or ''} {data.get('message') or ''}".lower()
+    if "frequent" in text or "seconds" in text:
+        raise CloudAuthError("2fa_cooldown_active")
+    if code == 70022 or "limit" in text:
+        raise CloudAuthError("2fa_limit_reached")
+    raise CloudAuthError("2fa_send_failed")
+
+
 def _timezone() -> str:
     offset = -(time.altzone if time.localtime().tm_isdst > 0 else time.timezone) // 60
     return f"GMT{'+' if offset >= 0 else '-'}{abs(offset) // 60:02d}:{abs(offset) % 60:02d}"
@@ -128,6 +145,7 @@ class XiaomiCloud:
         self._service_token = auth.service_token if auth else None
         self._pass_token = auth.pass_token if auth else None
         self._captcha_ick: str | None = None
+        self._verification_url: str | None = None
         self._user_agent = f"Android-7.1.1-1.0.0-ONEPLUS A3010-136-{self._client_id} APP/xiaomi.smarthome APPV/62830"
         self._locale = locale.getlocale()[0] or "en_US"
 
@@ -159,7 +177,7 @@ class XiaomiCloud:
                 location = await self._login_with_password(username, password, sign, captcha)
             await self._fetch_service_token(location)
         except CloudError:
-            self._ssecurity = None
+            self._ssecurity = self._service_token = None
             raise
         return self._require_auth()
 
@@ -172,6 +190,136 @@ class XiaomiCloud:
         except CloudAuthError:
             return False
         return True
+
+    async def send_2fa_code(self, verification_url: str) -> str:
+        """Send a verification code for a CloudLoginRequired; return where it went, masked.
+
+        Raises CloudAuthError("2fa_cooldown_active"), ("2fa_limit_reached") or ("2fa_send_failed").
+        """
+        if _AUTH_START not in verification_url:
+            raise CloudAuthError("2fa_send_failed")
+        self._verification_url = verification_url
+        await self._http("GET", verification_url)
+        context = URL(verification_url).query.get("context", "")
+        kind, flag = await self._identity_options(context)
+        if not self._cookie("identity_session"):
+            raise CloudAuthError("2fa_send_failed")
+        params = {"sid": SID, "context": context, "mask": "0", "_locale": self._locale}
+        verify = (
+            (
+                await self._http(
+                    "GET", f"{_IDENTITY_URL}/auth/verify{kind}", params={"_flag": flag, "_json": "true", **params}
+                )
+            )
+            .ok()
+            .json()
+        )
+        _check_sent(verify)
+        sent = await self._http(
+            "POST",
+            f"{_IDENTITY_URL}/auth/send{kind}Ticket",
+            params={"_dc": str(int(time.time() * 1000)), **params},
+            data={"retry": "0", "icode": "", "_json": "true", "ick": self._cookie("ick") or ""},
+        )
+        _check_sent(sent.ok().json())
+        return verify.get("maskedPhone") or verify.get("maskedEmail") or "*****"
+
+    async def verify_2fa_code(self, code: str) -> CloudAuth:
+        """Finish the login with the code send_2fa_code sent; CloudAuthError("2fa_failed") if refused."""
+        url = self._verification_url
+        context = URL(url).query.get("context") if url else None
+        if not code or not context:
+            raise CloudAuthError("2fa_failed")
+        kind, flag = await self._identity_options(context)
+        if not self._cookie("identity_session"):
+            raise CloudAuthError("2fa_failed")
+        reply = await self._http(
+            "POST",
+            f"{_IDENTITY_URL}/auth/verify{kind}",
+            params={
+                "_flag": flag,
+                "_json": "true",
+                "sid": SID,
+                "context": context,
+                "mask": "0",
+                "_locale": self._locale,
+            },
+            data={"_flag": flag, "ticket": code, "trust": "false", "_json": "true", "ick": self._cookie("ick") or ""},
+            headers=_FORM,
+        )
+        location = reply.headers.get("Location") if reply.status in (301, 302) else None
+        if reply.status == 200:
+            try:
+                data = reply.json()
+            except CloudConnectionError:
+                location = reply.headers.get("Location")
+            else:
+                if data.get("code") != 0:
+                    raise CloudAuthError("2fa_failed")
+                location = data.get("location")
+        if not (location and await self._login_after_2fa(location)):
+            await self._sts_after_2fa(context)
+        self._verification_url = None
+        return self._require_auth()
+
+    async def _identity_options(self, context: str) -> tuple[str, str]:
+        """Return how the account receives codes: ("Phone", "4") or ("Email", "8")."""
+        reply = await self._http(
+            "GET",
+            f"{_IDENTITY_URL}/list",
+            params={"sid": SID, "context": context, "_locale": self._locale},
+            headers=_FORM,
+        )
+        data = reply.ok().json()
+        options = data.get("options") or []
+        flag = 4 if 4 in options else 8 if 8 in options else data.get("flag", 4)
+        return ("Phone" if flag == 4 else "Email"), str(flag)
+
+    async def _login_after_2fa(self, location: str) -> bool:
+        """Follow the verified location, which grants a pass token, then log in with it."""
+        try:
+            if (await self._http("GET", location, headers=_FORM)).status != 200:
+                return False
+            self._user_id = self._jar_user_id() or self._user_id
+            location, _sign = await self._service_login()
+            if not location:
+                return False
+            await self._fetch_service_token(location)
+        except CloudError:
+            return False
+        return True
+
+    async def _sts_after_2fa(self, context: str) -> None:
+        """Fetch the ssecurity and the service token through the identity result page."""
+        reply = await self._http(
+            "GET",
+            f"{_IDENTITY_URL}/result/check",
+            params={"sid": SID, "context": context, "_locale": self._locale},
+            headers=_FORM,
+            allow_redirects=False,
+        )
+        location = reply.headers.get("Location") if reply.status in (301, 302) else None
+        if not location and reply.status == 200 and reply.body:
+            location = reply.json().get("location")
+        if not location:
+            raise CloudAuthError("2fa_failed")
+        reply = await self._http("GET", location, headers=_FORM, allow_redirects=False)
+        if reply.status == 200 and "Xiaomi Account - Tips" in reply.text:
+            reply = await self._http("GET", location, headers=_FORM, allow_redirects=False)
+        try:
+            self._ssecurity = json.loads(reply.headers.get("extension-pragma", ""))["ssecurity"]
+        except (ValueError, KeyError, TypeError) as err:
+            raise CloudAuthError("2fa_failed") from err
+        sts = reply.headers.get("Location") or ((m := _STS_URL.search(reply.text)) and m.group(1))
+        if not sts or (await self._http("GET", sts, headers=_FORM)).status != 200:
+            raise CloudAuthError("2fa_failed")
+        self._service_token = self._cookie("serviceToken", "sts.api.io.mi.com")
+        self._user_id = self._jar_user_id() or self._user_id
+        if not (self._service_token and self._user_id):
+            raise CloudAuthError("2fa_failed")
+
+    def _jar_user_id(self) -> str | None:
+        return next((m.value for m in self._session.cookie_jar if m.key in ("userId", "cUserId") and m.value), None)
 
     def _require_auth(self) -> CloudAuth:
         if (auth := self.auth) is None:
