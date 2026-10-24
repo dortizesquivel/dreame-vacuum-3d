@@ -4,7 +4,7 @@
     "siid": 2,
     "piid": 1,
     "code": 0,
-    "value": 1
+    "value": 13
   },
   {
     "key": "error",
@@ -25,7 +25,7 @@
     "siid": 3,
     "piid": 2,
     "code": 0,
-    "value": 2
+    "value": 1
   },
   {
     "key": "off_peak_charging",
@@ -39,21 +39,21 @@
     "siid": 4,
     "piid": 1,
     "code": 0,
-    "value": 18
+    "value": 14
   },
   {
     "key": "cleaning_time",
     "siid": 4,
     "piid": 2,
     "code": 0,
-    "value": 2
+    "value": 3
   },
   {
     "key": "cleaned_area",
     "siid": 4,
     "piid": 3,
     "code": 0,
-    "value": 2
+    "value": 3
   },
   {
     "key": "suction_level",
@@ -81,7 +81,7 @@
     "siid": 4,
     "piid": 7,
     "code": 0,
-    "value": 3
+    "value": 0
   },
   {
     "key": "cleaning_start_time",
@@ -879,21 +879,21 @@
     "siid": 12,
     "piid": 2,
     "code": 0,
-    "value": 35574
+    "value": 35577
   },
   {
     "key": "cleaning_count",
     "siid": 12,
     "piid": 3,
     "code": 0,
-    "value": 733
+    "value": 734
   },
   {
     "key": "total_cleaned_area",
     "siid": 12,
     "piid": 4,
     "code": 0,
-    "value": 33953
+    "value": 33956
   },
   {
     "key": "total_runtime",
@@ -970,7 +970,7 @@
     "siid": 15,
     "piid": 3,
     "code": 0,
-    "value": 0
+    "value": 1
   },
   {
     "key": "auto_empty_status",
