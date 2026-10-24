@@ -86,5 +86,29 @@
         "error": "Errors"
       }
     }
+  },
+  "entity": {
+    "vacuum": {
+      "vacuum": {
+        "state": {
+          "cleaning": "Cleaning",
+          "docked": "Docked",
+          "error": "Error",
+          "idle": "Idle",
+          "paused": "Paused",
+          "returning": "Returning"
+        },
+        "state_attributes": {
+          "fan_speed": {
+            "state": {
+              "quiet": "Quiet",
+              "standard": "Standard",
+              "strong": "Strong",
+              "turbo": "Turbo"
+            }
+          }
+        }
+      }
+    }
   }
 }

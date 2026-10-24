@@ -35,8 +35,7 @@ from .protocol.cloud import (
 from .protocol.miio import MiioClient
 from .protocol.miio_codec import MiioError
 
-# Entity platforms land in tasks 16-18; forward nothing until those modules exist.
-PLATFORMS: list[str] = []
+PLATFORMS: list[str] = ["vacuum"]
 
 
 @dataclass

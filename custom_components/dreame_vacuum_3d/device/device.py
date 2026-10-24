@@ -117,6 +117,7 @@ class DreameDevice:
     async def set(self, key: str, value: Any) -> None:
         siid, piid = self.caps.properties[key]
         await miot.set_property(self._send, siid, piid, value)
+        self.values[key] = value
 
     async def reset_consumable(self, name: str) -> Any:
         return await self._action(f"reset_{name}")
