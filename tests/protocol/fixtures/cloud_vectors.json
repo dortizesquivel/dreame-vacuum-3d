@@ -1,0 +1,76 @@
+{
+  "generator": "Tasshack dreame-vacuum f5b8472 static methods",
+  "ssecurity": "PxqcDlt9KEahw+X3CBkqOw==",
+  "nonces": [
+    {
+      "now_ms": 1761300000123,
+      "rand_hex": "8123456789abcdef",
+      "nonce": "gSNFZ4mrze8Bv+v4"
+    },
+    {
+      "now_ms": 1761300059999,
+      "rand_hex": "70e1d2c3b4a59687",
+      "nonce": "cOHSw7SllocBv+v4"
+    },
+    {
+      "now_ms": 1500000000000,
+      "rand_hex": "8000000000000000",
+      "nonce": "gAAAAAAAAAABfXhA"
+    }
+  ],
+  "nonce": "gSNFZ4mrze8Bv+v4",
+  "signed_nonce": "KQkPzWElLpqu7qzmWnH3+fhDb9wsQHUc4LKEMO+8kY4=",
+  "requests": [
+    {
+      "url": "https://de.api.io.mi.com/app/v2/home/rpc/123456",
+      "method": "POST",
+      "params": {
+        "data": "{\"method\":\"get_properties\",\"params\":[]}"
+      },
+      "enc_signature": "YnDgGpbvQ/7gY5ov7BVdpQsNc2o=",
+      "enc_params": {
+        "data": "1kd0sy83ldtXsTBx+FQJCXVDNCIaLZ01Boah3bBWcdlbMQCG4M60",
+        "rc4_hash__": "9AtdsRwvmMkkpCVxxBU5DzBuEiMYCIceFpbiwg==",
+        "signature": "D7W4wYSJEIDEQrLoFsIdPqZuE08=",
+        "ssecurity": "PxqcDlt9KEahw+X3CBkqOw==",
+        "_nonce": "gSNFZ4mrze8Bv+v4"
+      }
+    },
+    {
+      "url": "https://api.io.mi.com/app/home/device_list",
+      "method": "POST",
+      "params": {
+        "data": "{\"getVirtualModel\":false,\"getHuamiDevices\":0}"
+      },
+      "enc_signature": "qASi4z7lgo2k/MHfoSjc2nRBRzY=",
+      "enc_params": {
+        "data": "1kd+sy8Jk80B/nN60E8yHGsOfiEJNYc1WYbqmrR/dtlbK2bZzfqqcWjN+Dij",
+        "rc4_hash__": "3CRKv28lzdMS5CB9sm0eH2h/LiRaN6YSJ97Uwg==",
+        "signature": "mL+RbJl0WdqmdMNm/1LI2/OuPbs=",
+        "ssecurity": "PxqcDlt9KEahw+X3CBkqOw==",
+        "_nonce": "gSNFZ4mrze8Bv+v4"
+      }
+    },
+    {
+      "url": "https://sg.api.io.mi.com/app/miotspec/prop/get",
+      "method": "POST",
+      "params": {
+        "data": "{\"params\":[{\"did\":\"123456\",\"siid\":2,\"piid\":1}]}",
+        "extra": "x y&z"
+      },
+      "enc_signature": "ScR5/hh3+Fly2PE2RBXhb2Ebx10=",
+      "enc_params": {
+        "data": "1kdptyk+l8xXsUltv0Q/HSUWZnZaasBlQ4ah3bNeatwUeBCQmeOgfX/N+DmjFpQ=",
+        "extra": "1UVg8CE=",
+        "rc4_hash__": "/gZL43Q3koxezX5vr3ATS1VuHC8Ka7EyDZW9wg==",
+        "signature": "7AI8mDCIwabtHKeB7wn4Gyu9F0M=",
+        "ssecurity": "PxqcDlt9KEahw+X3CBkqOw==",
+        "_nonce": "gSNFZ4mrze8Bv+v4"
+      }
+    }
+  ],
+  "response": {
+    "body": "1kd6uT862IVFpzB7+FMlGGBJZn1KNp9yWYb/mrNCb8wUeHnHmfegcDnV4DnseN1dUTaIpfjNYEzi7Of+kCRKBKNu4JiqofilC6M8ZBcPMZedo+VKE+O/Frw8",
+    "plaintext": "{\"code\":0,\"message\":\"ok\",\"result\":[{\"did\":\"123456\",\"siid\":2,\"piid\":1,\"value\":6,\"code\":0}]}"
+  }
+}
