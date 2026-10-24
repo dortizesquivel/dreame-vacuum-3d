@@ -45,6 +45,7 @@ _IDENTITY_URL = f"{ACCOUNT_URL}/identity"
 _GETHOME = {"fg": True, "fetch_share": True, "fetch_share_dev": True, "limit": 100, "app_ver": 7}
 _HOME_DEVICES = {"limit": 100, "get_split_device": True, "support_smart_home": True}
 _STS_URL = re.compile(r'(https://[a-zA-Z0-9-]*\.?sts\.api\.io\.mi\.com/sts[^"\'\s]*)')
+_LOCALE = re.compile(r"[a-z]{2}_[A-Z]{2}")
 
 
 @dataclass
@@ -116,8 +117,8 @@ class _Reply:
         """Parse an account server reply, which may start with &&&START&&&."""
         try:
             data = json.loads(self.text.replace("&&&START&&&", ""))
-        except ValueError as err:
-            raise CloudConnectionError("malformed reply from the Xiaomi cloud") from err
+        except ValueError:
+            raise CloudConnectionError("malformed reply from the Xiaomi cloud") from None
         if not isinstance(data, dict):
             raise CloudConnectionError("malformed reply from the Xiaomi cloud")
         return data
@@ -125,6 +126,15 @@ class _Reply:
 
 def _absolute(url: str) -> str:
     return url if url.startswith("http") else ACCOUNT_URL + url
+
+
+def _server_url(url: str) -> URL:
+    """A URL the server gave us, sent back byte for byte (it may be signed)."""
+    return URL(url, encoded=True)
+
+
+def _dicts(value: Any) -> list[dict[str, Any]]:
+    return [v for v in value if isinstance(v, dict)] if isinstance(value, list) else []
 
 
 def _check_sent(data: dict[str, Any]) -> None:
@@ -159,6 +169,8 @@ class XiaomiCloud:
         session: aiohttp.ClientSession,
         country: str,
         auth: CloudAuth | None = None,
+        *,
+        locale: str | None = None,
     ) -> None:
         if session.cookie_jar.quote_cookie:
             raise ValueError("the session needs a cookie jar with quote_cookie=False")
@@ -169,9 +181,11 @@ class XiaomiCloud:
         self._username: str | None = None
         self._pending: _Login | None = None
         self._lock = asyncio.Lock()
-        self._files_v2_only = False
+        self._v2_file_models: set[str] = set()
         self._user_agent = f"Android-7.1.1-1.0.0-ONEPLUS A3010-136-{self._client_id} APP/xiaomi.smarthome APPV/62830"
-        self._locale = getlocale()[0] or "en_US"
+        if locale is None:
+            locale = getlocale()[0]
+        self._locale = locale if locale and _LOCALE.fullmatch(locale) else "en_US"
 
     def __repr__(self) -> str:
         return f"XiaomiCloud(country={self._country!r}, user_id={self._auth.user_id if self._auth else None!r})"
@@ -221,7 +235,7 @@ class XiaomiCloud:
         async with self._lock:
             state = self._pending = self._pending or _Login(None)
             state.verification_url = verification_url
-            await self._http("GET", verification_url)
+            await self._http("GET", _server_url(verification_url))
             context = URL(verification_url).query.get("context", "")
             kind, flag, identity = await self._identity_options(context)
             if not identity:
@@ -277,7 +291,7 @@ class XiaomiCloud:
                 cookies={"identity_session": identity},
                 headers=_FORM,
             )
-            location = reply.headers.get("Location") if reply.status in (301, 302) else None
+            location = None
             if reply.status == 200:
                 try:
                     data = reply.json()
@@ -294,26 +308,31 @@ class XiaomiCloud:
     async def devices(self) -> list[dict[str, Any]]:
         """List the account's devices (did, model, name, localip, token, mac, uid...) in own and shared homes.
 
-        Child devices (with a parent_id) are left out, and each device is listed once.
+        Child devices (with a parent_id) and malformed entries are left out, and each device is listed once.
         """
         auth = self._require_auth()
         homes: dict[Any, Any] = {}
-        result = await self._result("v2/homeroom/gethome", _GETHOME)
-        for home in result.get("homelist") or []:
-            homes[home["id"]] = auth.user_id
-        result = await self._result("v2/user/get_device_cnt", {"fetch_own": True, "fetch_share": True})
-        for home in (result.get("share") or {}).get("share_family") or []:
-            homes[home["home_id"]] = home["home_owner"]
+        for home in _dicts((await self._result("v2/homeroom/gethome", _GETHOME)).get("homelist")):
+            if home.get("id") is not None:
+                homes[home["id"]] = auth.user_id
+        share = (await self._result("v2/user/get_device_cnt", {"fetch_own": True, "fetch_share": True})).get("share")
+        for home in _dicts(share.get("share_family") if isinstance(share, dict) else None):
+            if home.get("home_id") is not None and home.get("home_owner") is not None:
+                homes[home["home_id"]] = home["home_owner"]
         found: list[dict[str, Any]] = []
         for home_id, owner in homes.items():
-            params = {"home_id": int(home_id), "home_owner": owner, **_HOME_DEVICES}
-            found += (await self._result("v2/home/home_device_list", params)).get("device_info") or []
+            try:
+                params = {"home_id": int(home_id), "home_owner": owner, **_HOME_DEVICES}
+            except TypeError, ValueError:
+                continue
+            found += _dicts((await self._result("v2/home/home_device_list", params)).get("device_info"))
         result = await self._result("home/device_list", {"getVirtualModel": False, "getHuamiDevices": 0})
-        found += result.get("list") or []
+        found += _dicts(result.get("list"))
         devices: dict[Any, dict[str, Any]] = {}
         for device in found:
-            if not device.get("parent_id"):
-                devices.setdefault(device.get("mac") or device.get("did"), device)
+            key = device.get("mac") or device.get("did")
+            if key and not device.get("parent_id"):
+                devices.setdefault(key, device)
         return list(devices.values())
 
     async def rpc(self, did: str, method: str, params: Any) -> Any:
@@ -333,9 +352,9 @@ class XiaomiCloud:
         return await self._file_url("v2/home/get_interim_file_url", "_pro", object_name, model)
 
     async def download(self, url: str) -> bytes | None:
-        """Download a file URL; None if the server doesn't answer 200."""
-        reply = await self._http("GET", url)
-        return reply.body if reply.status == 200 else None
+        """Download a file URL; None if it doesn't exist (404)."""
+        reply = await self._http("GET", _server_url(url))
+        return None if reply.status == 404 else reply.ok().body
 
     def _resume(self, username: str, same_account: bool) -> _Login:
         """Start a login from what's known of this account: its pass token, and a pending captcha."""
@@ -370,14 +389,16 @@ class XiaomiCloud:
             headers=_FORM,
         )
         data = reply.ok().json()
-        options = data.get("options") or []
+        options = data.get("options")
+        if not isinstance(options, list):
+            options = []
         flag = 4 if 4 in options else 8 if 8 in options else data.get("flag", 4)
         return ("Phone" if flag == 4 else "Email"), str(flag), self._reply_cookie(reply, "identity_session")
 
     async def _login_after_2fa(self, state: _Login, location: str) -> bool:
         """Follow the verified location, which grants a pass token, then log in with it."""
         try:
-            if (await self._http("GET", location, headers=_FORM)).status != 200:
+            if (await self._http("GET", _server_url(location), headers=_FORM)).status != 200:
                 return False
             state.user_id = self._jar_user_id() or state.user_id
             location, _sign = await self._service_login(state)
@@ -399,20 +420,23 @@ class XiaomiCloud:
         )
         location = reply.headers.get("Location") if reply.status in (301, 302) else None
         if not location and reply.status == 200 and reply.body:
-            location = reply.json().get("location")
+            try:
+                location = reply.json().get("location")
+            except CloudConnectionError:
+                raise CloudAuthError("2fa_failed") from None
         if not location:
             raise CloudAuthError("2fa_failed")
-        reply = await self._http("GET", location, headers=_FORM, allow_redirects=False)
+        reply = await self._http("GET", _server_url(location), headers=_FORM, allow_redirects=False)
         if reply.status == 200 and "Xiaomi Account - Tips" in reply.text:
-            reply = await self._http("GET", location, headers=_FORM, allow_redirects=False)
+            reply = await self._http("GET", _server_url(location), headers=_FORM, allow_redirects=False)
         try:
             state.ssecurity = json.loads(reply.headers.get("extension-pragma", ""))["ssecurity"]
-        except (ValueError, KeyError, TypeError) as err:
-            raise CloudAuthError("2fa_failed") from err
+        except ValueError, KeyError, TypeError:
+            raise CloudAuthError("2fa_failed") from None
         sts = reply.headers.get("Location") or ((m := _STS_URL.search(reply.text)) and m.group(1))
         if not sts:
             raise CloudAuthError("2fa_failed")
-        reply = await self._http("GET", sts, headers=_FORM)
+        reply = await self._http("GET", _server_url(sts), headers=_FORM)
         if reply.status != 200:
             raise CloudAuthError("2fa_failed")
         state.service_token = self._reply_cookie(reply, "serviceToken")
@@ -422,13 +446,13 @@ class XiaomiCloud:
         return next((m.value for m in self._session.cookie_jar if m.key in ("userId", "cUserId") and m.value), None)
 
     async def _file_url(self, path: str, v3_suffix: str, object_name: str, model: str) -> str | None:
-        v3 = "xiaomi.vacuum." in model and not self._files_v2_only
+        v3 = "xiaomi.vacuum." in model and model not in self._v2_file_models
         reply = await self._api(path + (v3_suffix if v3 else ""), {"obj_name": object_name})
         result = reply.get("result")
         if isinstance(result, dict) and result.get("url"):
             return result["url"]
         if v3 and reply.get("code") == -8:
-            self._files_v2_only = True
+            self._v2_file_models.add(model)
             return await self._file_url(path, v3_suffix, object_name, model)
         return None
 
@@ -477,7 +501,8 @@ class XiaomiCloud:
                 cookies = {name: morsel.value for name, morsel in response.cookies.items()}
                 reply = _Reply(response.status, response.headers, await response.read(), cookies)
         except (aiohttp.ClientError, TimeoutError) as err:
-            raise CloudConnectionError(f"can't reach {URL(url).host}: {type(err).__name__}") from err
+            # Not chained: aiohttp errors can carry the (signed) URL.
+            raise CloudConnectionError(f"can't reach {URL(url).host}: {type(err).__name__}") from None
         _LOGGER.debug("%s %s: HTTP %s", method, URL(url).with_query(None), reply.status)
         return reply
 
@@ -531,13 +556,13 @@ class XiaomiCloud:
         raise CloudAuthError("invalid_auth")
 
     async def _fetch_captcha(self, state: _Login, url: str) -> bytes | None:
-        reply = (await self._http("GET", url)).ok()
+        reply = (await self._http("GET", _server_url(url))).ok()
         state.captcha_ick = self._reply_cookie(reply, "ick")
         return reply.body if state.captcha_ick else None
 
     async def _fetch_service_token(self, state: _Login, location: str) -> None:
         """Step 3: follow the STS location, which sets the serviceToken cookie."""
-        reply = (await self._http("GET", location, headers=_FORM)).ok()
+        reply = (await self._http("GET", _server_url(location), headers=_FORM)).ok()
         if not (token := self._reply_cookie(reply, "serviceToken")):
             raise CloudAuthError("invalid_auth")
         state.service_token = token
@@ -569,8 +594,8 @@ class XiaomiCloud:
             raise CloudAuthError("invalid_auth")
         try:
             result = json.loads(cc.decrypt_response(key, reply.ok().text))
-        except ValueError as err:
-            raise CloudConnectionError("malformed reply from the Xiaomi cloud") from err
+        except ValueError:
+            raise CloudConnectionError("malformed reply from the Xiaomi cloud") from None
         if not isinstance(result, dict):
             raise CloudConnectionError("malformed reply from the Xiaomi cloud")
         message = str(result.get("message", ""))

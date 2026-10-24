@@ -3,6 +3,7 @@
   "list_phone": {"code": 0, "flag": 4, "options": [4], "result": "ok"},
   "list_email": {"code": 0, "flag": 8, "options": [8], "result": "ok"},
   "list_flag_only": {"code": 0, "flag": 8, "options": [], "result": "ok"},
+  "list_bad_options": {"code": 0, "options": "4", "result": "ok"},
   "verify_phone": {"code": 0, "maskedPhone": "+49*****1234", "result": "ok"},
   "verify_email": {"code": 0, "maskedEmail": "u***@example.com", "result": "ok"},
   "sent": {"code": 0, "result": "ok"},

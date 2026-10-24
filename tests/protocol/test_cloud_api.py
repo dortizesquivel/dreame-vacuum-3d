@@ -71,6 +71,32 @@ async def test_devices_without_homes(session, cloud):
     assert [d["did"] for d in await cloud.devices()] == ["1001", "3001"]
 
 
+async def test_devices_skip_malformed_entries(session, cloud):
+    vacuum = DEVICES["device_list"]["result"]["list"][1]
+    homes = [None, "home", {"name": "no id"}, {"id": "not a number"}, {"id": "100001"}]
+    session.api("v2/homeroom/gethome", {"code": 0, "result": {"homelist": homes}})
+    families = [None, {"home_id": 200002}, {"home_owner": 2000002}, {"home_id": 200002, "home_owner": 2000002}]
+    session.api("v2/user/get_device_cnt", {"code": 0, "result": {"share": {"share_family": families}}})
+    session.api(
+        "v2/home/home_device_list",
+        lambda data: {"code": 0, "result": {"device_info": {"did": "1"}} if data["home_id"] == 100001 else ["x"]},
+    )
+    session.api("home/device_list", {"code": 0, "result": {"list": [None, "1001", {"name": "no ids"}, vacuum]}})
+
+    assert await cloud.devices() == [vacuum]
+    homes = [(d["home_id"], d["home_owner"]) for p, d in session.api_calls if p == "v2/home/home_device_list"]
+    assert homes == [(100001, "1000001"), (200002, 2000002)]
+
+
+@pytest.mark.parametrize("result", [None, [], "x", {"homelist": "x"}, {"homelist": None}])
+async def test_devices_with_odd_results(session, cloud, result):
+    session.api("v2/homeroom/gethome", {"code": 0, "result": result})
+    session.api("v2/user/get_device_cnt", {"code": 0, "result": {"share": ["x"]}})
+    session.api("home/device_list", {"code": 0, "result": {"list": {"did": "1"}}})
+
+    assert await cloud.devices() == []
+
+
 async def test_rpc_returns_the_result(session, cloud):
     session.api("v2/home/rpc/1001", {"code": 0, "message": "ok", "result": [{"did": "2.1", "code": 0, "value": 6}]})
 
@@ -167,6 +193,23 @@ async def test_file_urls_v3_with_fallback(session, cloud, method, v2, v3):
     assert [p for p, _ in session.api_calls] == [v3, v3, v2, v2]
 
 
+async def test_file_url_fallback_is_per_model(session, cloud):
+    session.api(
+        "home/getfileurl_v3", {"code": -8, "message": "not supported"}, {"code": 0, "result": {"url": FILE_URL}}
+    )
+    session.api("home/getfileurl", {"code": 0, "result": {"url": FILE_URL}})
+
+    assert await cloud.file_url(OBJECT, model="xiaomi.vacuum.old") == FILE_URL
+    assert await cloud.file_url(OBJECT, model="xiaomi.vacuum.new") == FILE_URL
+    assert await cloud.file_url(OBJECT, model="xiaomi.vacuum.old") == FILE_URL
+    assert [p for p, _ in session.api_calls] == [
+        "home/getfileurl_v3",
+        "home/getfileurl",
+        "home/getfileurl_v3",
+        "home/getfileurl",
+    ]
+
+
 @pytest.mark.parametrize(
     "reply",
     [{"code": 0, "result": None}, {"code": 0, "result": {"url": ""}}, {"code": -8, "message": "not supported"}],
@@ -178,10 +221,11 @@ async def test_file_url_missing(session, cloud, reply):
 
 
 async def test_download(session, cloud):
+    url = "https://cdn.example.com/map/1001?Signature=a%2Fb%3D&Expires=%31"
     session.on("GET", "https://cdn.example.com/map/1001", Reply(body=b"\x1f\x8bmap"))
 
-    assert await cloud.download(FILE_URL) == b"\x1f\x8bmap"
-    assert str(session.calls[0].url) == FILE_URL
+    assert await cloud.download(url) == b"\x1f\x8bmap"
+    assert str(session.calls[0].url) == url
 
 
 async def test_download_missing_file(session, cloud):
@@ -190,8 +234,20 @@ async def test_download_missing_file(session, cloud):
     assert await cloud.download(FILE_URL) is None
 
 
-async def test_download_network_error(session, cloud):
-    session.on("GET", "https://cdn.example.com/map/1001", aiohttp.ClientConnectionError("boom"))
+@pytest.mark.parametrize("failure", [Reply(status=403), Reply(status=500), aiohttp.ClientConnectionError("boom")])
+async def test_download_errors(session, cloud, failure):
+    session.on("GET", "https://cdn.example.com/map/1001", failure)
 
     with pytest.raises(CloudConnectionError):
         await cloud.download(FILE_URL)
+
+
+async def test_errors_dont_chain_signed_urls(session, cloud):
+    session.on("GET", "https://cdn.example.com/map/1001", aiohttp.ClientConnectionError(f"can't fetch {FILE_URL}"))
+
+    with pytest.raises(CloudConnectionError) as err:
+        await cloud.download(FILE_URL)
+
+    assert "signature" not in str(err.value)
+    assert err.value.__cause__ is None
+    assert err.value.__suppress_context__

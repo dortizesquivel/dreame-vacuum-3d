@@ -55,6 +55,7 @@ def serve_identity(session: FakeSession, kind: str = "phone", *, list_reply: str
         ("phone", None, "+49*****1234"),
         ("email", None, "u***@example.com"),
         ("email", "list_flag_only", "u***@example.com"),
+        ("phone", "list_bad_options", "+49*****1234"),
     ],
 )
 async def test_send_code(session, kind, list_reply, masked):
@@ -227,7 +228,7 @@ async def test_falls_back_to_sts_when_the_pass_token_login_fails(session, failur
 
 async def test_verify_location_from_headers(session):
     serve_identity(session)
-    finish = "https://account.xiaomi.com/identity/finish?x=1"
+    finish = "https://account.xiaomi.com/identity/finish?x=%7E1"
     session.on("POST", f"{IDENTITY}/auth/verifyPhone", Reply(body="<html>done</html>", headers={"Location": finish}))
     session.on("GET", FINISH, Reply(body="ok"))
     serve_sts(session)
@@ -258,7 +259,7 @@ NO_STS = Reply(body="<html></html>", headers={"extension-pragma": PRAGMA})
 
 @pytest.mark.parametrize(
     "broken",
-    ["no-check-location", "no-pragma", "bad-pragma", "no-sts-url", "sts-error", "no-service-token"],
+    ["no-check-location", "bad-check-body", "no-pragma", "bad-pragma", "no-sts-url", "sts-error", "no-service-token"],
 )
 async def test_sts_failures(session, broken):
     serve_identity(session)
@@ -267,6 +268,8 @@ async def test_sts_failures(session, broken):
     match broken:
         case "no-check-location":
             session.on("GET", f"{IDENTITY}/result/check", Reply(status=200))
+        case "bad-check-body":
+            session.on("GET", f"{IDENTITY}/result/check", Reply(body="<html>oops</html>"))
         case "no-pragma":
             session.on("GET", AUTH2_END, NO_PRAGMA)
         case "bad-pragma":

@@ -11,6 +11,7 @@ import re
 import aiohttp
 import pytest
 
+from custom_components.dreame_vacuum_3d.protocol import cloud as cloud_module
 from custom_components.dreame_vacuum_3d.protocol.cloud import (
     CloudAuth,
     CloudAuthError,
@@ -212,6 +213,15 @@ async def test_login_follows_a_redirecting_sts(session):
     ).service_token == SERVICE_TOKEN
 
 
+async def test_login_sends_server_urls_byte_exact(session):
+    location = "https://sts.api.io.mi.com/sts?d=a%7Eb&clientSign=x%2By%3D&p=%41"
+    serve_login(session, Reply.xiaomi({**LOGIN["login_ok"], "location": location}))
+
+    await XiaomiCloud(session, "de").login("user@example.com", "secret-password")
+
+    assert str(session.requests("GET", STS)[0].url) == location
+
+
 async def test_login_with_another_account_forgets_the_first(session):
     serve_login(session)
     session.api(CHECK, {"code": 0, "result": {}})
@@ -255,6 +265,30 @@ async def test_captcha_cookie_is_read_from_the_reply(session):
     await cloud.login("user@example.com", "secret-password", captcha="x7k2")
 
     assert session.requests("POST", LOGIN_AUTH)[-1].cookies["ick"] == "c3ludGhldGljLWljaw"
+
+
+@pytest.mark.parametrize(
+    ("given", "system", "expected"),
+    [
+        ("de_DE", ("fr_FR", "UTF-8"), "de_DE"),
+        ("de-DE", ("fr_FR", "UTF-8"), "en_US"),
+        ("C", ("fr_FR", "UTF-8"), "en_US"),
+        (None, ("fr_FR", "UTF-8"), "fr_FR"),
+        (None, ("C", "UTF-8"), "en_US"),
+        (None, (None, None), "en_US"),
+    ],
+)
+async def test_locale(session, monkeypatch, given, system, expected):
+    lookups = []
+    monkeypatch.setattr(cloud_module, "getlocale", lambda: lookups.append(system) or system)
+    session.api(CHECK, {"code": 0, "result": {}})
+    cloud = XiaomiCloud(session, "de", STORED, locale=given)
+
+    await cloud.check()
+    await cloud.check()
+
+    assert [c.cookies["locale"] for c in session.calls] == [expected, expected]
+    assert len(lookups) <= 1
 
 
 async def test_login_asks_for_a_captcha_and_retries_with_it(session):
