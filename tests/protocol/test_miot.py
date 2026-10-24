@@ -7,19 +7,22 @@ from typing import Any
 import pytest
 
 from custom_components.dreame_vacuum_3d.protocol import miot
+from custom_components.dreame_vacuum_3d.protocol.miio_codec import MiioError
+
+_ECHO = object()
 
 
 class FakeSend:
-    """Records (method, params) and answers like a MIoT device."""
+    """Records (method, params); answers reply, or like a MIoT device by default."""
 
-    def __init__(self, *, codes: dict[tuple[int, int], int] | None = None, reply: Any = None) -> None:
+    def __init__(self, *, codes: dict[tuple[int, int], int] | None = None, reply: Any = _ECHO) -> None:
         self.calls: list[tuple[str, Any]] = []
         self.codes = codes or {}
         self.reply = reply
 
     async def __call__(self, method: str, params: Any) -> Any:
         self.calls.append((method, params))
-        if self.reply is not None:
+        if self.reply is not _ECHO:
             return self.reply
         return [
             {
@@ -58,9 +61,26 @@ async def test_get_properties_custom_chunk():
     assert [len(params) for _method, params in send.calls] == [2, 1]
 
 
-async def test_get_properties_keys_come_from_the_reply():
-    send = FakeSend(reply=[{"did": "x", "siid": 9, "piid": 9, "code": 0, "value": "v"}])
-    assert await miot.get_properties(send, [(2, 1)]) == {(9, 9): "v"}
+async def test_get_properties_keys_come_from_the_did_we_sent():
+    send = FakeSend(reply=[{"did": "2.1", "siid": 9, "piid": 9, "code": 0, "value": "v"}])
+    assert await miot.get_properties(send, [(2, 1)]) == {(2, 1): "v"}
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        pytest.param(None, id="none"),
+        pytest.param({"code": 0}, id="dict"),
+        pytest.param([None, "x", 3], id="non-dict-items"),
+        pytest.param([{"did": "9.9", "code": 0, "value": 1}], id="unknown-did"),
+        pytest.param([{"did": ["2.1"], "code": 0, "value": 1}], id="unhashable-did"),
+        pytest.param([{"siid": 2, "piid": 1, "code": 0, "value": 1}], id="no-did"),
+        pytest.param([{"did": "2.1", "value": 1}], id="no-code"),
+    ],
+)
+async def test_get_properties_skips_malformed_replies(reply):
+    send = FakeSend(reply=reply)
+    assert await miot.get_properties(send, [(2, 1)]) == {}
 
 
 async def test_get_properties_skips_failed_props():
@@ -85,6 +105,34 @@ async def test_set_property_error_raises():
     with pytest.raises(miot.MiotError) as info:
         await miot.set_property(send, 4, 4, 2)
     assert info.value.code == -4004
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        pytest.param(None, id="none"),
+        pytest.param([], id="empty"),
+        pytest.param({"code": 0}, id="dict"),
+        pytest.param([None], id="non-dict-item"),
+        pytest.param([{"did": "set"}], id="no-code"),
+    ],
+)
+async def test_set_property_malformed_reply_raises(reply):
+    send = FakeSend(reply=reply)
+    with pytest.raises(miot.MiotError):
+        await miot.set_property(send, 4, 4, 2)
+
+
+@pytest.mark.parametrize("reply", [None, [], "ok"])
+async def test_call_action_malformed_reply_raises(reply):
+    send = FakeSend(reply=reply)
+    with pytest.raises(miot.MiotError) as info:
+        await miot.call_action(send, 4, 1)
+    assert info.value.code is None
+
+
+def test_miot_error_is_transport_agnostic():
+    assert not issubclass(miot.MiotError, MiioError)
 
 
 async def test_call_action_payload_and_reply():
