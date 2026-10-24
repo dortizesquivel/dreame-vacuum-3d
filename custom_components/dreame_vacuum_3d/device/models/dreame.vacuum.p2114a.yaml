@@ -1,0 +1,4 @@
+model: dreame.vacuum.p2114a
+name: Xiaomi Robot Vacuum X10+
+extends: dreame_base
+tested: true
