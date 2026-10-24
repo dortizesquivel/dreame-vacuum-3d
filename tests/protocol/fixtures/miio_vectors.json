@@ -1,0 +1,53 @@
+{
+  "generator": "python-miio 0.5.12 Message.build",
+  "plaintext": "json.dumps(payload) with default separators and ensure_ascii, then a NUL byte",
+  "token": "00112233445566778899aabbccddeeff",
+  "vectors": [
+    {
+      "device_id": 195939070,
+      "stamp": 1000,
+      "payload": {
+        "id": 1,
+        "method": "miIO.info",
+        "params": []
+      },
+      "packet_hex": "21310050000000000badcafe000003e87b258277c4a68eb2f8fbfb41b840ce3a2a36b2b7afa85bd6a9f1ed82b485a3d6c2c13a12855c97fc9a0bd7be55469c61b5393611ac2c922588d969ad8c226bde"
+    },
+    {
+      "device_id": 123456789,
+      "stamp": 1700000000,
+      "payload": {
+        "id": 42,
+        "method": "get_properties",
+        "params": [
+          {
+            "did": "battery",
+            "siid": 3,
+            "piid": 1
+          },
+          {
+            "did": "state",
+            "siid": 2,
+            "piid": 1
+          }
+        ]
+      },
+      "packet_hex": "213100b000000000075bcd156553f1007ae5eae2e2a8109bc1f0831a5e0e123f679569e4e919cfa5b1eb0d3aef4aff9f2b1f6843dd55e5d923d7862fa906dafad219853df4181d4d7730597b936fd7ea169202f5edb9016377196a0d9ec225910d7dbb4aba430c691443bce95ac16ea873bdfb7a78e4ef7222d451952f8424b6976ec18d6c9a322222561ea95bd7d40bdfda55f05709546beb82f7861a4a08089ccb41a6860a665e8330e3f34fb9deef"
+    },
+    {
+      "device_id": 4294967294,
+      "stamp": 86400,
+      "payload": {
+        "id": 7,
+        "result": [
+          {
+            "name": "Barra",
+            "room": "Salón",
+            "emoji": "🧹"
+          }
+        ]
+      },
+      "packet_hex": "2131008000000000fffffffe00015180c615b372ded454b7549ed915937660b3f703b7fda91a1f739f8a08f5a6108812397b8a2f3b5aa013ae0821ca0bd7ceb97b944fe21552b377eaa51e21371d60d7869ca61734155f6ca3ba436e2973309476594444f92677b35d1e847d738b68a184fd8d4843caaff412af8718284abd56"
+    }
+  ]
+}
