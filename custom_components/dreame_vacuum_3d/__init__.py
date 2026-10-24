@@ -25,6 +25,7 @@ from .const import CONF_AUTH, CONF_DID, DOMAIN
 from .coordinator import DreameDataUpdateCoordinator
 from .device.capabilities import load
 from .device.device import DreameDevice
+from .notifications import DreameNotifier
 from .protocol.cloud import (
     CloudAuth,
     CloudAuthError,
@@ -53,6 +54,7 @@ class RuntimeData:
     coordinator: DreameDataUpdateCoordinator
     cloud: XiaomiCloud
     miio: MiioClient
+    notifier: DreameNotifier
 
 
 type DreameConfigEntry = ConfigEntry[RuntimeData]
@@ -92,10 +94,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bo
     coordinator = DreameDataUpdateCoordinator(hass, entry, device)
     await coordinator.async_config_entry_first_refresh()
 
-    entry.runtime_data = RuntimeData(coordinator=coordinator, cloud=cloud, miio=miio)
+    notifier = DreameNotifier(hass, entry, coordinator)
+    entry.runtime_data = RuntimeData(
+        coordinator=coordinator, cloud=cloud, miio=miio, notifier=notifier
+    )
     _async_register_device(hass, entry, info)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    # Listen after entities exist so events can resolve entity_id / device_id.
+    notifier.async_setup()
     return True
 
 
