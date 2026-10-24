@@ -1,0 +1,90 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Cuenta Xiaomi",
+        "description": "Inicia sesión con las credenciales de Xiaomi Home de tu aspiradora Dreame.{devices}",
+        "data": {
+          "username": "Correo o ID de Xiaomi",
+          "password": "Contraseña",
+          "country": "País del servidor"
+        }
+      },
+      "captcha": {
+        "title": "Captcha",
+        "description": "{captcha}",
+        "data": {
+          "captcha": "Código de la imagen"
+        }
+      },
+      "2fa": {
+        "title": "Verificación en dos pasos",
+        "description": "Se ha enviado un código de verificación a {dest}. Introdúcelo abajo.",
+        "data": {
+          "code": "Código de verificación"
+        }
+      },
+      "device": {
+        "title": "Elige una aspiradora",
+        "description": "Selecciona la aspiradora Dreame que quieres añadir.",
+        "data": {
+          "device": "Dispositivo"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Volver a autenticar",
+        "description": "La sesión de la nube Xiaomi de {name} ha caducado. Introduce de nuevo la contraseña de la cuenta.",
+        "data": {
+          "password": "Contraseña"
+        }
+      },
+      "reconfigure": {
+        "title": "Dirección IP local",
+        "description": "Actualiza la IP local del robot si ha cambiado en tu red.",
+        "data": {
+          "host": "Dirección IP"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Usuario o contraseña incorrectos",
+      "cannot_connect": "No se pudo contactar con la nube de Xiaomi",
+      "no_devices": "No se encontraron aspiradoras Dreame en esta cuenta para el país seleccionado.{devices}",
+      "wrong_captcha": "Captcha incorrecto",
+      "2fa_failed": "La verificación ha fallado",
+      "2fa_send_failed": "No se pudo enviar el código de verificación",
+      "2fa_cooldown_active": "Demasiadas solicitudes; espera unos minutos e inténtalo de nuevo",
+      "2fa_limit_reached": "Se ha alcanzado el límite diario de códigos; inténtalo mañana"
+    },
+    "abort": {
+      "already_configured": "Esta aspiradora ya está configurada",
+      "reauth_successful": "Reautenticación correcta",
+      "reconfigure_successful": "Reconfiguración correcta",
+      "cannot_connect": "No se pudo contactar con la nube de Xiaomi"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones de Dreame Vacuum 3D",
+        "description": "Coexistir ralentiza el sondeo mientras otra integración Dreame sigue instalada. Las notificaciones son mensajes persistentes por categoría. El umbral de consumibles es el % restante que dispara un aviso.",
+        "data": {
+          "coexist": "Coexistir con otra integración Dreame",
+          "notify": "Categorías de notificación",
+          "consumable_threshold": "Umbral de aviso de consumibles"
+        }
+      }
+    }
+  },
+  "selector": {
+    "notifications": {
+      "options": {
+        "cleanup_completed": "Limpieza completada",
+        "consumable": "Consumibles",
+        "information": "Información",
+        "warning": "Avisos",
+        "error": "Errores"
+      }
+    }
+  }
+}

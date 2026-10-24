@@ -1,0 +1,90 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Xiaomi account",
+        "description": "Sign in with the Xiaomi Home credentials for your Dreame vacuum.{devices}",
+        "data": {
+          "username": "Email or Xiaomi ID",
+          "password": "Password",
+          "country": "Server country"
+        }
+      },
+      "captcha": {
+        "title": "Captcha",
+        "description": "{captcha}",
+        "data": {
+          "captcha": "Code from the image"
+        }
+      },
+      "2fa": {
+        "title": "Two-factor verification",
+        "description": "A verification code was sent to {dest}. Enter it below.",
+        "data": {
+          "code": "Verification code"
+        }
+      },
+      "device": {
+        "title": "Choose a vacuum",
+        "description": "Select the Dreame vacuum to add.",
+        "data": {
+          "device": "Device"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate",
+        "description": "The Xiaomi cloud session for {name} expired. Enter the account password again.",
+        "data": {
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Local IP address",
+        "description": "Update the robot's local IP if it changed on your network.",
+        "data": {
+          "host": "IP address"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid username or password",
+      "cannot_connect": "Could not reach the Xiaomi cloud",
+      "no_devices": "No Dreame vacuums found on this account for the selected country.{devices}",
+      "wrong_captcha": "Wrong captcha",
+      "2fa_failed": "Verification failed",
+      "2fa_send_failed": "Could not send the verification code",
+      "2fa_cooldown_active": "Too many requests; wait a few minutes and try again",
+      "2fa_limit_reached": "Daily verification-code limit reached; try again tomorrow"
+    },
+    "abort": {
+      "already_configured": "This vacuum is already configured",
+      "reauth_successful": "Reauthentication successful",
+      "reconfigure_successful": "Reconfigure successful",
+      "cannot_connect": "Could not reach the Xiaomi cloud"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Dreame Vacuum 3D options",
+        "description": "Coexist slows polling while another Dreame integration is still installed. Notifications are persistent messages by category. Consumable threshold is the remaining % that triggers a warning.",
+        "data": {
+          "coexist": "Coexist with another Dreame integration",
+          "notify": "Notification categories",
+          "consumable_threshold": "Consumable warning threshold"
+        }
+      }
+    }
+  },
+  "selector": {
+    "notifications": {
+      "options": {
+        "cleanup_completed": "Cleanup completed",
+        "consumable": "Consumables",
+        "information": "Information",
+        "warning": "Warnings",
+        "error": "Errors"
+      }
+    }
+  }
+}
