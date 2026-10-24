@@ -1,4 +1,4 @@
-"""Async Xiaomi cloud client: account login (captcha, two-factor) and the RC4-encrypted app API.
+"""Async Xiaomi cloud client: account login (captcha, two-factor), devices, RPC and map files.
 
 Portions derived from Tasshack/dreame-vacuum (MIT), see NOTICE.
 """
@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
+from functools import partial
 import hashlib
 from http.cookies import SimpleCookie
 import json
@@ -22,6 +23,7 @@ import aiohttp
 from yarl import URL
 
 from . import cloud_crypto as cc
+from .miot import Send
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,6 +42,8 @@ _AUTH_ERROR_CODES = (2, 3)
 _AUTH_ERROR_MESSAGES = ("auth err", "invalid signature", "SERVICETOKEN_EXPIRED")
 _AUTH_START = "fe/service/identity/authStart"
 _IDENTITY_URL = f"{ACCOUNT_URL}/identity"
+_GETHOME = {"fg": True, "fetch_share": True, "fetch_share_dev": True, "limit": 100, "app_ver": 7}
+_HOME_DEVICES = {"limit": 100, "get_split_device": True, "support_smart_home": True}
 _STS_URL = re.compile(r'(https://[a-zA-Z0-9-]*\.?sts\.api\.io\.mi\.com/sts[^"\'\s]*)')
 
 
@@ -146,6 +150,7 @@ class XiaomiCloud:
         self._pass_token = auth.pass_token if auth else None
         self._captcha_ick: str | None = None
         self._verification_url: str | None = None
+        self._files_v2_only = False
         self._user_agent = f"Android-7.1.1-1.0.0-ONEPLUS A3010-136-{self._client_id} APP/xiaomi.smarthome APPV/62830"
         self._locale = locale.getlocale()[0] or "en_US"
 
@@ -205,15 +210,10 @@ class XiaomiCloud:
         if not self._cookie("identity_session"):
             raise CloudAuthError("2fa_send_failed")
         params = {"sid": SID, "context": context, "mask": "0", "_locale": self._locale}
-        verify = (
-            (
-                await self._http(
-                    "GET", f"{_IDENTITY_URL}/auth/verify{kind}", params={"_flag": flag, "_json": "true", **params}
-                )
-            )
-            .ok()
-            .json()
+        reply = await self._http(
+            "GET", f"{_IDENTITY_URL}/auth/verify{kind}", params={"_flag": flag, "_json": "true", **params}
         )
+        verify = reply.ok().json()
         _check_sent(verify)
         sent = await self._http(
             "POST",
@@ -320,6 +320,66 @@ class XiaomiCloud:
 
     def _jar_user_id(self) -> str | None:
         return next((m.value for m in self._session.cookie_jar if m.key in ("userId", "cUserId") and m.value), None)
+
+    async def devices(self) -> list[dict[str, Any]]:
+        """List the account's devices (did, model, name, localip, token, mac, uid...) in own and shared homes.
+
+        Child devices (with a parent_id) are left out, and each device is listed once.
+        """
+        homes: dict[Any, Any] = {}
+        result = await self._result("v2/homeroom/gethome", _GETHOME)
+        for home in result.get("homelist") or []:
+            homes[home["id"]] = self._user_id
+        result = await self._result("v2/user/get_device_cnt", {"fetch_own": True, "fetch_share": True})
+        for home in (result.get("share") or {}).get("share_family") or []:
+            homes[home["home_id"]] = home["home_owner"]
+        found: list[dict[str, Any]] = []
+        for home_id, owner in homes.items():
+            params = {"home_id": int(home_id), "home_owner": owner, **_HOME_DEVICES}
+            found += (await self._result("v2/home/home_device_list", params)).get("device_info") or []
+        result = await self._result("home/device_list", {"getVirtualModel": False, "getHuamiDevices": 0})
+        found += result.get("list") or []
+        devices: dict[Any, dict[str, Any]] = {}
+        for device in found:
+            if not device.get("parent_id"):
+                devices.setdefault(device.get("mac") or device.get("did"), device)
+        return list(devices.values())
+
+    async def rpc(self, did: str, method: str, params: Any) -> Any:
+        """Call a miIO method on a device through the cloud; return its result (None if it has none)."""
+        return (await self._api(f"v2/home/rpc/{did}", {"method": method, "params": params})).get("result")
+
+    def rpc_sender(self, did: str) -> Send:
+        """Return rpc bound to one device, for the miot helpers."""
+        return partial(self.rpc, did)
+
+    async def file_url(self, object_name: str, *, model: str = "") -> str | None:
+        """Return a download URL for a stored file (a map), None if there's none."""
+        return await self._file_url("home/getfileurl", "_v3", object_name, model)
+
+    async def interim_file_url(self, object_name: str, *, model: str = "") -> str | None:
+        """Return a download URL for a file still being written (the live map), None if there's none."""
+        return await self._file_url("v2/home/get_interim_file_url", "_pro", object_name, model)
+
+    async def download(self, url: str) -> bytes | None:
+        """Download a file URL; None if the server doesn't answer 200."""
+        reply = await self._http("GET", url)
+        return reply.body if reply.status == 200 else None
+
+    async def _file_url(self, path: str, v3_suffix: str, object_name: str, model: str) -> str | None:
+        v3 = "xiaomi.vacuum." in model and not self._files_v2_only
+        reply = await self._api(path + (v3_suffix if v3 else ""), {"obj_name": object_name})
+        result = reply.get("result")
+        if isinstance(result, dict) and result.get("url"):
+            return result["url"]
+        if v3 and reply.get("code") == -8:
+            self._files_v2_only = True
+            return await self._file_url(path, v3_suffix, object_name, model)
+        return None
+
+    async def _result(self, path: str, params: Any) -> dict[str, Any]:
+        result = (await self._api(path, params)).get("result")
+        return result if isinstance(result, dict) else {}
 
     def _require_auth(self) -> CloudAuth:
         if (auth := self.auth) is None:
