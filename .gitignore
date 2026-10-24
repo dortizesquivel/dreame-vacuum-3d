@@ -2,3 +2,12 @@
 
 # Internal plans and working notes, kept local only
 docs/plans/
+
+# Local tooling and data
+.venv/
+dumps/
+.coverage
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+__pycache__/
