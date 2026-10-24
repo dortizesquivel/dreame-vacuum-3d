@@ -225,17 +225,10 @@ async def test_falls_back_to_sts_when_the_pass_token_login_fails(session, failur
     assert session.requests("GET", f"{IDENTITY}/result/check")
 
 
-@pytest.mark.parametrize(
-    "verified",
-    [
-        Reply(body="<html>done</html>", headers={"Location": "https://account.xiaomi.com/identity/finish?x=1"}),
-        Reply(status=302, headers={"Location": "https://account.xiaomi.com/identity/finish?x=1"}),
-    ],
-    ids=["html", "redirect"],
-)
-async def test_verify_location_from_headers(session, verified):
+async def test_verify_location_from_headers(session):
     serve_identity(session)
-    session.on("POST", f"{IDENTITY}/auth/verifyPhone", verified)
+    finish = "https://account.xiaomi.com/identity/finish?x=1"
+    session.on("POST", f"{IDENTITY}/auth/verifyPhone", Reply(body="<html>done</html>", headers={"Location": finish}))
     session.on("GET", FINISH, Reply(body="ok"))
     serve_sts(session)
     cloud, url = await start(session)
@@ -243,7 +236,19 @@ async def test_verify_location_from_headers(session, verified):
 
     await cloud.verify_2fa_code("123456")
 
-    assert session.requests("GET", FINISH)
+    assert str(session.requests("GET", FINISH)[0].url) == finish
+
+
+async def test_sts_service_token_set_for_a_parent_domain(session):
+    serve_identity(session)
+    serve_verification(session, "verified_without_location")
+    serve_sts(session)
+    token = {"value": SERVICE_TOKEN, "domain": ".api.io.mi.com"}
+    session.on("GET", STS, Reply(body="ok", cookies={"serviceToken": token, "userId": "1000001"}))
+    cloud, url = await start(session)
+    await cloud.send_2fa_code(url)
+
+    assert (await cloud.verify_2fa_code("123456")).service_token == SERVICE_TOKEN
 
 
 NO_PRAGMA = Reply(status=302, headers={"Location": TWO_FA["sts_location"]})

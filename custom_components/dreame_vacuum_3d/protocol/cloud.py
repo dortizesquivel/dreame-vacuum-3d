@@ -5,13 +5,14 @@ Portions derived from Tasshack/dreame-vacuum (MIT), see NOTICE.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
 from functools import partial
 import hashlib
 from http.cookies import SimpleCookie
 import json
-import locale
+from locale import getlocale
 import logging
 import re
 import secrets
@@ -27,8 +28,7 @@ from .miot import Send
 
 _LOGGER = logging.getLogger(__name__)
 
-ACCOUNT_HOST = "account.xiaomi.com"
-ACCOUNT_URL = f"https://{ACCOUNT_HOST}"
+ACCOUNT_URL = "https://account.xiaomi.com"
 SID = "xiaomiio"
 TIMEOUT = aiohttp.ClientTimeout(total=10)
 _FORM = {"Content-Type": "application/x-www-form-urlencoded"}
@@ -83,11 +83,25 @@ class CloudConnectionError(CloudError):
     """The cloud couldn't be reached or answered something unusable."""
 
 
+@dataclass
+class _Login:
+    """What a login in progress has learnt; it becomes the CloudAuth only once it succeeds."""
+
+    username: str | None
+    user_id: str | None = None
+    ssecurity: str | None = field(default=None, repr=False)
+    service_token: str | None = field(default=None, repr=False)
+    pass_token: str | None = field(default=None, repr=False)
+    captcha_ick: str | None = field(default=None, repr=False)
+    verification_url: str | None = field(default=None, repr=False)
+
+
 @dataclass(frozen=True)
 class _Reply:
     status: int
     headers: Mapping[str, str]
     body: bytes
+    cookies: Mapping[str, str]
 
     @property
     def text(self) -> str:
@@ -134,28 +148,33 @@ def _timezone() -> str:
 class XiaomiCloud:
     """One Xiaomi account on one server region.
 
-    The session must have its own cookie jar, created with quote_cookie=False: the account
-    server keeps its state in cookies, and quoted base64 tokens aren't what it expects.
+    Give each instance its own session, with a cookie jar created with quote_cookie=False: the
+    account server keeps its state in cookies, and quoted base64 tokens aren't what it expects.
+    The caller closes the session. Keep the same instance through a login's captcha and
+    two-factor steps; use a new one (and a new session) for another account.
     """
 
-    def __init__(self, session: aiohttp.ClientSession, country: str, auth: CloudAuth | None = None) -> None:
+    def __init__(
+        self,
+        session: aiohttp.ClientSession,
+        country: str,
+        auth: CloudAuth | None = None,
+    ) -> None:
         if session.cookie_jar.quote_cookie:
             raise ValueError("the session needs a cookie jar with quote_cookie=False")
         self._session = session
         self._country = country
+        self._auth = auth
         self._client_id = auth.client_id if auth else "".join(secrets.choice(string.ascii_lowercase) for _ in range(16))
-        self._user_id = auth.user_id if auth else None
-        self._ssecurity = auth.ssecurity if auth else None
-        self._service_token = auth.service_token if auth else None
-        self._pass_token = auth.pass_token if auth else None
-        self._captcha_ick: str | None = None
-        self._verification_url: str | None = None
+        self._username: str | None = None
+        self._pending: _Login | None = None
+        self._lock = asyncio.Lock()
         self._files_v2_only = False
         self._user_agent = f"Android-7.1.1-1.0.0-ONEPLUS A3010-136-{self._client_id} APP/xiaomi.smarthome APPV/62830"
-        self._locale = locale.getlocale()[0] or "en_US"
+        self._locale = getlocale()[0] or "en_US"
 
     def __repr__(self) -> str:
-        return f"XiaomiCloud(country={self._country!r}, user_id={self._user_id!r})"
+        return f"XiaomiCloud(country={self._country!r}, user_id={self._auth.user_id if self._auth else None!r})"
 
     @property
     def api_url(self) -> str:
@@ -163,38 +182,34 @@ class XiaomiCloud:
 
     @property
     def auth(self) -> CloudAuth | None:
-        if not (self._user_id and self._ssecurity and self._service_token):
-            return None
-        return CloudAuth(self._user_id, self._ssecurity, self._service_token, self._client_id, self._pass_token)
+        return self._auth
 
     async def login(self, username: str, password: str, *, captcha: str | None = None) -> CloudAuth:
         """Log in, reusing the current session if it still works.
 
         Raises CloudLoginRequired when a captcha (retry with captcha=) or a two-factor
-        verification is needed, CloudAuthError("invalid_auth") on bad credentials.
+        verification is needed, CloudAuthError("invalid_auth") on bad credentials. The
+        current session stays in use until the new one is complete.
         """
-        if (auth := self.auth) and await self.check():
-            return auth
-        self._reset_cookies()
-        try:
-            location, sign = await self._service_login()
-            if not location:
-                location = await self._login_with_password(username, password, sign, captcha)
-            await self._fetch_service_token(location)
-        except CloudError:
-            self._ssecurity = self._service_token = None
-            raise
-        return self._require_auth()
+        async with self._lock:
+            same_account = self._username in (None, username)
+            if same_account and (auth := self._auth) and await self._check(auth):
+                return auth
+            state = self._resume(username, same_account)
+            self._reset_cookies(state)
+            try:
+                location, sign = await self._service_login(state)
+                if not location:
+                    location = await self._login_with_password(state, password, sign, captcha)
+                await self._fetch_service_token(state, location)
+                return self._commit(state, "invalid_auth")
+            except CloudError:
+                self._pending = state
+                raise
 
     async def check(self) -> bool:
         """Return whether the session still works."""
-        if self.auth is None:
-            return False
-        try:
-            await self._api("v2/message/v2/check_new_msg", {"begin_at": int(time.time()) - 60})
-        except CloudAuthError:
-            return False
-        return True
+        return await self._check(self._auth) if self._auth else False
 
     async def send_2fa_code(self, verification_url: str) -> str:
         """Send a verification code for a CloudLoginRequired; return where it went, masked.
@@ -203,133 +218,89 @@ class XiaomiCloud:
         """
         if _AUTH_START not in verification_url:
             raise CloudAuthError("2fa_send_failed")
-        self._verification_url = verification_url
-        await self._http("GET", verification_url)
-        context = URL(verification_url).query.get("context", "")
-        kind, flag = await self._identity_options(context)
-        if not self._cookie("identity_session"):
-            raise CloudAuthError("2fa_send_failed")
-        params = {"sid": SID, "context": context, "mask": "0", "_locale": self._locale}
-        reply = await self._http(
-            "GET", f"{_IDENTITY_URL}/auth/verify{kind}", params={"_flag": flag, "_json": "true", **params}
-        )
-        verify = reply.ok().json()
-        _check_sent(verify)
-        sent = await self._http(
-            "POST",
-            f"{_IDENTITY_URL}/auth/send{kind}Ticket",
-            params={"_dc": str(int(time.time() * 1000)), **params},
-            data={"retry": "0", "icode": "", "_json": "true", "ick": self._cookie("ick") or ""},
-        )
-        _check_sent(sent.ok().json())
-        return verify.get("maskedPhone") or verify.get("maskedEmail") or "*****"
+        async with self._lock:
+            state = self._pending = self._pending or _Login(None)
+            state.verification_url = verification_url
+            await self._http("GET", verification_url)
+            context = URL(verification_url).query.get("context", "")
+            kind, flag, identity = await self._identity_options(context)
+            if not identity:
+                raise CloudAuthError("2fa_send_failed")
+            params = {"sid": SID, "context": context, "mask": "0", "_locale": self._locale}
+            reply = await self._http(
+                "GET",
+                f"{_IDENTITY_URL}/auth/verify{kind}",
+                params={"_flag": flag, "_json": "true", **params},
+                cookies={"identity_session": identity},
+            )
+            verify = reply.ok().json()
+            _check_sent(verify)
+            sent = await self._http(
+                "POST",
+                f"{_IDENTITY_URL}/auth/send{kind}Ticket",
+                params={"_dc": str(int(time.time() * 1000)), **params},
+                data={"retry": "0", "icode": "", "_json": "true", "ick": self._cookie("ick") or ""},
+                cookies={"identity_session": identity},
+            )
+            _check_sent(sent.ok().json())
+            return verify.get("maskedPhone") or verify.get("maskedEmail") or "*****"
 
     async def verify_2fa_code(self, code: str) -> CloudAuth:
         """Finish the login with the code send_2fa_code sent; CloudAuthError("2fa_failed") if refused."""
-        url = self._verification_url
-        context = URL(url).query.get("context") if url else None
-        if not code or not context:
-            raise CloudAuthError("2fa_failed")
-        kind, flag = await self._identity_options(context)
-        if not self._cookie("identity_session"):
-            raise CloudAuthError("2fa_failed")
-        reply = await self._http(
-            "POST",
-            f"{_IDENTITY_URL}/auth/verify{kind}",
-            params={
-                "_flag": flag,
-                "_json": "true",
-                "sid": SID,
-                "context": context,
-                "mask": "0",
-                "_locale": self._locale,
-            },
-            data={"_flag": flag, "ticket": code, "trust": "false", "_json": "true", "ick": self._cookie("ick") or ""},
-            headers=_FORM,
-        )
-        location = reply.headers.get("Location") if reply.status in (301, 302) else None
-        if reply.status == 200:
-            try:
-                data = reply.json()
-            except CloudConnectionError:
-                location = reply.headers.get("Location")
-            else:
-                if data.get("code") != 0:
-                    raise CloudAuthError("2fa_failed")
-                location = data.get("location")
-        if not (location and await self._login_after_2fa(location)):
-            await self._sts_after_2fa(context)
-        self._verification_url = None
-        return self._require_auth()
-
-    async def _identity_options(self, context: str) -> tuple[str, str]:
-        """Return how the account receives codes: ("Phone", "4") or ("Email", "8")."""
-        reply = await self._http(
-            "GET",
-            f"{_IDENTITY_URL}/list",
-            params={"sid": SID, "context": context, "_locale": self._locale},
-            headers=_FORM,
-        )
-        data = reply.ok().json()
-        options = data.get("options") or []
-        flag = 4 if 4 in options else 8 if 8 in options else data.get("flag", 4)
-        return ("Phone" if flag == 4 else "Email"), str(flag)
-
-    async def _login_after_2fa(self, location: str) -> bool:
-        """Follow the verified location, which grants a pass token, then log in with it."""
-        try:
-            if (await self._http("GET", location, headers=_FORM)).status != 200:
-                return False
-            self._user_id = self._jar_user_id() or self._user_id
-            location, _sign = await self._service_login()
-            if not location:
-                return False
-            await self._fetch_service_token(location)
-        except CloudError:
-            return False
-        return True
-
-    async def _sts_after_2fa(self, context: str) -> None:
-        """Fetch the ssecurity and the service token through the identity result page."""
-        reply = await self._http(
-            "GET",
-            f"{_IDENTITY_URL}/result/check",
-            params={"sid": SID, "context": context, "_locale": self._locale},
-            headers=_FORM,
-            allow_redirects=False,
-        )
-        location = reply.headers.get("Location") if reply.status in (301, 302) else None
-        if not location and reply.status == 200 and reply.body:
-            location = reply.json().get("location")
-        if not location:
-            raise CloudAuthError("2fa_failed")
-        reply = await self._http("GET", location, headers=_FORM, allow_redirects=False)
-        if reply.status == 200 and "Xiaomi Account - Tips" in reply.text:
-            reply = await self._http("GET", location, headers=_FORM, allow_redirects=False)
-        try:
-            self._ssecurity = json.loads(reply.headers.get("extension-pragma", ""))["ssecurity"]
-        except (ValueError, KeyError, TypeError) as err:
-            raise CloudAuthError("2fa_failed") from err
-        sts = reply.headers.get("Location") or ((m := _STS_URL.search(reply.text)) and m.group(1))
-        if not sts or (await self._http("GET", sts, headers=_FORM)).status != 200:
-            raise CloudAuthError("2fa_failed")
-        self._service_token = self._cookie("serviceToken", "sts.api.io.mi.com")
-        self._user_id = self._jar_user_id() or self._user_id
-        if not (self._service_token and self._user_id):
-            raise CloudAuthError("2fa_failed")
-
-    def _jar_user_id(self) -> str | None:
-        return next((m.value for m in self._session.cookie_jar if m.key in ("userId", "cUserId") and m.value), None)
+        async with self._lock:
+            state = self._pending
+            url = state.verification_url if state else None
+            context = URL(url).query.get("context") if url else None
+            if not (state and code and context):
+                raise CloudAuthError("2fa_failed")
+            kind, flag, identity = await self._identity_options(context)
+            if not identity:
+                raise CloudAuthError("2fa_failed")
+            reply = await self._http(
+                "POST",
+                f"{_IDENTITY_URL}/auth/verify{kind}",
+                params={
+                    "_flag": flag,
+                    "_json": "true",
+                    "sid": SID,
+                    "context": context,
+                    "mask": "0",
+                    "_locale": self._locale,
+                },
+                data={
+                    "_flag": flag,
+                    "ticket": code,
+                    "trust": "false",
+                    "_json": "true",
+                    "ick": self._cookie("ick") or "",
+                },
+                cookies={"identity_session": identity},
+                headers=_FORM,
+            )
+            location = reply.headers.get("Location") if reply.status in (301, 302) else None
+            if reply.status == 200:
+                try:
+                    data = reply.json()
+                except CloudConnectionError:
+                    location = reply.headers.get("Location")
+                else:
+                    if data.get("code") != 0:
+                        raise CloudAuthError("2fa_failed")
+                    location = data.get("location")
+            if not (location and await self._login_after_2fa(state, location)):
+                await self._sts_after_2fa(state, context)
+            return self._commit(state, "2fa_failed")
 
     async def devices(self) -> list[dict[str, Any]]:
         """List the account's devices (did, model, name, localip, token, mac, uid...) in own and shared homes.
 
         Child devices (with a parent_id) are left out, and each device is listed once.
         """
+        auth = self._require_auth()
         homes: dict[Any, Any] = {}
         result = await self._result("v2/homeroom/gethome", _GETHOME)
         for home in result.get("homelist") or []:
-            homes[home["id"]] = self._user_id
+            homes[home["id"]] = auth.user_id
         result = await self._result("v2/user/get_device_cnt", {"fetch_own": True, "fetch_share": True})
         for home in (result.get("share") or {}).get("share_family") or []:
             homes[home["home_id"]] = home["home_owner"]
@@ -366,6 +337,90 @@ class XiaomiCloud:
         reply = await self._http("GET", url)
         return reply.body if reply.status == 200 else None
 
+    def _resume(self, username: str, same_account: bool) -> _Login:
+        """Start a login from what's known of this account: its pass token, and a pending captcha."""
+        pending = self._pending
+        if pending and pending.username == username:
+            return _Login(username, pending.user_id, pass_token=pending.pass_token, captcha_ick=pending.captcha_ick)
+        if same_account and (auth := self._auth):
+            return _Login(username, auth.user_id, pass_token=auth.pass_token)
+        return _Login(username)
+
+    def _commit(self, state: _Login, error: str) -> CloudAuth:
+        if not (state.user_id and state.ssecurity and state.service_token):
+            raise CloudAuthError(error)
+        self._auth = CloudAuth(state.user_id, state.ssecurity, state.service_token, self._client_id, state.pass_token)
+        self._username = state.username or self._username
+        self._pending = None
+        return self._auth
+
+    async def _check(self, auth: CloudAuth) -> bool:
+        try:
+            await self._api("v2/message/v2/check_new_msg", {"begin_at": int(time.time()) - 60}, auth)
+        except CloudAuthError:
+            return False
+        return True
+
+    async def _identity_options(self, context: str) -> tuple[str, str, str | None]:
+        """Return how the account receives codes (("Phone", "4") or ("Email", "8")) and the identity session."""
+        reply = await self._http(
+            "GET",
+            f"{_IDENTITY_URL}/list",
+            params={"sid": SID, "context": context, "_locale": self._locale},
+            headers=_FORM,
+        )
+        data = reply.ok().json()
+        options = data.get("options") or []
+        flag = 4 if 4 in options else 8 if 8 in options else data.get("flag", 4)
+        return ("Phone" if flag == 4 else "Email"), str(flag), self._reply_cookie(reply, "identity_session")
+
+    async def _login_after_2fa(self, state: _Login, location: str) -> bool:
+        """Follow the verified location, which grants a pass token, then log in with it."""
+        try:
+            if (await self._http("GET", location, headers=_FORM)).status != 200:
+                return False
+            state.user_id = self._jar_user_id() or state.user_id
+            location, _sign = await self._service_login(state)
+            if not location:
+                return False
+            await self._fetch_service_token(state, location)
+        except CloudError:
+            return False
+        return True
+
+    async def _sts_after_2fa(self, state: _Login, context: str) -> None:
+        """Fetch the ssecurity and the service token through the identity result page."""
+        reply = await self._http(
+            "GET",
+            f"{_IDENTITY_URL}/result/check",
+            params={"sid": SID, "context": context, "_locale": self._locale},
+            headers=_FORM,
+            allow_redirects=False,
+        )
+        location = reply.headers.get("Location") if reply.status in (301, 302) else None
+        if not location and reply.status == 200 and reply.body:
+            location = reply.json().get("location")
+        if not location:
+            raise CloudAuthError("2fa_failed")
+        reply = await self._http("GET", location, headers=_FORM, allow_redirects=False)
+        if reply.status == 200 and "Xiaomi Account - Tips" in reply.text:
+            reply = await self._http("GET", location, headers=_FORM, allow_redirects=False)
+        try:
+            state.ssecurity = json.loads(reply.headers.get("extension-pragma", ""))["ssecurity"]
+        except (ValueError, KeyError, TypeError) as err:
+            raise CloudAuthError("2fa_failed") from err
+        sts = reply.headers.get("Location") or ((m := _STS_URL.search(reply.text)) and m.group(1))
+        if not sts:
+            raise CloudAuthError("2fa_failed")
+        reply = await self._http("GET", sts, headers=_FORM)
+        if reply.status != 200:
+            raise CloudAuthError("2fa_failed")
+        state.service_token = self._reply_cookie(reply, "serviceToken")
+        state.user_id = self._jar_user_id() or state.user_id
+
+    def _jar_user_id(self) -> str | None:
+        return next((m.value for m in self._session.cookie_jar if m.key in ("userId", "cUserId") and m.value), None)
+
     async def _file_url(self, path: str, v3_suffix: str, object_name: str, model: str) -> str | None:
         v3 = "xiaomi.vacuum." in model and not self._files_v2_only
         reply = await self._api(path + (v3_suffix if v3 else ""), {"obj_name": object_name})
@@ -382,18 +437,18 @@ class XiaomiCloud:
         return result if isinstance(result, dict) else {}
 
     def _require_auth(self) -> CloudAuth:
-        if (auth := self.auth) is None:
+        if (auth := self._auth) is None:
             raise CloudAuthError("invalid_auth")
         return auth
 
-    def _reset_cookies(self) -> None:
+    def _reset_cookies(self, state: _Login) -> None:
         jar = self._session.cookie_jar
         jar.clear()
         values = {
             "sdkVersion": "3.8.6",
             "deviceId": self._client_id,
-            "passToken": self._pass_token,
-            "userId": self._user_id,
+            "passToken": state.pass_token,
+            "userId": state.user_id,
         }
         for domain in ("mi.com", "xiaomi.com"):
             cookies = SimpleCookie()
@@ -404,30 +459,35 @@ class XiaomiCloud:
                     cookies[name]["path"] = "/"
             jar.update_cookies(cookies, URL(f"https://{domain}/"))
 
-    def _cookie(self, name: str, domain: str | None = None) -> str | None:
-        """Return a cookie from the jar, only one set for domain (or a subdomain) if given."""
-        for morsel in self._session.cookie_jar:
-            if morsel.key == name and (domain is None or morsel["domain"].endswith(domain)):
-                return morsel.value
-        return None
+    def _cookie(self, name: str) -> str | None:
+        return next((m.value for m in self._session.cookie_jar if m.key == name), None)
 
-    async def _http(self, method: str, url: str, **kwargs: Any) -> _Reply:
+    def _reply_cookie(self, reply: _Reply, name: str) -> str | None:
+        """Return a cookie the reply set, else one the jar got earlier (e.g. on a redirect)."""
+        return reply.cookies.get(name) or self._cookie(name)
+
+    def _pass_token(self, state: _Login, reply: _Reply, data: Mapping[str, Any]) -> str | None:
+        # The jar still holds the pass token we started with, so it only fills a gap.
+        return data.get("passToken") or reply.cookies.get("passToken") or state.pass_token or self._cookie("passToken")
+
+    async def _http(self, method: str, url: str | URL, **kwargs: Any) -> _Reply:
         headers = {"User-Agent": self._user_agent, **kwargs.pop("headers", {})}
         try:
             async with self._session.request(method, url, headers=headers, timeout=TIMEOUT, **kwargs) as response:
-                reply = _Reply(response.status, response.headers, await response.read())
+                cookies = {name: morsel.value for name, morsel in response.cookies.items()}
+                reply = _Reply(response.status, response.headers, await response.read(), cookies)
         except (aiohttp.ClientError, TimeoutError) as err:
             raise CloudConnectionError(f"can't reach {URL(url).host}: {type(err).__name__}") from err
         _LOGGER.debug("%s %s: HTTP %s", method, URL(url).with_query(None), reply.status)
         return reply
 
-    def _update_login(self, data: dict[str, Any]) -> None:
+    def _update_login(self, state: _Login, data: dict[str, Any], reply: _Reply) -> None:
         if (user_id := data.get("userId")) is not None:
-            self._user_id = str(user_id)
-        self._ssecurity = data.get("ssecurity", self._ssecurity)
-        self._pass_token = data.get("passToken") or self._cookie("passToken", ACCOUNT_HOST) or self._pass_token
+            state.user_id = str(user_id)
+        state.ssecurity = data.get("ssecurity", state.ssecurity)
+        state.pass_token = self._pass_token(state, reply, data)
 
-    async def _service_login(self) -> tuple[str | None, str | None]:
+    async def _service_login(self, state: _Login) -> tuple[str | None, str | None]:
         """Step 1: return the STS location if the pass token is still good, and the login sign."""
         reply = await self._http(
             "GET", f"{ACCOUNT_URL}/pass/serviceLogin", params={"sid": SID, "_json": "true"}, headers=_FORM
@@ -435,13 +495,13 @@ class XiaomiCloud:
         data = reply.ok().json()
         if data.get("code") != 0:
             return None, data.get("_sign")
-        self._update_login(data)
+        self._update_login(state, data, reply)
         return data.get("location") or None, data.get("_sign")
 
-    async def _login_with_password(self, username: str, password: str, sign: str | None, captcha: str | None) -> str:
+    async def _login_with_password(self, state: _Login, password: str, sign: str | None, captcha: str | None) -> str:
         """Step 2: return the STS location, or raise if more than the password is needed."""
         data = {
-            "user": username,
+            "user": state.username,
             "hash": hashlib.md5(password.encode(), usedforsecurity=False).hexdigest().upper(),
             "callback": "https://sts.api.io.mi.com/sts",
             "sid": SID,
@@ -451,36 +511,37 @@ class XiaomiCloud:
             data["_sign"] = sign
         params = {"_json": "true"}
         cookies = {}
-        if captcha and self._captcha_ick:
+        if captcha and state.captcha_ick:
             data["captCode"] = captcha
             params["_dc"] = str(int(time.time() * 1000))
-            cookies["ick"] = self._captcha_ick
+            cookies["ick"] = state.captcha_ick
         reply = await self._http(
             "POST", f"{ACCOUNT_URL}/pass/serviceLoginAuth2", params=params, data=data, cookies=cookies, headers=_FORM
         )
         result = reply.ok().json()
         if location := result.get("location"):
-            self._update_login(result)
+            self._update_login(state, result, reply)
             return location
-        captcha_png = await self._fetch_captcha(_absolute(url)) if (url := result.get("captchaUrl")) else None
+        captcha_png = await self._fetch_captcha(state, _absolute(url)) if (url := result.get("captchaUrl")) else None
         verification_url = _absolute(url) if (url := result.get("notificationUrl")) else None
         if captcha_png or verification_url:
             _LOGGER.debug("Xiaomi login needs %s", "a captcha" if captcha_png else "a two-factor verification")
+            state.verification_url = verification_url
             raise CloudLoginRequired(captcha_png=captcha_png, verification_url=verification_url)
         raise CloudAuthError("invalid_auth")
 
-    async def _fetch_captcha(self, url: str) -> bytes | None:
+    async def _fetch_captcha(self, state: _Login, url: str) -> bytes | None:
         reply = (await self._http("GET", url)).ok()
-        self._captcha_ick = self._cookie("ick")
-        return reply.body if self._captcha_ick else None
+        state.captcha_ick = self._reply_cookie(reply, "ick")
+        return reply.body if state.captcha_ick else None
 
-    async def _fetch_service_token(self, location: str) -> None:
+    async def _fetch_service_token(self, state: _Login, location: str) -> None:
         """Step 3: follow the STS location, which sets the serviceToken cookie."""
-        (await self._http("GET", location, headers=_FORM)).ok()
-        if not (token := self._cookie("serviceToken")):
+        reply = (await self._http("GET", location, headers=_FORM)).ok()
+        if not (token := self._reply_cookie(reply, "serviceToken")):
             raise CloudAuthError("invalid_auth")
-        self._service_token = token
-        self._pass_token = self._cookie("passToken", ACCOUNT_HOST) or self._pass_token
+        state.service_token = token
+        state.pass_token = self._pass_token(state, reply, {})
 
     def _api_cookies(self, auth: CloudAuth) -> dict[str, str]:
         dst = time.localtime().tm_isdst
@@ -495,9 +556,9 @@ class XiaomiCloud:
             "channel": "MI_APP_STORE",
         }
 
-    async def _api(self, path: str, params: Any) -> dict[str, Any]:
-        """POST an encrypted API call and return the decrypted reply."""
-        auth = self._require_auth()
+    async def _api(self, path: str, params: Any, auth: CloudAuth | None = None) -> dict[str, Any]:
+        """POST an encrypted API call with one session (the current one by default); return the reply."""
+        auth = auth or self._require_auth()
         url = f"{self.api_url}/{path}"
         nonce = cc.generate_nonce()
         key = cc.signed_nonce(auth.ssecurity, nonce)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict
 import logging
 import re
@@ -17,7 +19,7 @@ from custom_components.dreame_vacuum_3d.protocol.cloud import (
     XiaomiCloud,
 )
 
-from .fake_cloud import ACCOUNT, SSECURITY, FakeSession, Reply, fixture
+from .fake_cloud import ACCOUNT, API_URL, SSECURITY, Call, FakeSession, Reply, fixture
 
 LOGIN = fixture("login")
 SERVICE_LOGIN = f"{ACCOUNT}/pass/serviceLogin"
@@ -25,18 +27,34 @@ LOGIN_AUTH = f"{ACCOUNT}/pass/serviceLoginAuth2"
 STS = "https://sts.api.io.mi.com/sts"
 CAPTCHA = f"{ACCOUNT}/pass/getCode"
 SERVICE_TOKEN = "c3ludGhldGljLXNlcnZpY2U/to+ken=="
+OLD_SSECURITY = "b2xkLXNzZWN1cml0eS0xNg=="
 STORED = CloudAuth(
     user_id="1000001",
-    ssecurity=SSECURITY,
+    ssecurity=OLD_SSECURITY,
     service_token="b2xkLXNlcnZpY2UtdG9rZW4=",
     client_id="abcdefghijklmnop",
     pass_token="V1:b2xkLXBhc3MtdG9rZW4=",
 )
+CHECK = "v2/message/v2/check_new_msg"
 
 
 @pytest.fixture
 async def session() -> FakeSession:
-    return FakeSession()
+    session = FakeSession()
+    session.ssecurities.add(OLD_SSECURITY)
+    return session
+
+
+def paused(reply: Reply) -> tuple[asyncio.Event, asyncio.Event, Callable[[Call], Awaitable[Reply]]]:
+    """A handler that waits for release before answering; reached is set once it's called."""
+    reached, release = asyncio.Event(), asyncio.Event()
+
+    async def handler(call: Call) -> Reply:
+        reached.set()
+        await release.wait()
+        return reply
+
+    return reached, release, handler
 
 
 def serve_login(session: FakeSession, *step_2: Reply, prefix: str = "&&&START&&&") -> None:
@@ -118,14 +136,125 @@ async def test_login_with_a_wrong_password(session):
     assert not session.requests("GET", STS)
 
 
-async def test_failed_login_forgets_the_old_session(session):
-    session.api("v2/message/v2/check_new_msg", {"code": 3, "message": "auth err"})
+async def test_failed_login_keeps_the_old_session(session):
+    session.api(CHECK, {"code": 3, "message": "auth err"})
     serve_login(session, Reply.xiaomi(LOGIN["wrong_password"]))
     cloud = XiaomiCloud(session, "de", STORED)
 
     with pytest.raises(CloudAuthError):
         await cloud.login("user@example.com", "wrong")
-    assert cloud.auth is None
+    assert cloud.auth == STORED
+
+
+async def test_rpc_during_a_login_uses_one_whole_session(session):
+    session.api(CHECK, {"code": 2, "message": "auth err"})
+    session.api("v2/home/rpc/1001", {"code": 0, "result": "ok"})
+    serve_login(session)
+    reached, release, slow_sts = paused(Reply(cookies={"serviceToken": SERVICE_TOKEN}))
+    session.on("GET", STS, slow_sts)
+    cloud = XiaomiCloud(session, "de", STORED)
+
+    login = asyncio.create_task(cloud.login("user@example.com", "secret-password"))
+    await reached.wait()
+    await cloud.rpc("1001", "get_properties", [])
+    release.set()
+    await login
+    await cloud.rpc("1001", "get_properties", [])
+
+    rpcs = session.requests("POST", f"{API_URL}/v2/home/rpc/1001")
+    assert [(c.data["ssecurity"], c.cookies["serviceToken"]) for c in rpcs] == [
+        (OLD_SSECURITY, STORED.service_token),
+        (SSECURITY, SERVICE_TOKEN),
+    ]
+
+
+async def test_concurrent_logins_run_one_after_the_other(session):
+    session.api(CHECK, {"code": 0, "result": {}})
+    serve_login(session)
+    reached, release, slow_sts = paused(Reply(cookies={"serviceToken": SERVICE_TOKEN}))
+    session.on("GET", STS, slow_sts)
+    cloud = XiaomiCloud(session, "de")
+
+    first = asyncio.create_task(cloud.login("user@example.com", "secret-password"))
+    await reached.wait()
+    second = asyncio.create_task(cloud.login("user@example.com", "secret-password"))
+    for _ in range(5):
+        await asyncio.sleep(0)
+    assert len(session.calls) == 3
+    release.set()
+
+    assert await first == await second
+    assert [c.url.path for c in session.calls] == [
+        "/pass/serviceLogin",
+        "/pass/serviceLoginAuth2",
+        "/sts",
+        "/app/v2/message/v2/check_new_msg",
+    ]
+
+
+async def test_login_reads_a_pass_token_set_for_the_parent_domain(session):
+    token = "V1:bmV3LXBhc3MtdG9rZW4=/+"
+    reply = {k: v for k, v in LOGIN["login_ok"].items() if k != "passToken"}
+    serve_login(session, Reply.xiaomi(reply, cookies={"passToken": {"value": token, "domain": ".xiaomi.com"}}))
+
+    assert (await XiaomiCloud(session, "de").login("user@example.com", "secret-password")).pass_token == token
+
+
+async def test_login_follows_a_redirecting_sts(session):
+    serve_login(session)
+    session.on(
+        "GET", STS, Reply(status=302, headers={"Location": f"{STS}/done"}, cookies={"serviceToken": SERVICE_TOKEN})
+    )
+    session.on("GET", f"{STS}/done", Reply(body="ok"))
+
+    assert (
+        await XiaomiCloud(session, "de").login("user@example.com", "secret-password")
+    ).service_token == SERVICE_TOKEN
+
+
+async def test_login_with_another_account_forgets_the_first(session):
+    serve_login(session)
+    session.api(CHECK, {"code": 0, "result": {}})
+    cloud = XiaomiCloud(session, "de")
+    await cloud.login("user@example.com", "secret-password")
+    session.calls.clear()
+
+    await cloud.login("other@example.com", "other-password")
+
+    [step_1] = session.requests("GET", SERVICE_LOGIN)
+    assert "passToken" not in step_1.cookies
+    assert "userId" not in step_1.cookies
+    assert not session.api_calls
+
+
+async def test_captcha_is_forgotten_after_a_login(session):
+    serve_login(session, Reply.xiaomi(LOGIN["captcha"]), Reply.xiaomi(LOGIN["login_ok"]))
+    session.on("GET", CAPTCHA, Reply(body=b"\x89PNG fake", cookies={"ick": "c3ludGhldGljLWljaw"}))
+    session.api(CHECK, {"code": 2, "message": "auth err"})
+    cloud = XiaomiCloud(session, "de")
+    with pytest.raises(CloudLoginRequired):
+        await cloud.login("user@example.com", "secret-password")
+    await cloud.login("user@example.com", "secret-password", captcha="x7k2")
+
+    await cloud.login("user@example.com", "secret-password", captcha="x7k2")
+
+    last = session.requests("POST", LOGIN_AUTH)[-1]
+    assert "captCode" not in last.data
+    assert "ick" not in last.cookies
+
+
+async def test_captcha_cookie_is_read_from_the_reply(session):
+    serve_login(session, Reply.xiaomi(LOGIN["captcha"]), Reply.xiaomi(LOGIN["login_ok"]))
+    # The jar refuses a cookie for another domain; only the reply has it.
+    ick = {"value": "c3ludGhldGljLWljaw", "domain": "captcha.example.com"}
+    session.on("GET", CAPTCHA, Reply(body=b"\x89PNG fake", cookies={"ick": ick}))
+    cloud = XiaomiCloud(session, "de")
+
+    with pytest.raises(CloudLoginRequired):
+        await cloud.login("user@example.com", "secret-password")
+    await cloud.login("user@example.com", "secret-password", captcha="x7k2")
+
+    assert session.requests("POST", LOGIN_AUTH)[-1].cookies["ick"] == "c3ludGhldGljLWljaw"
 
 
 async def test_login_asks_for_a_captcha_and_retries_with_it(session):
