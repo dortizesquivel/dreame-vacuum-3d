@@ -336,6 +336,135 @@
       "dust_bag_problem": {
         "name": "Dust bag problem"
       }
+    },
+    "select": {
+      "cleaning_mode": {
+        "name": "Cleaning mode",
+        "state": {
+          "sweeping": "Sweeping",
+          "mopping": "Mopping",
+          "sweeping_and_mopping": "Sweeping and mopping",
+          "mopping_after_sweeping": "Mopping after sweeping"
+        }
+      },
+      "suction_level": {
+        "name": "Suction level",
+        "state": {
+          "quiet": "Quiet",
+          "standard": "Standard",
+          "strong": "Strong",
+          "turbo": "Turbo"
+        }
+      },
+      "water_volume": {
+        "name": "Water volume",
+        "state": {
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High"
+        }
+      },
+      "auto_empty_frequency": {
+        "name": "Auto-empty frequency",
+        "state": {
+          "1": "After every task",
+          "2": "After two cleanings",
+          "3": "After three cleanings"
+        }
+      },
+      "mop_wash_level": {
+        "name": "Mop wash level",
+        "state": {
+          "water_saving": "Water saving",
+          "daily": "Daily",
+          "deep": "Deep"
+        }
+      },
+      "carpet_cleaning": {
+        "name": "Carpet cleaning",
+        "state": {
+          "not_set": "Not set",
+          "avoidance": "Avoid",
+          "adaptation": "Adapt",
+          "remove_mop": "Remove mop",
+          "adaptation_without_route": "Adapt without route",
+          "vacuum_and_mop": "Vacuum and mop",
+          "ignore": "Ignore",
+          "cross": "Cross"
+        }
+      }
+    },
+    "switch": {
+      "carpet_boost": {
+        "name": "Carpet boost"
+      },
+      "dnd": {
+        "name": "Do not disturb"
+      },
+      "child_lock": {
+        "name": "Child lock"
+      },
+      "obstacle_avoidance": {
+        "name": "Obstacle avoidance"
+      },
+      "auto_mount_mop": {
+        "name": "Auto mop mount"
+      },
+      "self_clean": {
+        "name": "Self-clean"
+      }
+    },
+    "number": {
+      "volume": {
+        "name": "Volume"
+      },
+      "dnd_start": {
+        "name": "Do not disturb start"
+      },
+      "dnd_end": {
+        "name": "Do not disturb end"
+      }
+    },
+    "button": {
+      "reset_main_brush": {
+        "name": "Reset main brush"
+      },
+      "reset_side_brush": {
+        "name": "Reset side brush"
+      },
+      "reset_filter": {
+        "name": "Reset filter"
+      },
+      "reset_sensor": {
+        "name": "Reset sensors"
+      },
+      "reset_mop_pad": {
+        "name": "Reset mop pad"
+      },
+      "reset_silver_ion": {
+        "name": "Reset silver ion"
+      },
+      "reset_detergent": {
+        "name": "Reset detergent"
+      },
+      "reset_tank_filter": {
+        "name": "Reset tank filter"
+      },
+      "reset_squeegee": {
+        "name": "Reset squeegee"
+      },
+      "reset_deodorizer": {
+        "name": "Reset deodorizer"
+      },
+      "empty": {
+        "name": "Empty dust bag"
+      },
+      "wash_mop": {
+        "name": "Wash mop"
+      },
+      "dry_mop": {
+        "name": "Dry mop"
+      }
     }
   }
 }

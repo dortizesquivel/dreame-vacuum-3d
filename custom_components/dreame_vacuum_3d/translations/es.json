@@ -336,6 +336,135 @@
       "dust_bag_problem": {
         "name": "Problema de bolsa de polvo"
       }
+    },
+    "select": {
+      "cleaning_mode": {
+        "name": "Modo de limpieza",
+        "state": {
+          "sweeping": "Aspirar",
+          "mopping": "Fregar",
+          "sweeping_and_mopping": "Aspirar y fregar",
+          "mopping_after_sweeping": "Fregar tras aspirar"
+        }
+      },
+      "suction_level": {
+        "name": "Nivel de succión",
+        "state": {
+          "quiet": "Silencio",
+          "standard": "Estándar",
+          "strong": "Fuerte",
+          "turbo": "Turbo"
+        }
+      },
+      "water_volume": {
+        "name": "Cantidad de agua",
+        "state": {
+          "low": "Baja",
+          "medium": "Media",
+          "high": "Alta"
+        }
+      },
+      "auto_empty_frequency": {
+        "name": "Frecuencia de vaciado",
+        "state": {
+          "1": "Tras cada tarea",
+          "2": "Tras dos limpiezas",
+          "3": "Tras tres limpiezas"
+        }
+      },
+      "mop_wash_level": {
+        "name": "Nivel de lavado de mopa",
+        "state": {
+          "water_saving": "Ahorro de agua",
+          "daily": "Diario",
+          "deep": "Profundo"
+        }
+      },
+      "carpet_cleaning": {
+        "name": "Limpieza de alfombras",
+        "state": {
+          "not_set": "Sin definir",
+          "avoidance": "Evitar",
+          "adaptation": "Adaptar",
+          "remove_mop": "Quitar mopa",
+          "adaptation_without_route": "Adaptar sin ruta",
+          "vacuum_and_mop": "Aspirar y fregar",
+          "ignore": "Ignorar",
+          "cross": "Cruzar"
+        }
+      }
+    },
+    "switch": {
+      "carpet_boost": {
+        "name": "Refuerzo en alfombras"
+      },
+      "dnd": {
+        "name": "No molestar"
+      },
+      "child_lock": {
+        "name": "Bloqueo infantil"
+      },
+      "obstacle_avoidance": {
+        "name": "Evitación de obstáculos"
+      },
+      "auto_mount_mop": {
+        "name": "Montaje automático de mopa"
+      },
+      "self_clean": {
+        "name": "Autolavado"
+      }
+    },
+    "number": {
+      "volume": {
+        "name": "Volumen"
+      },
+      "dnd_start": {
+        "name": "Inicio de no molestar"
+      },
+      "dnd_end": {
+        "name": "Fin de no molestar"
+      }
+    },
+    "button": {
+      "reset_main_brush": {
+        "name": "Reiniciar cepillo principal"
+      },
+      "reset_side_brush": {
+        "name": "Reiniciar cepillo lateral"
+      },
+      "reset_filter": {
+        "name": "Reiniciar filtro"
+      },
+      "reset_sensor": {
+        "name": "Reiniciar sensores"
+      },
+      "reset_mop_pad": {
+        "name": "Reiniciar mopa"
+      },
+      "reset_silver_ion": {
+        "name": "Reiniciar ion de plata"
+      },
+      "reset_detergent": {
+        "name": "Reiniciar detergente"
+      },
+      "reset_tank_filter": {
+        "name": "Reiniciar filtro del depósito"
+      },
+      "reset_squeegee": {
+        "name": "Reiniciar rasqueta"
+      },
+      "reset_deodorizer": {
+        "name": "Reiniciar desodorizante"
+      },
+      "empty": {
+        "name": "Vaciar bolsa"
+      },
+      "wash_mop": {
+        "name": "Lavar mopa"
+      },
+      "dry_mop": {
+        "name": "Secar mopa"
+      }
     }
   }
 }

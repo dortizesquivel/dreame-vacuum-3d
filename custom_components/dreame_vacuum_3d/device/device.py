@@ -8,7 +8,7 @@ from random import randrange
 from typing import Any
 
 from custom_components.dreame_vacuum_3d.device.capabilities import Capabilities
-from custom_components.dreame_vacuum_3d.device.enums import Status
+from custom_components.dreame_vacuum_3d.device.enums import CleaningMode, Status, parse_enum
 from custom_components.dreame_vacuum_3d.protocol import miot
 from custom_components.dreame_vacuum_3d.protocol.miio_codec import MiioError
 from custom_components.dreame_vacuum_3d.protocol.miot import Send
@@ -121,6 +121,58 @@ class DreameDevice:
 
     async def reset_consumable(self, name: str) -> Any:
         return await self._action(f"reset_{name}")
+
+    async def start_auto_empty(self) -> Any:
+        return await self._action("start_auto_empty")
+
+    async def start_washing(self) -> Any:
+        """Wash the mop at the dock (Tasshack start_self_wash_base \"2,1\")."""
+        return await self._self_wash("2,1")
+
+    async def start_drying(self) -> Any:
+        """Dry the mop at the dock (Tasshack start_self_wash_base \"3,1\")."""
+        return await self._self_wash("3,1")
+
+    async def _self_wash(self, parameters: str) -> Any:
+        props_piid = self.caps.properties["cleaning_properties"][1]
+        return await self._action(
+            "start_washing",
+            [{"piid": props_piid, "value": parameters}],
+        )
+
+    def cleaning_mode(self) -> int | None:
+        """Decoded cleaning mode (handles packed firmware values)."""
+        raw = self.values.get("cleaning_mode")
+        if not isinstance(raw, int):
+            return None
+        if raw <= 3:
+            simple = parse_enum(CleaningMode, raw)
+            return None if simple is None or simple.name == "UNKNOWN" else simple.value
+        # Packed mop-pad-lifting layout (Tasshack split_group_value mapping).
+        bits = raw & 0x03
+        if bits == 2:
+            return CleaningMode.SWEEPING.value
+        if bits == 0:
+            return CleaningMode.SWEEPING_AND_MOPPING.value
+        if bits == 3:
+            return CleaningMode.MOPPING_AFTER_SWEEPING.value
+        return CleaningMode.MOPPING.value
+
+    async def set_cleaning_mode(self, mode: int) -> None:
+        """Write cleaning mode, preserving packed high bytes when present."""
+        raw = self.values.get("cleaning_mode")
+        mode = int(mode)
+        if isinstance(raw, int) and raw > 3:
+            packed = {
+                CleaningMode.SWEEPING.value: 2,
+                CleaningMode.SWEEPING_AND_MOPPING.value: 0,
+                CleaningMode.MOPPING.value: 1,
+                CleaningMode.MOPPING_AFTER_SWEEPING.value: 3,
+            }.get(mode, mode & 0x03)
+            value = (raw & ~0x03) | packed
+        else:
+            value = mode
+        await self.set("cleaning_mode", value)
 
     async def _start_custom(self, status: int, parameters: str) -> Any:
         status_piid = self.caps.properties["status"][1]

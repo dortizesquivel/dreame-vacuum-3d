@@ -35,7 +35,15 @@ from .protocol.cloud import (
 from .protocol.miio import MiioClient
 from .protocol.miio_codec import MiioError
 
-PLATFORMS: list[str] = ["vacuum", "sensor", "binary_sensor"]
+PLATFORMS: list[str] = [
+    "vacuum",
+    "sensor",
+    "binary_sensor",
+    "select",
+    "switch",
+    "number",
+    "button",
+]
 
 
 @dataclass

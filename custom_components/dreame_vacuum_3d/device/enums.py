@@ -411,6 +411,20 @@ class MopWashLevel(IntEnum):
     DEEP = 2
 
 
+class CarpetCleaning(IntEnum):
+    """How the robot treats carpets."""
+
+    UNKNOWN = -1
+    NOT_SET = 0
+    AVOIDANCE = 1
+    ADAPTATION = 2
+    REMOVE_MOP = 3
+    ADAPTATION_WITHOUT_ROUTE = 4
+    VACUUM_AND_MOP = 5
+    IGNORE = 6
+    CROSS = 7
+
+
 class CleanWaterTankStatus(IntEnum):
     """Dock clean-water tank."""
 
