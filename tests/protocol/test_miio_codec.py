@@ -67,6 +67,18 @@ def test_wrong_token_is_rejected():
         codec.parse(bytes(16), packet)
 
 
+@pytest.mark.parametrize(
+    "head",
+    [
+        pytest.param(struct.pack(">HHIII", 0x2132, 32, 0, 1, 1), id="magic"),
+        pytest.param(struct.pack(">HHIII", 0x2131, 48, 0, 1, 1), id="length"),
+    ],
+)
+def test_bad_header_is_rejected(head):
+    with pytest.raises(codec.MiioError, match="not a miIO packet"):
+        codec.parse(TOKEN, head + bytes(16))
+
+
 def test_header_only_reply_has_no_payload():
     reply = struct.pack(">HHIII", 0x2131, 32, 0, 7, 99) + bytes(16)
     assert codec.parse(TOKEN, reply) == (codec.Header(7, 99), None)
