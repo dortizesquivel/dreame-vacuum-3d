@@ -27,6 +27,8 @@ Security requirements for this phase:
 | Config flow / entry | Username, password, country, captcha, 2FA code | The Home Assistant admin | Phishing of the form; password stored in `.storage` readable by anyone with `/config` access (same as other cloud integrations) |
 | Xiaomi cloud | Login JSON, device list, RPC, map URLs | Xiaomi, the network | Session theft; hostile JSON; redirect to unexpected hosts |
 | Local miIO | Encrypted UDP replies | The robot, the LAN | Replay; wrong token; oversized payloads |
+| Map files | zlib + base64 frames the robot uploads | The robot, Xiaomi, the network | Hostile or corrupt data crashing the decoder; a zip bomb |
+| Card WebSocket | `dreame_vacuum_3d/map/subscribe` | Any logged-in Home Assistant user | Reading the floor plan of a vacuum the user has no access to |
 | Diagnostics download | Admin-triggered export | Home Assistant admins | Accidental paste of secrets into a public issue |
 | Build and release | GitHub Actions, release zip | Upstream actions, the CI | Tampered release; compromised action |
 
@@ -47,7 +49,7 @@ Security requirements for this phase:
 | miIO token | Config entry | LAN (key derivation only; not sent in clear) | Redacted |
 | `did`, MAC, host, username | Config entry | Cloud / LAN as needed for protocol | Redacted |
 | Serial number | Device property | Not by this integration | Omitted |
-| Map payloads | Later phases: download + cache | From Xiaomi CDN to HA | Must stay redacted / local |
+| Floor plan (rooms, names, path) | In memory only (`LiveMap`) | Only to the card, over Home Assistant's WebSocket, for users who can read the vacuum entity | Not included |
 
 ## Common weaknesses countered
 
@@ -57,6 +59,7 @@ Security requirements for this phase:
 | Use of hard-coded credentials | None; user supplies account and token comes from the cloud device list |
 | Supply chain (CWE-829, CWE-494) | Actions pinned to commit SHAs; release zip attested; reproducible package from `scripts/release.py` |
 | Improper error handling | Protocol errors mapped to HA exceptions; user-facing flow errors are fixed keys from `strings.json` |
+| Untrusted input (CWE-20) | The map decoder checks sizes against the header and raises only `MapError` on anything else, fuzzed with Hypothesis; a failed frame keeps the last map and logs one warning |
 
 ## Evidence
 
