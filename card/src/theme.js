@@ -42,6 +42,8 @@ export function readTheme(el, dark) {
     fg2: cssColor(v('--secondary-text-color'), dark ? '#9b9b9b' : '#727272', bg),
     line: cssColor(v('--divider-color'), dark ? '#2f2f2f' : '#e0e0e0', bg),
     accent: cssColor(v('--primary-color'), '#03a9f4', bg),
+    warning: cssColor(v('--warning-color'), '#ffa600', bg),
+    error: cssColor(v('--error-color'), '#db4437', bg),
     model: dark ? MODEL.dark : MODEL.light,
   };
 }

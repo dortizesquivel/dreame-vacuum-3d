@@ -20,7 +20,7 @@ from custom_components.dreame_vacuum_3d.protocol.cloud import CloudAuthError
 from custom_components.dreame_vacuum_3d.protocol.miio import MiioTimeoutError
 from tests.integration.helpers import setup_fixture_entry
 from tests.integration.test_init import ENTRY_DATA
-from tests.map_frames import encrypt, frame, live
+from tests.map_frames import SAVED_ROWS, encrypt, frame, live, saved
 
 DID = ENTRY_DATA["did"]
 IN_ROOM_1 = (-925, -425, 90)  # cell (1, 1)
@@ -44,6 +44,8 @@ async def test_map_feeds_the_room_entities(hass: HomeAssistant, card_urls: list[
     assert message["room"] == 1 and message["active"] == [2]
     assert message["path"][0] == {"mode": "both", "points": [[-900, -450], [-850, -450], [-850, -400]]}
     assert set(message["rooms"]) == {"1", "2"} and "255" in message["cells"]
+    assert message["obstacles"] == [] and message["furniture"] == []
+    assert message["new_cells"] == []  # the live frame has the same walls as the saved map
 
     room = hass.states.get(_entity(hass, "sensor", "current_room"))
     assert room.state == "Cocina" and room.attributes["segment_id"] == 1
@@ -142,6 +144,24 @@ async def test_errors_keep_the_last_map_and_warn_once(hass: HomeAssistant, caplo
     device.request_map = AsyncMock(return_value=(live(robot=(-700, -400, 0)), None))
     await live_map.refresh()
     assert live_map.message["robot"] == [-700, -400, 0] and live_map.message["room"] == 2
+
+
+async def test_obstacles_furniture_and_new_cells_reach_the_card(hass: HomeAssistant) -> None:
+    entry, _miio = await setup(hass)
+    live_map = entry.runtime_data.map
+    rows = [[3 if v else 0 for v in row] for row in SAVED_ROWS]
+    rows[0][5] = 2  # something new in room 2, three cells from its walls
+    data = {
+        "rism": saved(),
+        "ai_obstacle": [[-925, -425, 133, 0.99]],
+        "ai_furniture_new": [[0, 0, 4, 1, -1000, -500, 150, 100]],
+    }
+    entry.runtime_data.coordinator.device.request_map = AsyncMock(return_value=(frame(rows, data), None))
+    await live_map.refresh()
+    pose = live_map.pose
+    assert pose["obstacles"] == [{"x": -925, "y": -425, "type": "shoes", "confidence": 99, "source": "camera"}]
+    assert pose["furniture"][0]["type"] == "two_seat_sofa"
+    assert pose["new_cells"] == [5, 0, 1]
 
 
 async def test_live_map_without_saved_rooms_and_unknown_robot(hass: HomeAssistant) -> None:

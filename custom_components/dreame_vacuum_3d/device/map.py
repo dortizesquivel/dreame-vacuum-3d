@@ -232,6 +232,115 @@ def path(frame: Frame) -> list[dict[str, Any]]:
     return strokes
 
 
+# Things on the floor the robot names (Tasshack's ObstacleType). Others it reports become "obstacle", except these.
+_OBSTACLES = {
+    129: "scale", 130: "thread", 131: "wire", 132: "toy", 133: "shoes", 134: "sock", 135: "pet_waste",
+    136: "trash_can", 137: "fabric", 138: "power_strip", 139: "liquid_stain", 142: "obstacle", 158: "pet",
+    163: "cleaning_tools", 169: "stain", 202: "stain", 204: "leg", 205: "particles", 206: "stain", 209: "food_bowl",
+    210: "pet_bed", 225: "hair", 226: "paper", 229: "sundry",
+}  # fmt: skip
+# The dock itself, codes the app hides, rooms it couldn't enter, spots it got stuck, stains it already cleaned.
+_NOT_OBSTACLES = {128, 160, 166, 200, 201, 207, 214, 215, 216, 217, 228}
+_IGNORED = {2, 3, 4}  # ignored automatically, an error, hidden
+
+_FURNITURE = {
+    1: "single_bed", 2: "double_bed", 3: "armchair", 4: "two_seat_sofa", 5: "three_seat_sofa", 6: "dining_table",
+    7: "nightstand", 8: "coffee_table", 9: "toilet", 10: "litter_box", 11: "pet_bed", 12: "food_bowl",
+    13: "pet_toilet", 14: "refrigerator", 15: "washing_machine", 16: "litter_box", 17: "air_conditioner",
+    18: "tv_cabinet", 19: "bookshelf", 20: "shoe_cabinet", 21: "wardrobe", 22: "plant", 23: "floor_mirror",
+    24: "l_shaped_sofa", 25: "coffee_table", 26: "table", 29: "armchair", 30: "three_seat_sofa",
+}  # fmt: skip
+
+
+def obstacles(frame: Frame) -> list[dict[str, Any]]:
+    """What the robot found on the floor: [{x, y (mm), type, confidence (%), source: camera | lidar}]."""
+    out: list[dict[str, Any]] = []
+    for key, source in (("ai_obstacle", "camera"), ("laser_obstacle", "lidar")):
+        items = frame.data.get(key)
+        for o in items if isinstance(items, list) else []:
+            if not isinstance(o, list) or len(o) < 3:
+                continue
+            try:
+                x, y, kind = float(o[0]), float(o[1]), int(o[2])
+                confidence = round(float(o[3]) * 100) if len(o) > 3 and str(o[3]).strip() else 100
+            except TypeError, ValueError:
+                continue
+            # The app hides "small objects", and anything it is less than half sure of.
+            small = len(o) > 17 and str(o[17]) == "1" and (128 <= kind <= 138 or kind == 142)
+            if kind in _NOT_OBSTACLES or small or confidence < 50 or _ignore_status(o) in _IGNORED:
+                continue
+            out.append({"x": round(x), "y": round(y), "type": _OBSTACLES.get(kind, "obstacle"),
+                        "confidence": confidence, "source": source})  # fmt: skip
+    return out
+
+
+def _ignore_status(o: list[Any]) -> int:
+    value = o[18] if len(o) > 18 else o[-1] if len(str(o[-1])) == 1 else 0
+    try:
+        return int(value)
+    except TypeError, ValueError:
+        return 0
+
+
+def furniture(frame: Frame) -> list[dict[str, Any]]:
+    """Furniture the robot's camera recognised: [{type, x0, y0, width, height (mm), angle (degrees)}]."""
+    key = next((k for k in ("ai_furniture_user", "ai_furniture_new", "ai_furniture") if frame.data.get(k)), None)
+    out: list[dict[str, Any]] = []
+    for f in frame.data[key] if key and isinstance(frame.data[key], list) else []:
+        if not isinstance(f, list) or len(f) < 8:  # older entries are only a point
+            continue
+        try:
+            kind, x0, y0, width, height = int(f[2]), int(f[4]), int(f[5]), abs(int(f[6])), abs(int(f[7]))
+            angle = float(f[8]) if len(f) > 8 else 0.0
+        except TypeError, ValueError:
+            continue
+        if kind not in _FURNITURE or not width or not height:
+            continue
+        if key == "ai_furniture" and len(f) > 8 and angle in (0, 180):  # this list has them the other way round
+            angle = 180 - angle
+        out.append({"type": _FURNITURE[kind], "x0": x0, "y0": y0, "width": width, "height": height, "angle": angle})
+    return out
+
+
+def floor_mask(saved: Frame, margin: int = 2) -> bytearray:
+    """1 for each cell of a room's floor at least `margin` cells from the saved map's walls, else 0."""
+    width, height = saved.grid.width, saved.grid.height
+    mask = bytearray(1 if (v & 0x3F) and not v & 0x80 else 0 for v in saved.cells)
+    for i, v in enumerate(saved.cells):
+        if v & 0x80:
+            x, y = i % width, i // width
+            for yy in range(max(0, y - margin), min(height, y + margin + 1)):
+                start = yy * width
+                mask[start + max(0, x - margin) : start + min(width, x + margin + 1)] = bytes(
+                    min(width, x + margin + 1) - max(0, x - margin)
+                )
+    return mask
+
+
+def new_cells(live: Frame, saved: Grid, mask: bytearray) -> list[int]:
+    """Where the live map sees a wall or an obstacle on what the saved map has as open floor: something that wasn't
+    there when the house was mapped. Runs [x, y, n, …] in the saved map's grid."""
+    key = _framed_cell if live.data.get("fsm") == 1 else _live_cell
+    walls = bytes(1 if key(v) == WALL else 0 for v in range(256))
+    width, size = live.grid.width, live.grid.size
+    hits: set[tuple[int, int]] = set()
+    for y in range(live.grid.height):
+        row = live.cells[y * width : (y + 1) * width].translate(walls)
+        for run in re.finditer(b"\x01+", row):
+            sy = int((live.grid.top + (y + 0.5) * size - saved.top) // saved.size)
+            for x in range(run.start(), run.end()):
+                sx = int((live.grid.left + (x + 0.5) * size - saved.left) // saved.size)
+                if 0 <= sx < saved.width and 0 <= sy < saved.height and mask[sy * saved.width + sx]:
+                    hits.add((sx, sy))
+    runs: list[int] = []
+    for sx, sy in sorted(hits, key=lambda c: (c[1], c[0])):
+        if runs and runs[-2] == sy and runs[-3] + runs[-1] == sx:
+            runs[-1] += 1
+        else:
+            runs.extend((sx, sy, 1))
+    return runs
+
+
 def active_rooms(frame: Frame) -> list[int]:
     """Rooms the robot is cleaning (`sa`: [[room, …], …])."""
     sa = frame.data.get("sa")

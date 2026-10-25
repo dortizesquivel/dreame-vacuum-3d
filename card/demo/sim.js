@@ -16,8 +16,15 @@ export function fromDump(d) {
     try { name = s[4] ? new TextDecoder().decode(Uint8Array.from(atob(s[4]), (c) => c.charCodeAt(0))).trim() : null; } catch { /* unnamed */ }
     rooms[s[0]] = { name, x: s[1], y: s[2] };
   }
-  return { map_id: d.map_id, frame_id: d.frame_id, grid: { left, top, size, width, height }, cells: d.data, rooms, dock: d.charger_position };
+  // Tasshack keeps furniture as [centre x, centre y, width, height, type, ?, angle, scale].
+  const TYPES = { 1: 'single_bed', 2: 'double_bed', 3: 'armchair', 4: 'two_seat_sofa', 5: 'three_seat_sofa', 6: 'dining_table', 8: 'coffee_table', 9: 'toilet' };
+  const furniture = (d.furnitures ?? []).filter((f) => TYPES[f[4]]).map((f) => ({
+    type: TYPES[f[4]], x0: f[0] - f[2] / 2, y0: f[1] - f[3] / 2, width: f[2], height: f[3], angle: f[6] ?? 0,
+  }));
+  return { map_id: d.map_id, frame_id: d.frame_id, grid: { left, top, size, width, height }, cells: d.data, rooms, dock: d.charger_position, furniture };
 }
+
+const SEES = 1200;   // mm: how close the robot gets before it reports something on the floor
 
 export class Sim {
   constructor(map) {
@@ -47,10 +54,34 @@ export class Sim {
     }
     this.pose = [...map.dock];
     this.path = [];
+    this.hidden = this.plantThings();   // things on the floor, reported once the robot comes close
+    this.found = [];
+    this.newCells = [];
     this.route = [];
     this.active = [];
     this.state = 'docked';
     this.frame = map.frame_id ?? 0;
+  }
+
+  /** A few things on the floor of the demo house: by a room's centre, a little to the side. */
+  plantThings() {
+    const at = (room, dx, dy) => {
+      const r = this.map.rooms[room];
+      return r ? [r.x + dx, r.y + dy] : null;
+    };
+    const things = [
+      { type: 'shoes', at: at(8, 400, -300) },
+      { type: 'sock', at: at(9, -600, 500) },
+      { type: 'wire', at: at(9, 900, -400) },
+      { type: 'liquid_stain', at: at(13, -500, 200) },
+    ].filter((t) => t.at).map((t) => ({ x: t.at[0], y: t.at[1], type: t.type, confidence: 96, source: 'camera' }));
+    // And a box nobody had put there when the house was mapped: 30 by 20 cm, which the lidar outlines.
+    const box = at(13, 600, -600);
+    if (box) {
+      const [cx, cy] = this.toCell(box);
+      things.push({ cells: [cx, cy, 6, cx, cy + 1, 6, cx, cy + 2, 6, cx, cy + 3, 6], x: box[0], y: box[1] });
+    }
+    return things;
   }
 
   toCell([x, y]) { return [Math.floor((x - this.g.left) / this.g.size), Math.floor((y - this.g.top) / this.g.size)]; }
@@ -169,6 +200,11 @@ export class Sim {
       const last = stroke.points[stroke.points.length - 1];
       if (Math.hypot(point[0] - last[0], point[1] - last[1]) >= TRAIL_STEP) stroke.points.push(point);
     }
+    for (const t of this.hidden.filter((h) => Math.hypot(h.x - this.pose[0], h.y - this.pose[1]) < SEES)) {
+      this.hidden.splice(this.hidden.indexOf(t), 1);
+      if (t.cells) this.newCells.push(...t.cells);
+      else this.found.push(t);
+    }
     if (!this.route.length && this.state !== 'docked') {
       this.pose = [...this.map.dock];
       this.state = 'docked';
@@ -187,6 +223,8 @@ export class Sim {
       path: this.path.map((st) => ({ mode: st.mode, points: st.points.slice() })),
       room: this.map.rooms[id] ? id : null,
       active: this.active.slice(),
+      obstacles: this.found.slice(),
+      new_cells: this.newCells.slice(),
     };
   }
 }
