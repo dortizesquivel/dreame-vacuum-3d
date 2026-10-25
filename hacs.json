@@ -1,0 +1,7 @@
+{
+  "name": "Dreame Vacuum 3D",
+  "render_readme": true,
+  "homeassistant": "2026.10.0",
+  "zip_release": true,
+  "filename": "dreame_vacuum_3d.zip"
+}

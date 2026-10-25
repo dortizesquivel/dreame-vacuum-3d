@@ -1,0 +1,453 @@
+"""Device state enums (values aligned with Dreame MIoT / Tasshack types).
+
+Portions derived from Tasshack/dreame-vacuum (MIT), see NOTICE.
+"""
+
+from __future__ import annotations
+
+from enum import IntEnum
+import logging
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def parse_enum[E: IntEnum](enum_cls: type[E], value: object) -> E | None:
+    """Map an int to enum_cls, or None (and debug-log) if it is not a known member."""
+    try:
+        return enum_cls(value)
+    except (ValueError, TypeError):
+        _LOGGER.debug("unknown %s value: %r", enum_cls.__name__, value)
+        return None
+
+
+class ChargingStatus(IntEnum):
+    """Charging status."""
+
+    UNKNOWN = -1
+    CHARGING = 1
+    NOT_CHARGING = 2
+    CHARGING_COMPLETED = 3
+    RETURN_TO_CHARGE = 5
+
+
+class ErrorCode(IntEnum):
+    """Device error code."""
+
+    UNKNOWN = -1
+    NO_ERROR = 0
+    DROP = 1
+    CLIFF = 2
+    BUMPER = 3
+    GESTURE = 4
+    BUMPER_REPEAT = 5
+    DROP_REPEAT = 6
+    OPTICAL_FLOW = 7
+    BOX = 8
+    TANKBOX = 9
+    WATERBOX_EMPTY = 10
+    BOX_FULL = 11
+    BRUSH = 12
+    SIDE_BRUSH = 13
+    FAN = 14
+    LEFT_WHEEL_MOTOR = 15
+    RIGHT_WHEEL_MOTOR = 16
+    TURN_SUFFOCATE = 17
+    FORWARD_SUFFOCATE = 18
+    CHARGER_GET = 19
+    BATTERY_LOW = 20
+    CHARGE_FAULT = 21
+    BATTERY_PERCENTAGE = 22
+    HEART = 23
+    CAMERA_OCCLUSION = 24
+    MOVE = 25
+    FLOW_SHIELDING = 26
+    INFRARED_SHIELDING = 27
+    CHARGE_NO_ELECTRIC = 28
+    BATTERY_FAULT = 29
+    FAN_SPEED_ERROR = 30
+    LEFTWHELL_SPEED = 31
+    RIGHTWHELL_SPEED = 32
+    BMI055_ACCE = 33
+    BMI055_GYRO = 34
+    XV7001 = 35
+    LEFT_MAGNET = 36
+    RIGHT_MAGNET = 37
+    FLOW_ERROR = 38
+    INFRARED_FAULT = 39
+    CAMERA_FAULT = 40
+    STRONG_MAGNET = 41
+    WATER_PUMP = 42
+    RTC = 43
+    AUTO_KEY_TRIG = 44
+    P3V3 = 45
+    CAMERA_IDLE = 46
+    BLOCKED = 47
+    LDS_ERROR = 48
+    LDS_BUMPER = 49
+    WATER_PUMP_2 = 50
+    FILTER_BLOCKED = 51
+    EDGE = 54
+    CARPET = 55
+    LASER = 56
+    EDGE_2 = 57
+    ULTRASONIC = 58
+    NO_GO_ZONE = 59
+    ROUTE = 61
+    ROUTE_2 = 62
+    BLOCKED_2 = 63
+    BLOCKED_3 = 64
+    RESTRICTED = 65
+    RESTRICTED_2 = 66
+    RESTRICTED_3 = 67
+    REMOVE_MOP = 68
+    MOP_REMOVED = 69
+    MOP_REMOVED_2 = 70
+    MOP_PAD_STOP_ROTATE = 71
+    MOP_PAD_STOP_ROTATE_2 = 72
+    MOP_INSTALL_FAILED = 74
+    LOW_BATTERY_TURN_OFF = 75
+    DIRTY_TANK_NOT_INSTALLED = 76
+    ROBOT_IN_HIDDEN_ROOM = 78
+    LDS_FAILED_TO_LIFT = 79
+    ROBOT_STUCK = 80
+    ROBOT_STUCK_REPEAT = 81
+    SLIPPERY_FLOOR = 82
+    UNKNOWN_ERROR = 84
+    CHECK_MOP_INSTALL = 85
+    DIRTY_WATER_TANK_FULL = 86
+    RETRACTABLE_LEG_STUCK = 88
+    INTERNAL_ERROR = 89
+    ROBOT_STUCK_2 = 90
+    ROBOT_STUCK_ON_TABLES = 91
+    ROBOT_STUCK_ON_PASSAGE = 92
+    ROBOT_STUCK_ON_THRESHOLD = 93
+    ROBOT_STUCK_ON_LOW_LYING_AREA = 94
+    ROBOT_STUCK_ON_RAMP = 95
+    ROBOT_STUCK_ON_OBSTACLE = 96
+    ROBOT_STUCK_ON_PET = 97
+    ROBOT_STUCK_ON_SLIPPERY_SURFACE = 98
+    ROBOT_STUCK_ON_CARPET = 99
+    BIN_FULL = 101
+    BIN_OPEN = 102
+    BIN_OPEN_2 = 103
+    BIN_FULL_2 = 104
+    WATER_TANK = 105
+    DIRTY_WATER_TANK = 106
+    WATER_TANK_DRY = 107
+    DIRTY_WATER_TANK_2 = 108
+    DIRTY_WATER_TANK_BLOCKED = 109
+    DIRTY_WATER_TANK_PUMP = 110
+    MOP_PAD = 111
+    WET_MOP_PAD = 112
+    CLEAN_MOP_PAD = 114
+    CLEAN_TANK_LEVEL = 116
+    STATION_DISCONNECTED = 117
+    DIRTY_TANK_LEVEL = 118
+    WASHBOARD_LEVEL = 119
+    NO_MOP_IN_STATION = 120
+    DUST_BAG_FULL = 121
+    UNKNOWN_WARNING = 122
+    SELF_TEST_FAILED = 123
+    WASHBOARD_NOT_WORKING = 124
+    DRAINAGE_FAILED = 125
+    MOP_NOT_DETECTED = 126
+    MOP_HOLDER_ERROR = 127
+    DOCK_ERROR = 128
+    WASH_FAILED = 129
+    ROBOT_STUCK_ON_CURTAIN = 200
+    EDGE_MOP_STOP_ROTATE = 201
+    EDGE_MOP_DETACHED = 202
+    CHASSIS_LIFT_MALFUNCTION = 203
+    INTERNAL_ERROR_2 = 207
+    MOP_COVER_ERROR = 209
+    ROLLER_MOP_ERROR = 210
+    ROBOTIC_ARM_STOPPED = 212
+    ONBOARD_WATER_TANK_EMPTY = 213
+    ONBOARD_DIRTY_WATER_TANK_FULL = 214
+    MOP_NOT_INSTALLED = 215
+    LDS_ERROR_2 = 217
+    ROLLER_MOP_ERROR_2 = 218
+    FLUFFING_ROLLER_ERROR = 222
+    MOP_COVER_ERROR_2 = 223
+    MOP_COVER_ERROR_3 = 224
+    ROLLER_MOP_ERROR_3 = 225
+    BLOCKED_BY_OBSTACLE = 226
+    DRAINAGE_OUTLET_FILTER = 227
+    MAIN_WHEELS_ERROR = 228
+    INTERNAL_ERROR_3 = 229
+    INTERNAL_ERROR_4 = 230
+    RETURN_TO_CHARGE_FAILED = 1000
+
+
+class DreameVacuumState(IntEnum):
+    """Robot operating state."""
+
+    UNKNOWN = -1
+    SWEEPING = 1
+    IDLE = 2
+    PAUSED = 3
+    ERROR = 4
+    RETURNING = 5
+    CHARGING = 6
+    MOPPING = 7
+    DRYING = 8
+    WASHING = 9
+    RETURNING_TO_WASH = 10
+    BUILDING = 11
+    SWEEPING_AND_MOPPING = 12
+    CHARGING_COMPLETED = 13
+    UPGRADING = 14
+    CLEAN_SUMMON = 15
+    STATION_RESET = 16
+    RETURNING_INSTALL_MOP = 17
+    RETURNING_REMOVE_MOP = 18
+    WATER_CHECK = 19
+    CLEAN_ADD_WATER = 20
+    WASHING_PAUSED = 21
+    AUTO_EMPTYING = 22
+    REMOTE_CONTROL = 23
+    SMART_CHARGING = 24
+    SECOND_CLEANING = 25
+    HUMAN_FOLLOWING = 26
+    SPOT_CLEANING = 27
+    RETURNING_AUTO_EMPTY = 28
+    WAITING_FOR_TASK = 29
+    STATION_CLEANING = 30
+    RETURNING_TO_DRAIN = 31
+    DRAINING = 32
+    AUTO_WATER_DRAINING = 33
+    EMPTYING = 34
+    DUST_BAG_DRYING = 35
+    DUST_BAG_DRYING_PAUSED = 36
+    HEADING_TO_EXTRA_CLEANING = 37
+    EXTRA_CLEANING = 38
+    FINDING_PET_PAUSED = 95
+    FINDING_PET = 96
+    SHORTCUT = 97
+    MONITORING = 98
+    MONITORING_PAUSED = 99
+    INITIAL_DEEP_CLEANING = 101
+    INITIAL_DEEP_CLEANING_PAUSED = 102
+    SANITIZING = 103
+    SANITIZING_WITH_DRY = 104
+    CHANGING_MOP = 105
+    CHANGING_MOP_PAUSED = 106
+    FLOOR_MAINTAINING = 107
+    FLOOR_MAINTAINING_PAUSED = 108
+    REMOTE_PICKUP = 109
+    ARRANGING_ITEMS = 113
+    PET_GUARDING = 114
+    PET_GUARDING_PAUSED = 115
+    INSTALLING_MOP = 116
+    UNINSTALLING_MOP = 117
+    INTELLIGENT_RECHARGING = 118
+    ASSISTED_CLEANING = 120
+    ENTERING_DOCK = 121
+    LEAVING_DOCK = 122
+    NAVIGATING_TO_CLIMBER = 140
+    DOCKING_TO_CLIMBER = 141
+    CLIMBER_DOCKED = 142
+    CLIMBER_NAVIGATING = 143
+    CLIMBING_STAIRS = 144
+    CLIMBING_STAIRS_COMPLETED = 145
+    CLIMBER_AT_DOCK = 146
+    CLIMBER_LEAVING_DOCK = 147
+
+
+class SuctionLevel(IntEnum):
+    """Fan / suction level."""
+
+    UNKNOWN = -1
+    QUIET = 0
+    STANDARD = 1
+    STRONG = 2
+    TURBO = 3
+
+
+class CleaningMode(IntEnum):
+    """Sweep / mop mode."""
+
+    UNKNOWN = -1
+    SWEEPING = 0
+    MOPPING = 1
+    SWEEPING_AND_MOPPING = 2
+    MOPPING_AFTER_SWEEPING = 3
+
+
+class WaterTank(IntEnum):
+    """Water tank / mop install state."""
+
+    UNKNOWN = -1
+    NOT_INSTALLED = 0
+    INSTALLED = 1
+    MOP_INSTALLED = 10
+    IN_STATION = 99
+
+
+class WaterVolume(IntEnum):
+    """Mop water volume."""
+
+    UNKNOWN = -1
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+
+
+class TaskStatus(IntEnum):
+    """Current cleaning task kind."""
+
+    UNKNOWN = -1
+    COMPLETED = 0
+    AUTO_CLEANING = 1
+    ZONE_CLEANING = 2
+    SEGMENT_CLEANING = 3
+    SPOT_CLEANING = 4
+    FAST_MAPPING = 5
+    AUTO_CLEANING_PAUSED = 6
+    ZONE_CLEANING_PAUSED = 7
+    SEGMENT_CLEANING_PAUSED = 8
+    SPOT_CLEANING_PAUSED = 9
+    MAP_CLEANING_PAUSED = 10
+    DOCKING_PAUSED = 11
+    MOPPING_PAUSED = 12
+    SEGMENT_MOPPING_PAUSED = 13
+    ZONE_MOPPING_PAUSED = 14
+    AUTO_MOPPING_PAUSED = 15
+    AUTO_DOCKING_PAUSED = 16
+    SEGMENT_DOCKING_PAUSED = 17
+    ZONE_DOCKING_PAUSED = 18
+    CRUISING_PATH = 20
+    CRUISING_PATH_PAUSED = 21
+    CRUISING_POINT = 22
+    CRUISING_POINT_PAUSED = 23
+    SUMMON_CLEAN_PAUSED = 24
+    RETURNING_INSTALL_MOP = 25
+    RETURNING_REMOVE_MOP = 26
+    STATION_CLEANING = 27
+    PET_FINDING = 30
+    AUTO_CLEANING_WASHING_PAUSED = 31
+    AREA_CLEANING_WASHING_PAUSED = 32
+    CUSTOM_CLEANING_WASHING_PAUSED = 33
+    PICKING_UP_ITEM = 34
+    PICKING_UP_ITEM_PAUSED = 35
+    PICKING_UP_ITEM_SUCCESS = 36
+    REMOTE_PICKUP_INITIALIZING = 37
+    REMOTE_PICKUP_IDENTIFING = 38
+    MANUAL_REMOTE_PICKUP = 39
+    AUTOMATIC_REMOTE_PICKUP = 40
+    REMOTE_PICKUP_IN_PROGRESS = 41
+    REMOTE_PICKUP_PAUSED = 42
+    PLACING_ITEM = 43
+    PLACING_ITEM_PAUSED = 44
+
+
+class Status(IntEnum):
+    """High-level status (drives start_custom)."""
+
+    UNKNOWN = -1
+    IDLE = 0
+    PAUSED = 1
+    CLEANING = 2
+    BACK_HOME = 3
+    PARTIAL_CLEANING = 4
+    FOLLOW_WALL = 5
+    CHARGING = 6
+    OTA = 7
+    FCT = 8
+    WIFI_SET = 9
+    POWER_OFF = 10
+    FACTORY = 11
+    ERROR = 12
+    REMOTE_CONTROL = 13
+    SLEEPING = 14
+    SELF_REPAIR = 15
+    FACTORY_FUNCION_TEST = 16
+    STANDBY = 17
+    SEGMENT_CLEANING = 18
+    ZONE_CLEANING = 19
+    SPOT_CLEANING = 20
+    FAST_MAPPING = 21
+    CRUISING_PATH = 22
+    CRUISING_POINT = 23
+    SUMMON_CLEAN = 24
+    SHORTCUT = 25
+    PERSON_FOLLOW = 26
+    PET_GUARDING = 27
+    AUTO_ARRANGEMENT = 28
+    SMART_ARRANGEMENT = 29
+    ZONED_ARRANGEMENT = 30
+    WATER_CHECK = 1501
+
+
+class AutoEmptyStatus(IntEnum):
+    """Auto-empty dock status."""
+
+    UNKNOWN = -1
+    IDLE = 0
+    ACTIVE = 1
+    NOT_PERFORMED = 2
+
+
+class SelfWashBaseStatus(IntEnum):
+    """Self-wash base status."""
+
+    UNKNOWN = -1
+    IDLE = 0
+    WASHING = 1
+    DRYING = 2
+    RETURNING = 3
+    PAUSED = 4
+    CLEAN_ADD_WATER = 5
+    ADDING_WATER = 6
+    RETURNING_FOR_DRY_MOP = 7
+
+
+class MopWashLevel(IntEnum):
+    """Mop wash intensity."""
+
+    UNKNOWN = -1
+    WATER_SAVING = 0
+    DAILY = 1
+    DEEP = 2
+
+
+class CarpetCleaning(IntEnum):
+    """How the robot treats carpets."""
+
+    UNKNOWN = -1
+    NOT_SET = 0
+    AVOIDANCE = 1
+    ADAPTATION = 2
+    REMOVE_MOP = 3
+    ADAPTATION_WITHOUT_ROUTE = 4
+    VACUUM_AND_MOP = 5
+    IGNORE = 6
+    CROSS = 7
+
+
+class CleanWaterTankStatus(IntEnum):
+    """Dock clean-water tank."""
+
+    UNKNOWN = -1
+    INSTALLED = 0
+    NOT_INSTALLED = 1
+    LOW_WATER = 2
+    CHECKING = 3
+
+
+class DirtyWaterTankStatus(IntEnum):
+    """Dock dirty-water tank."""
+
+    UNKNOWN = -1
+    INSTALLED = 0
+    NOT_INSTALLED_OR_FULL = 1
+
+
+class DustBagStatus(IntEnum):
+    """Dock dust bag."""
+
+    UNKNOWN = -1
+    INSTALLED = 0
+    NOT_INSTALLED = 1
+    CHECK = 2
+

@@ -1,0 +1,105 @@
+{
+  "_comment": "Synthetic device list replies shaped like Xiaomi's; no real account data.",
+  "gethome": {
+    "code": 0,
+    "message": "ok",
+    "result": {
+      "homelist": [
+        {"id": "100001", "name": "Home", "uid": 1000001, "dids": ["1001", "1002"], "roomlist": []}
+      ],
+      "has_more": false
+    }
+  },
+  "device_cnt": {
+    "code": 0,
+    "message": "ok",
+    "result": {
+      "own": {"own_family": [{"home_id": 100001, "home_owner": 1000001}]},
+      "share": {"share_family": [{"home_id": 200002, "home_owner": 2000002}]}
+    }
+  },
+  "home_100001": {
+    "code": 0,
+    "message": "ok",
+    "result": {
+      "device_info": [
+        {
+          "did": "1001",
+          "uid": 1000001,
+          "name": "Living room vacuum",
+          "model": "dreame.vacuum.r2228o",
+          "localip": "192.168.1.50",
+          "token": "00112233445566778899aabbccddeeff",
+          "mac": "AA:BB:CC:00:00:01",
+          "isOnline": true,
+          "parent_id": ""
+        },
+        {
+          "did": "1002",
+          "uid": 1000001,
+          "name": "Vacuum station",
+          "model": "dreame.vacuum.r2228o",
+          "localip": "",
+          "token": "",
+          "mac": "AA:BB:CC:00:00:02",
+          "isOnline": true,
+          "parent_id": "1001"
+        }
+      ]
+    }
+  },
+  "home_200002": {
+    "code": 0,
+    "message": "ok",
+    "result": {
+      "device_info": [
+        {
+          "did": "2001",
+          "uid": 2000002,
+          "name": "Shared vacuum",
+          "model": "xiaomi.vacuum.d109gl",
+          "localip": "192.168.1.60",
+          "token": "ffeeddccbbaa99887766554433221100",
+          "mac": "AA:BB:CC:00:00:03",
+          "isOnline": false
+        },
+        {
+          "did": "1001",
+          "uid": 1000001,
+          "name": "Living room vacuum",
+          "model": "dreame.vacuum.r2228o",
+          "localip": "192.168.1.50",
+          "token": "00112233445566778899aabbccddeeff",
+          "mac": "AA:BB:CC:00:00:01",
+          "isOnline": true
+        }
+      ]
+    }
+  },
+  "device_list": {
+    "code": 0,
+    "message": "ok",
+    "result": {
+      "list": [
+        {
+          "did": "1001",
+          "uid": 1000001,
+          "name": "Living room vacuum",
+          "model": "dreame.vacuum.r2228o",
+          "localip": "192.168.1.50",
+          "token": "00112233445566778899aabbccddeeff",
+          "mac": "AA:BB:CC:00:00:01"
+        },
+        {
+          "did": "3001",
+          "uid": 1000001,
+          "name": "Old vacuum",
+          "model": "dreame.vacuum.p2009",
+          "localip": "192.168.1.70",
+          "token": "0123456789abcdef0123456789abcdef",
+          "mac": "AA:BB:CC:00:00:04"
+        }
+      ]
+    }
+  }
+}

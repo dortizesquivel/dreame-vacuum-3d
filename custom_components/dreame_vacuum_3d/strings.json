@@ -1,0 +1,470 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Xiaomi account",
+        "description": "Sign in with the Xiaomi Home credentials for your Dreame vacuum.{devices}",
+        "data": {
+          "username": "Email or Xiaomi ID",
+          "password": "Password",
+          "country": "Server country"
+        }
+      },
+      "captcha": {
+        "title": "Captcha",
+        "description": "{captcha}",
+        "data": {
+          "captcha": "Code from the image"
+        }
+      },
+      "2fa": {
+        "title": "Two-factor verification",
+        "description": "A verification code was sent to {dest}. Enter it below.",
+        "data": {
+          "code": "Verification code"
+        }
+      },
+      "device": {
+        "title": "Choose a vacuum",
+        "description": "Select the Dreame vacuum to add.",
+        "data": {
+          "device": "Device"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate",
+        "description": "The Xiaomi cloud session for {name} expired. Enter the account password again.",
+        "data": {
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Local IP address",
+        "description": "Update the robot's local IP if it changed on your network.",
+        "data": {
+          "host": "IP address"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid username or password",
+      "cannot_connect": "Could not reach the Xiaomi cloud",
+      "no_devices": "No Dreame vacuums found on this account for the selected country.{devices}",
+      "wrong_captcha": "Wrong captcha",
+      "2fa_failed": "Verification failed",
+      "2fa_send_failed": "Could not send the verification code",
+      "2fa_cooldown_active": "Too many requests; wait a few minutes and try again",
+      "2fa_limit_reached": "Daily verification-code limit reached; try again tomorrow"
+    },
+    "abort": {
+      "already_configured": "This vacuum is already configured",
+      "reauth_successful": "Reauthentication successful",
+      "reconfigure_successful": "Reconfigure successful",
+      "cannot_connect": "Could not reach the Xiaomi cloud"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Dreame Vacuum 3D options",
+        "description": "Coexist slows polling while another Dreame integration is still installed. Notifications are persistent messages by category. Consumable threshold is the remaining % that triggers a warning.",
+        "data": {
+          "coexist": "Coexist with another Dreame integration",
+          "notify": "Notification categories",
+          "consumable_threshold": "Consumable warning threshold"
+        }
+      }
+    }
+  },
+  "selector": {
+    "notifications": {
+      "options": {
+        "cleanup_completed": "Cleanup completed",
+        "consumable": "Consumables",
+        "information": "Information",
+        "warning": "Warnings",
+        "error": "Errors"
+      }
+    }
+  },
+  "entity": {
+    "vacuum": {
+      "vacuum": {
+        "state": {
+          "cleaning": "Cleaning",
+          "docked": "Docked",
+          "error": "Error",
+          "idle": "Idle",
+          "paused": "Paused",
+          "returning": "Returning"
+        },
+        "state_attributes": {
+          "fan_speed": {
+            "state": {
+              "quiet": "Quiet",
+              "standard": "Standard",
+              "strong": "Strong",
+              "turbo": "Turbo"
+            }
+          }
+        }
+      }
+    },
+    "sensor": {
+      "state": {
+        "name": "State",
+        "state": {
+          "sweeping": "Sweeping",
+          "idle": "Idle",
+          "paused": "Paused",
+          "error": "Error",
+          "returning": "Returning",
+          "charging": "Charging",
+          "mopping": "Mopping",
+          "drying": "Drying",
+          "washing": "Washing",
+          "returning_to_wash": "Returning To Wash",
+          "building": "Building",
+          "sweeping_and_mopping": "Sweeping And Mopping",
+          "charging_completed": "Charging Completed",
+          "upgrading": "Upgrading",
+          "clean_summon": "Clean Summon",
+          "station_reset": "Station Reset",
+          "returning_install_mop": "Returning Install Mop",
+          "returning_remove_mop": "Returning Remove Mop",
+          "water_check": "Water Check",
+          "clean_add_water": "Clean Add Water",
+          "washing_paused": "Washing Paused",
+          "auto_emptying": "Auto Emptying",
+          "remote_control": "Remote Control",
+          "smart_charging": "Smart Charging",
+          "second_cleaning": "Second Cleaning",
+          "human_following": "Human Following",
+          "spot_cleaning": "Spot Cleaning",
+          "returning_auto_empty": "Returning Auto Empty",
+          "waiting_for_task": "Waiting For Task",
+          "station_cleaning": "Station Cleaning",
+          "returning_to_drain": "Returning To Drain",
+          "draining": "Draining",
+          "auto_water_draining": "Auto Water Draining",
+          "emptying": "Emptying",
+          "dust_bag_drying": "Dust Bag Drying",
+          "dust_bag_drying_paused": "Dust Bag Drying Paused",
+          "heading_to_extra_cleaning": "Heading To Extra Cleaning",
+          "extra_cleaning": "Extra Cleaning",
+          "finding_pet_paused": "Finding Pet Paused",
+          "finding_pet": "Finding Pet",
+          "shortcut": "Shortcut",
+          "monitoring": "Monitoring",
+          "monitoring_paused": "Monitoring Paused",
+          "initial_deep_cleaning": "Initial Deep Cleaning",
+          "initial_deep_cleaning_paused": "Initial Deep Cleaning Paused",
+          "sanitizing": "Sanitizing",
+          "sanitizing_with_dry": "Sanitizing With Dry",
+          "changing_mop": "Changing Mop",
+          "changing_mop_paused": "Changing Mop Paused",
+          "floor_maintaining": "Floor Maintaining",
+          "floor_maintaining_paused": "Floor Maintaining Paused",
+          "remote_pickup": "Remote Pickup",
+          "arranging_items": "Arranging Items",
+          "pet_guarding": "Pet Guarding",
+          "pet_guarding_paused": "Pet Guarding Paused",
+          "installing_mop": "Installing Mop",
+          "uninstalling_mop": "Uninstalling Mop",
+          "intelligent_recharging": "Intelligent Recharging",
+          "assisted_cleaning": "Assisted Cleaning",
+          "entering_dock": "Entering Dock",
+          "leaving_dock": "Leaving Dock",
+          "navigating_to_climber": "Navigating To Climber",
+          "docking_to_climber": "Docking To Climber",
+          "climber_docked": "Climber Docked",
+          "climber_navigating": "Climber Navigating",
+          "climbing_stairs": "Climbing Stairs",
+          "climbing_stairs_completed": "Climbing Stairs Completed",
+          "climber_at_dock": "Climber At Dock",
+          "climber_leaving_dock": "Climber Leaving Dock"
+        }
+      },
+      "status": {
+        "name": "Status",
+        "state": {
+          "idle": "Idle",
+          "paused": "Paused",
+          "cleaning": "Cleaning",
+          "back_home": "Back Home",
+          "partial_cleaning": "Partial Cleaning",
+          "follow_wall": "Follow Wall",
+          "charging": "Charging",
+          "ota": "Ota",
+          "fct": "Fct",
+          "wifi_set": "Wifi Set",
+          "power_off": "Power Off",
+          "factory": "Factory",
+          "error": "Error",
+          "remote_control": "Remote Control",
+          "sleeping": "Sleeping",
+          "self_repair": "Self Repair",
+          "factory_funcion_test": "Factory Funcion Test",
+          "standby": "Standby",
+          "segment_cleaning": "Segment Cleaning",
+          "zone_cleaning": "Zone Cleaning",
+          "spot_cleaning": "Spot Cleaning",
+          "fast_mapping": "Fast Mapping",
+          "cruising_path": "Cruising Path",
+          "cruising_point": "Cruising Point",
+          "summon_clean": "Summon Clean",
+          "shortcut": "Shortcut",
+          "person_follow": "Person Follow",
+          "pet_guarding": "Pet Guarding",
+          "auto_arrangement": "Auto Arrangement",
+          "smart_arrangement": "Smart Arrangement",
+          "zoned_arrangement": "Zoned Arrangement",
+          "water_check": "Water Check"
+        }
+      },
+      "error": {
+        "name": "Error",
+        "state": {
+          "no_error": "No error"
+        }
+      },
+      "battery_level": {
+        "name": "Battery"
+      },
+      "cleaning_time": {
+        "name": "Cleaning time"
+      },
+      "cleaned_area": {
+        "name": "Cleaned area"
+      },
+      "total_cleaning_time": {
+        "name": "Total cleaning time"
+      },
+      "total_cleaned_area": {
+        "name": "Total cleaned area"
+      },
+      "cleaning_count": {
+        "name": "Cleaning count"
+      },
+      "main_brush_left": {
+        "name": "Main brush"
+      },
+      "main_brush_time_left": {
+        "name": "Main brush time left"
+      },
+      "side_brush_left": {
+        "name": "Side brush"
+      },
+      "side_brush_time_left": {
+        "name": "Side brush time left"
+      },
+      "filter_left": {
+        "name": "Filter"
+      },
+      "filter_time_left": {
+        "name": "Filter time left"
+      },
+      "sensor_dirty_left": {
+        "name": "Sensors"
+      },
+      "sensor_dirty_time_left": {
+        "name": "Sensors time left"
+      },
+      "mop_pad_left": {
+        "name": "Mop pad"
+      },
+      "mop_pad_time_left": {
+        "name": "Mop pad time left"
+      },
+      "silver_ion_left": {
+        "name": "Silver ion"
+      },
+      "silver_ion_time_left": {
+        "name": "Silver ion time left"
+      },
+      "detergent_left": {
+        "name": "Detergent"
+      },
+      "detergent_time_left": {
+        "name": "Detergent time left"
+      },
+      "clean_water_tank_status": {
+        "name": "Clean water tank",
+        "state": {
+          "installed": "Installed",
+          "not_installed": "Not Installed",
+          "low_water": "Low Water",
+          "checking": "Checking"
+        }
+      },
+      "dirty_water_tank_status": {
+        "name": "Dirty water tank",
+        "state": {
+          "installed": "Installed",
+          "not_installed_or_full": "Not Installed Or Full"
+        }
+      },
+      "dust_bag_status": {
+        "name": "Dust bag",
+        "state": {
+          "installed": "Installed",
+          "not_installed": "Not Installed",
+          "check": "Check"
+        }
+      },
+      "channel": {
+        "name": "Connection channel",
+        "state": {
+          "local": "Local",
+          "cloud": "Cloud"
+        }
+      }
+    },
+    "binary_sensor": {
+      "charging": {
+        "name": "Charging"
+      },
+      "mop_attached": {
+        "name": "Mop attached"
+      },
+      "clean_water_problem": {
+        "name": "Clean water problem"
+      },
+      "dirty_water_problem": {
+        "name": "Dirty water problem"
+      },
+      "dust_bag_problem": {
+        "name": "Dust bag problem"
+      }
+    },
+    "select": {
+      "cleaning_mode": {
+        "name": "Cleaning mode",
+        "state": {
+          "sweeping": "Sweeping",
+          "mopping": "Mopping",
+          "sweeping_and_mopping": "Sweeping and mopping",
+          "mopping_after_sweeping": "Mopping after sweeping"
+        }
+      },
+      "suction_level": {
+        "name": "Suction level",
+        "state": {
+          "quiet": "Quiet",
+          "standard": "Standard",
+          "strong": "Strong",
+          "turbo": "Turbo"
+        }
+      },
+      "water_volume": {
+        "name": "Water volume",
+        "state": {
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High"
+        }
+      },
+      "auto_empty_frequency": {
+        "name": "Auto-empty frequency",
+        "state": {
+          "1": "After every task",
+          "2": "After two cleanings",
+          "3": "After three cleanings"
+        }
+      },
+      "mop_wash_level": {
+        "name": "Mop wash level",
+        "state": {
+          "water_saving": "Water saving",
+          "daily": "Daily",
+          "deep": "Deep"
+        }
+      },
+      "carpet_cleaning": {
+        "name": "Carpet cleaning",
+        "state": {
+          "not_set": "Not set",
+          "avoidance": "Avoid",
+          "adaptation": "Adapt",
+          "remove_mop": "Remove mop",
+          "adaptation_without_route": "Adapt without route",
+          "vacuum_and_mop": "Vacuum and mop",
+          "ignore": "Ignore",
+          "cross": "Cross"
+        }
+      }
+    },
+    "switch": {
+      "carpet_boost": {
+        "name": "Carpet boost"
+      },
+      "dnd": {
+        "name": "Do not disturb"
+      },
+      "child_lock": {
+        "name": "Child lock"
+      },
+      "obstacle_avoidance": {
+        "name": "Obstacle avoidance"
+      },
+      "auto_mount_mop": {
+        "name": "Auto mop mount"
+      },
+      "self_clean": {
+        "name": "Self-clean"
+      }
+    },
+    "number": {
+      "volume": {
+        "name": "Volume"
+      },
+      "dnd_start": {
+        "name": "Do not disturb start"
+      },
+      "dnd_end": {
+        "name": "Do not disturb end"
+      }
+    },
+    "button": {
+      "reset_main_brush": {
+        "name": "Reset main brush"
+      },
+      "reset_side_brush": {
+        "name": "Reset side brush"
+      },
+      "reset_filter": {
+        "name": "Reset filter"
+      },
+      "reset_sensor": {
+        "name": "Reset sensors"
+      },
+      "reset_mop_pad": {
+        "name": "Reset mop pad"
+      },
+      "reset_silver_ion": {
+        "name": "Reset silver ion"
+      },
+      "reset_detergent": {
+        "name": "Reset detergent"
+      },
+      "reset_tank_filter": {
+        "name": "Reset tank filter"
+      },
+      "reset_squeegee": {
+        "name": "Reset squeegee"
+      },
+      "reset_deodorizer": {
+        "name": "Reset deodorizer"
+      },
+      "empty": {
+        "name": "Empty dust bag"
+      },
+      "wash_mop": {
+        "name": "Wash mop"
+      },
+      "dry_mop": {
+        "name": "Dry mop"
+      }
+    }
+  }
+}

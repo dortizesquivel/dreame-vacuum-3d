@@ -1,0 +1,2592 @@
+[
+  {
+    "key": "state",
+    "siid": 2,
+    "piid": 1,
+    "code": 0,
+    "value": 13
+  },
+  {
+    "key": "error",
+    "siid": 2,
+    "piid": 2,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "battery_level",
+    "siid": 3,
+    "piid": 1,
+    "code": 0,
+    "value": 100
+  },
+  {
+    "key": "charging_status",
+    "siid": 3,
+    "piid": 2,
+    "code": 0,
+    "value": 1
+  },
+  {
+    "key": "off_peak_charging",
+    "siid": 3,
+    "piid": 3,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "status",
+    "siid": 4,
+    "piid": 1,
+    "code": 0,
+    "value": 14
+  },
+  {
+    "key": "cleaning_time",
+    "siid": 4,
+    "piid": 2,
+    "code": 0,
+    "value": 3
+  },
+  {
+    "key": "cleaned_area",
+    "siid": 4,
+    "piid": 3,
+    "code": 0,
+    "value": 3
+  },
+  {
+    "key": "suction_level",
+    "siid": 4,
+    "piid": 4,
+    "code": 0,
+    "value": 2
+  },
+  {
+    "key": "water_volume",
+    "siid": 4,
+    "piid": 5,
+    "code": 0,
+    "value": 3
+  },
+  {
+    "key": "water_tank",
+    "siid": 4,
+    "piid": 6,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "task_status",
+    "siid": 4,
+    "piid": 7,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "cleaning_start_time",
+    "siid": 4,
+    "piid": 8,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "clean_log_file_name",
+    "siid": 4,
+    "piid": 9,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "cleaning_properties",
+    "siid": 4,
+    "piid": 10,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "resume_cleaning",
+    "siid": 4,
+    "piid": 11,
+    "code": 0,
+    "value": 1
+  },
+  {
+    "key": "carpet_boost",
+    "siid": 4,
+    "piid": 12,
+    "code": 0,
+    "value": 1
+  },
+  {
+    "key": "clean_log_status",
+    "siid": 4,
+    "piid": 13,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "serial_number",
+    "siid": 4,
+    "piid": 14,
+    "code": 0,
+    "value": ""
+  },
+  {
+    "key": "remote_control",
+    "siid": 4,
+    "piid": 15,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mop_cleaning_remainder",
+    "siid": 4,
+    "piid": 16,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "cleaning_paused",
+    "siid": 4,
+    "piid": 17,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "faults",
+    "siid": 4,
+    "piid": 18,
+    "code": 0,
+    "value": ""
+  },
+  {
+    "key": "nation_matched",
+    "siid": 4,
+    "piid": 19,
+    "code": 0,
+    "value": "unknown"
+  },
+  {
+    "key": "relocation_status",
+    "siid": 4,
+    "piid": 20,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "obstacle_avoidance",
+    "siid": 4,
+    "piid": 21,
+    "code": 0,
+    "value": 1
+  },
+  {
+    "key": "ai_obstacle_detection",
+    "siid": 4,
+    "piid": 22,
+    "code": 0,
+    "value": 287
+  },
+  {
+    "key": "cleaning_mode",
+    "siid": 4,
+    "piid": 23,
+    "code": 0,
+    "value": 204290
+  },
+  {
+    "key": "upload_map",
+    "siid": 4,
+    "piid": 24,
+    "code": 0,
+    "value": 1
+  },
+  {
+    "key": "self_wash_base_status",
+    "siid": 4,
+    "piid": 25,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "customized_cleaning",
+    "siid": 4,
+    "piid": 26,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "child_lock",
+    "siid": 4,
+    "piid": 27,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "carpet_sensitivity",
+    "siid": 4,
+    "piid": 28,
+    "code": 0,
+    "value": 2
+  },
+  {
+    "key": "tight_mopping",
+    "siid": 4,
+    "piid": 29,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "cleaning_cancel",
+    "siid": 4,
+    "piid": 30,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "y_clean",
+    "siid": 4,
+    "piid": 31,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "water_electrolysis",
+    "siid": 4,
+    "piid": 32,
+    "code": 0,
+    "value": 1
+  },
+  {
+    "key": "carpet_recognition",
+    "siid": 4,
+    "piid": 33,
+    "code": 0,
+    "value": 1
+  },
+  {
+    "key": "self_clean",
+    "siid": 4,
+    "piid": 34,
+    "code": 0,
+    "value": 1
+  },
+  {
+    "key": "warn_status",
+    "siid": 4,
+    "piid": 35,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "carpet_cleaning",
+    "siid": 4,
+    "piid": 36,
+    "code": 0,
+    "value": 2
+  },
+  {
+    "key": "auto_add_detergent",
+    "siid": 4,
+    "piid": 37,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "capability",
+    "siid": 4,
+    "piid": 38,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "save_water_tips",
+    "siid": 4,
+    "piid": 39,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "drying_time",
+    "siid": 4,
+    "piid": 40,
+    "code": 0,
+    "value": 2
+  },
+  {
+    "key": "low_water_warning",
+    "siid": 4,
+    "piid": 41,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "map_index",
+    "siid": 4,
+    "piid": 42,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "map_name",
+    "siid": 4,
+    "piid": 43,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "cruise_type",
+    "siid": 4,
+    "piid": 44,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "auto_mount_mop",
+    "siid": 4,
+    "piid": 45,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "mop_wash_level",
+    "siid": 4,
+    "piid": 46,
+    "code": 0,
+    "value": 1
+  },
+  {
+    "key": "scheduled_clean",
+    "siid": 4,
+    "piid": 47,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "shortcuts",
+    "siid": 4,
+    "piid": 48,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "intelligent_recognition",
+    "siid": 4,
+    "piid": 49,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "auto_switch_settings",
+    "siid": 4,
+    "piid": 50,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "auto_water_refilling",
+    "siid": 4,
+    "piid": 51,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mop_in_station",
+    "siid": 4,
+    "piid": 52,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mop_pad_installed",
+    "siid": 4,
+    "piid": 53,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "water_check",
+    "siid": 4,
+    "piid": 54,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "dry_stop_remainder",
+    "siid": 4,
+    "piid": 55,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "numeric_message_prompt",
+    "siid": 4,
+    "piid": 56,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "message_prompt",
+    "siid": 4,
+    "piid": 57,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "task_type",
+    "siid": 4,
+    "piid": 58,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "pet_detective",
+    "siid": 4,
+    "piid": 59,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "drainage_status",
+    "siid": 4,
+    "piid": 60,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dock_cleaning_status",
+    "siid": 4,
+    "piid": 61,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "back_clean_mode",
+    "siid": 4,
+    "piid": 62,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "cleaning_progress",
+    "siid": 4,
+    "piid": 63,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "drying_progress",
+    "siid": 4,
+    "piid": 64,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "cleaning_progress_info",
+    "siid": 4,
+    "piid": 66,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "device_capability",
+    "siid": 4,
+    "piid": 83,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "onboard_wetness_level",
+    "siid": 4,
+    "piid": 105,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dnd",
+    "siid": 5,
+    "piid": 1,
+    "code": 0,
+    "value": true
+  },
+  {
+    "key": "dnd_start",
+    "siid": 5,
+    "piid": 2,
+    "code": 0,
+    "value": "22:00"
+  },
+  {
+    "key": "dnd_end",
+    "siid": 5,
+    "piid": 3,
+    "code": 0,
+    "value": "08:00"
+  },
+  {
+    "key": "dnd_task",
+    "siid": 5,
+    "piid": 4,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "map_data",
+    "siid": 6,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "frame_info",
+    "siid": 6,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "object_name",
+    "siid": 6,
+    "piid": 3,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "map_extend_data",
+    "siid": 6,
+    "piid": 4,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "robot_time",
+    "siid": 6,
+    "piid": 5,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "result_code",
+    "siid": 6,
+    "piid": 6,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "multi_floor_map",
+    "siid": 6,
+    "piid": 7,
+    "code": 0,
+    "value": 1
+  },
+  {
+    "key": "map_list",
+    "siid": 6,
+    "piid": 8,
+    "code": 0,
+    "value": ""
+  },
+  {
+    "key": "recovery_map_list",
+    "siid": 6,
+    "piid": 9,
+    "code": 0,
+    "value": ""
+  },
+  {
+    "key": "map_recovery",
+    "siid": 6,
+    "piid": 10,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "map_recovery_status",
+    "siid": 6,
+    "piid": 11,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "old_map_data",
+    "siid": 6,
+    "piid": 13,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "map_backup_status",
+    "siid": 6,
+    "piid": 14,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "wifi_map",
+    "siid": 6,
+    "piid": 15,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "restore_map_from_data",
+    "siid": 6,
+    "piid": 16,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "volume",
+    "siid": 7,
+    "piid": 1,
+    "code": 0,
+    "value": 100
+  },
+  {
+    "key": "voice_packet_id",
+    "siid": 7,
+    "piid": 2,
+    "code": 0,
+    "value": "ES"
+  },
+  {
+    "key": "voice_change_status",
+    "siid": 7,
+    "piid": 3,
+    "code": 0,
+    "value": "{\\\"id\\\":\\\"\\\",\\\"state\\\":\\\"idle\\\",\\\"progress\\\":0}"
+  },
+  {
+    "key": "voice_change",
+    "siid": 7,
+    "piid": 4,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "voice_assistant",
+    "siid": 7,
+    "piid": 5,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "empty_stamp",
+    "siid": 7,
+    "piid": 6,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "current_city",
+    "siid": 7,
+    "piid": 7,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "voice_test",
+    "siid": 7,
+    "piid": 9,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "voice_assistant_language",
+    "siid": 7,
+    "piid": 10,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "baidu_log",
+    "siid": 7,
+    "piid": 11,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "response_word",
+    "siid": 7,
+    "piid": 12,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dreame_gpt",
+    "siid": 7,
+    "piid": 14,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "listen_language",
+    "siid": 7,
+    "piid": 15,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "listen_language_status",
+    "siid": 7,
+    "piid": 16,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dev_voice_control",
+    "siid": 7,
+    "piid": 17,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "full_duplex_sound",
+    "siid": 7,
+    "piid": 18,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "disable_voice_wake_up",
+    "siid": 7,
+    "piid": 19,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "custom_wake_up",
+    "siid": 7,
+    "piid": 20,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "custom_wake_up_word",
+    "siid": 7,
+    "piid": 21,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "custom_wake_up_word_status",
+    "siid": 7,
+    "piid": 22,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "combine_wake_up_word_command",
+    "siid": 7,
+    "piid": 23,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "timezone",
+    "siid": 8,
+    "piid": 1,
+    "code": 0,
+    "value": "Europe/Madrid"
+  },
+  {
+    "key": "schedule",
+    "siid": 8,
+    "piid": 2,
+    "code": 0,
+    "value": ""
+  },
+  {
+    "key": "schedule_id",
+    "siid": 8,
+    "piid": 3,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "schedule_cancel_reason",
+    "siid": 8,
+    "piid": 4,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "cruise_schedule",
+    "siid": 8,
+    "piid": 5,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "pet_cruise_schedule",
+    "siid": 8,
+    "piid": 6,
+    "code": 0,
+    "value": ""
+  },
+  {
+    "key": "main_brush_time_left",
+    "siid": 9,
+    "piid": 1,
+    "code": 0,
+    "value": 9
+  },
+  {
+    "key": "main_brush_left",
+    "siid": 9,
+    "piid": 2,
+    "code": 0,
+    "value": 3
+  },
+  {
+    "key": "side_brush_time_left",
+    "siid": 10,
+    "piid": 1,
+    "code": 0,
+    "value": 65
+  },
+  {
+    "key": "side_brush_left",
+    "siid": 10,
+    "piid": 2,
+    "code": 0,
+    "value": 32
+  },
+  {
+    "key": "filter_left",
+    "siid": 11,
+    "piid": 1,
+    "code": 0,
+    "value": 10
+  },
+  {
+    "key": "filter_time_left",
+    "siid": 11,
+    "piid": 2,
+    "code": 0,
+    "value": 15
+  },
+  {
+    "key": "first_cleaning_date",
+    "siid": 12,
+    "piid": 1,
+    "code": 0,
+    "value": 1736011487
+  },
+  {
+    "key": "total_cleaning_time",
+    "siid": 12,
+    "piid": 2,
+    "code": 0,
+    "value": 35577
+  },
+  {
+    "key": "cleaning_count",
+    "siid": 12,
+    "piid": 3,
+    "code": 0,
+    "value": 734
+  },
+  {
+    "key": "total_cleaned_area",
+    "siid": 12,
+    "piid": 4,
+    "code": 0,
+    "value": 33956
+  },
+  {
+    "key": "total_runtime",
+    "siid": 12,
+    "piid": 5,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "total_cruise_time",
+    "siid": 12,
+    "piid": 6,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "map_saving",
+    "siid": 13,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "keep_alive",
+    "siid": 14,
+    "piid": 4,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "get_public_key",
+    "siid": 14,
+    "piid": 5,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "matter_network_startup",
+    "siid": 14,
+    "piid": 6,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "country_code",
+    "siid": 14,
+    "piid": 7,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mains_power_frequency",
+    "siid": 14,
+    "piid": 9,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "auto_dust_collecting",
+    "siid": 15,
+    "piid": 1,
+    "code": 0,
+    "value": 1
+  },
+  {
+    "key": "auto_empty_frequency",
+    "siid": 15,
+    "piid": 2,
+    "code": 0,
+    "value": 3
+  },
+  {
+    "key": "dust_collection",
+    "siid": 15,
+    "piid": 3,
+    "code": 0,
+    "value": 1
+  },
+  {
+    "key": "auto_empty_status",
+    "siid": 15,
+    "piid": 5,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "sensor_dirty_left",
+    "siid": 16,
+    "piid": 1,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "sensor_dirty_time_left",
+    "siid": 16,
+    "piid": 2,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "tank_filter_left",
+    "siid": 17,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "tank_filter_time_left",
+    "siid": 17,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mop_pad_left",
+    "siid": 18,
+    "piid": 1,
+    "code": 0,
+    "value": 70
+  },
+  {
+    "key": "mop_pad_time_left",
+    "siid": 18,
+    "piid": 2,
+    "code": 0,
+    "value": 56
+  },
+  {
+    "key": "silver_ion_time_left",
+    "siid": 19,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "silver_ion_left",
+    "siid": 19,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "silver_ion_add",
+    "siid": 19,
+    "piid": 3,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "detergent_left",
+    "siid": 20,
+    "piid": 1,
+    "code": 0,
+    "value": 100
+  },
+  {
+    "key": "detergent_time_left",
+    "siid": 20,
+    "piid": 2,
+    "code": 0,
+    "value": 18
+  },
+  {
+    "key": "squeegee_time_left",
+    "siid": 24,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "squeegee_left",
+    "siid": 24,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dirty_water_channel_dirty_time_left",
+    "siid": 25,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dirty_water_channel_dirty_left",
+    "siid": 25,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "onboard_dirty_water_tank_time_left",
+    "siid": 26,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "onboard_dirty_water_tank_left",
+    "siid": 26,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "clean_water_tank_status",
+    "siid": 27,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dirty_water_tank_status",
+    "siid": 27,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dust_bag_status",
+    "siid": 27,
+    "piid": 3,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "detergent_status",
+    "siid": 27,
+    "piid": 4,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "station_drainage_status",
+    "siid": 27,
+    "piid": 5,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "lds_status",
+    "siid": 27,
+    "piid": 6,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "ai_map_optimization_status",
+    "siid": 27,
+    "piid": 7,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "second_cleaning_status",
+    "siid": 27,
+    "piid": 8,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "water_tank_status",
+    "siid": 27,
+    "piid": 9,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "add_cleaning_area_status",
+    "siid": 27,
+    "piid": 10,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "add_cleaning_area_result",
+    "siid": 27,
+    "piid": 11,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "first_connect_wifi",
+    "siid": 27,
+    "piid": 12,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "hand_dust_status",
+    "siid": 27,
+    "piid": 13,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "hand_dust_connect_status",
+    "siid": 27,
+    "piid": 14,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "hot_water_status",
+    "siid": 27,
+    "piid": 15,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "threshold_confirmation_status",
+    "siid": 27,
+    "piid": 16,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dust_bag_drying_left",
+    "siid": 27,
+    "piid": 17,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dust_bag_drying_status",
+    "siid": 27,
+    "piid": 18,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dust_box_status",
+    "siid": 27,
+    "piid": 19,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "roller_cover",
+    "siid": 27,
+    "piid": 20,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "cabin_door_drying_left_time",
+    "siid": 27,
+    "piid": 21,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "robot_arm_cover_status",
+    "siid": 27,
+    "piid": 22,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mop_transport_carrier_reset",
+    "siid": 27,
+    "piid": 24,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mop_transport_carrier_status",
+    "siid": 27,
+    "piid": 25,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "roller_cover_status",
+    "siid": 27,
+    "piid": 26,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "washboard_cleaning_status",
+    "siid": 27,
+    "piid": 27,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mechanical_foot_status",
+    "siid": 27,
+    "piid": 28,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "robot_arm_available",
+    "siid": 27,
+    "piid": 29,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "station_ota_status",
+    "siid": 27,
+    "piid": 30,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "climber_pair_status",
+    "siid": 27,
+    "piid": 33,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "intelligent_supercharging_status",
+    "siid": 27,
+    "piid": 43,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "intelligent_supercharging_level",
+    "siid": 27,
+    "piid": 44,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "pressurized_roller_status",
+    "siid": 27,
+    "piid": 45,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "wetness_level",
+    "siid": 28,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "clean_carpets_first",
+    "siid": 28,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "auto_lds_coverage",
+    "siid": 28,
+    "piid": 3,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "lds_state",
+    "siid": 28,
+    "piid": 4,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "cleangenius_mode",
+    "siid": 28,
+    "piid": 5,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "quick_wash_mode",
+    "siid": 28,
+    "piid": 6,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "has_children",
+    "siid": 28,
+    "piid": 7,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "water_temperature",
+    "siid": 28,
+    "piid": 8,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "clean_efficiency",
+    "siid": 28,
+    "piid": 9,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "impact_injection_pump",
+    "siid": 28,
+    "piid": 12,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "obstacle_videos",
+    "siid": 28,
+    "piid": 13,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dnd_disable_resume_cleaning",
+    "siid": 28,
+    "piid": 14,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dnd_disable_auto_empty",
+    "siid": 28,
+    "piid": 15,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dnd_reduce_volume",
+    "siid": 28,
+    "piid": 16,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "hand_vacuum_auto_dusting",
+    "siid": 28,
+    "piid": 17,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dynamic_obstacle_cleaning",
+    "siid": 28,
+    "piid": 18,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "human_noise_reduction",
+    "siid": 28,
+    "piid": 19,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "pet_care",
+    "siid": 28,
+    "piid": 20,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "lower_hatch_control",
+    "siid": 28,
+    "piid": 21,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "smart_mop_washing",
+    "siid": 28,
+    "piid": 22,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "block_health_checks",
+    "siid": 28,
+    "piid": 23,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mop_after_vacuum",
+    "siid": 28,
+    "piid": 24,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "small_area_fast_clean",
+    "siid": 28,
+    "piid": 25,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "shield_ultrasonic_signals",
+    "siid": 28,
+    "piid": 26,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "silent_drying",
+    "siid": 28,
+    "piid": 27,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "hair_compression",
+    "siid": 28,
+    "piid": 28,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "side_brush_carpet_rotate",
+    "siid": 28,
+    "piid": 29,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "erp_low_power",
+    "siid": 28,
+    "piid": 30,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "shield_washboard_in_place",
+    "siid": 28,
+    "piid": 31,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "self_cleaning_problem",
+    "siid": 28,
+    "piid": 32,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "washing_test",
+    "siid": 28,
+    "piid": 33,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "wifi_performance_test",
+    "siid": 28,
+    "piid": 34,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "emergency_information_upload",
+    "siid": 28,
+    "piid": 35,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "feedback_switch",
+    "siid": 28,
+    "piid": 36,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "carpet_ai_segment",
+    "siid": 28,
+    "piid": 37,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "obstacle_crossing",
+    "siid": 28,
+    "piid": 38,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "visual_resume",
+    "siid": 28,
+    "piid": 39,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "fan_abnormal_noise",
+    "siid": 28,
+    "piid": 40,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "large_memory_reset",
+    "siid": 28,
+    "piid": 41,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "bow_before_edge",
+    "siid": 28,
+    "piid": 42,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "voltage",
+    "siid": 28,
+    "piid": 43,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "detergent_a",
+    "siid": 28,
+    "piid": 44,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "detergent_b",
+    "siid": 28,
+    "piid": 45,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mop_temperature",
+    "siid": 28,
+    "piid": 46,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "battery_charge_level",
+    "siid": 28,
+    "piid": 47,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dust_bag_drying",
+    "siid": 28,
+    "piid": 48,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "sweep_distance",
+    "siid": 28,
+    "piid": 49,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "low_lying_area_frequency",
+    "siid": 28,
+    "piid": 51,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mopping_with_detergent",
+    "siid": 28,
+    "piid": 52,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "pressurized_cleaning",
+    "siid": 28,
+    "piid": 53,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "scraper_frequency",
+    "siid": 28,
+    "piid": 54,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "realtime_particle_detect",
+    "siid": 28,
+    "piid": 58,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "ignore_stairs",
+    "siid": 28,
+    "piid": 59,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "lift_chassis_on_carpet",
+    "siid": 28,
+    "piid": 60,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "ring_light_always_on",
+    "siid": 28,
+    "piid": 61,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "auto_change_mop",
+    "siid": 28,
+    "piid": 62,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "power_saving",
+    "siid": 28,
+    "piid": 63,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "wheel_lift_boost_mopping",
+    "siid": 28,
+    "piid": 64,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "cabin_door_drying_time",
+    "siid": 28,
+    "piid": 66,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "cabin_door_silent_drying",
+    "siid": 28,
+    "piid": 67,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "cabin_door_drying",
+    "siid": 28,
+    "piid": 68,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "close_roller_cover_on_carpet",
+    "siid": 28,
+    "piid": 69,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "robot_arm_status",
+    "siid": 28,
+    "piid": 70,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "auxiliary_cleaning",
+    "siid": 28,
+    "piid": 71,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "auto_arrangement",
+    "siid": 28,
+    "piid": 72,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "robot_arm_overweight_protection",
+    "siid": 28,
+    "piid": 73,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "robot_arm_arrangement_mode",
+    "siid": 28,
+    "piid": 74,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "floor_maintaining",
+    "siid": 28,
+    "piid": 75,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "detergent_c",
+    "siid": 28,
+    "piid": 76,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "robot_arm_object_status",
+    "siid": 28,
+    "piid": 77,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "robot_arm_camera_status",
+    "siid": 28,
+    "piid": 78,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "store_mode",
+    "siid": 28,
+    "piid": 79,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "robot_arm_mode",
+    "siid": 28,
+    "piid": 80,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "integrated_power",
+    "siid": 28,
+    "piid": 81,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "narrow_wall_cleaning",
+    "siid": 28,
+    "piid": 82,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "intelligent_stain_cleaning",
+    "siid": 28,
+    "piid": 83,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "active_suspension_crossing",
+    "siid": 28,
+    "piid": 84,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "shield_roller_active",
+    "siid": 28,
+    "piid": 85,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mop_pressure",
+    "siid": 28,
+    "piid": 86,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "pet_ai_model",
+    "siid": 28,
+    "piid": 87,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "lower_lds_while_docking",
+    "siid": 28,
+    "piid": 88,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "rl_navigation_message",
+    "siid": 28,
+    "piid": 89,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dust_light",
+    "siid": 28,
+    "piid": 90,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "quick_mop_switching",
+    "siid": 28,
+    "piid": 92,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "block_agency_alarm",
+    "siid": 28,
+    "piid": 93,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "exhibition_mode",
+    "siid": 28,
+    "piid": 94,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "auto_empty_area",
+    "siid": 28,
+    "piid": 95,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "minimal_voice_prompts",
+    "siid": 28,
+    "piid": 97,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "clearance_leg_obstacle_crossing",
+    "siid": 28,
+    "piid": 98,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "omnidirectional_whell_lifting",
+    "siid": 28,
+    "piid": 99,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "only_identify_cleaning_obstacles",
+    "siid": 28,
+    "piid": 100,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mop_scrubbing_speed",
+    "siid": 28,
+    "piid": 101,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "active_light_enhanced_detection",
+    "siid": 28,
+    "piid": 102,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "shielded_membrane_sensor",
+    "siid": 28,
+    "piid": 103,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mop_high_speed_rotation",
+    "siid": 28,
+    "piid": 104,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stain_recognition",
+    "siid": 28,
+    "piid": 106,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "dynamic_edge_extension",
+    "siid": 28,
+    "piid": 107,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "offline_demo_mode",
+    "siid": 28,
+    "piid": 108,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "intelligent_supercharging",
+    "siid": 28,
+    "piid": 109,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "battery_abnormal",
+    "siid": 28,
+    "piid": 110,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "steam_cleaning_mode",
+    "siid": 28,
+    "piid": 111,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stain_recognition_sensitivity",
+    "siid": 28,
+    "piid": 112,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stair_cleaning",
+    "siid": 28,
+    "piid": 113,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "extended_safety_regulation",
+    "siid": 28,
+    "piid": 114,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "ground_detection",
+    "siid": 28,
+    "piid": 115,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "drive_wheel_mos_short",
+    "siid": 28,
+    "piid": 116,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "drive_wheel_extended_safety_regulation",
+    "siid": 28,
+    "piid": 117,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "deodorizer_time_left",
+    "siid": 29,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "deodorizer_left",
+    "siid": 29,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "wheel_dirty_time_left",
+    "siid": 30,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "wheel_dirty_left",
+    "siid": 30,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "scale_inhibitor_time_left",
+    "siid": 31,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "scale_inhibitor_left",
+    "siid": 31,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "fluffing_roller_dirty_left",
+    "siid": 32,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "fluffing_roller_dirty_time_left",
+    "siid": 32,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "roller_mop_filter_dirty_left",
+    "siid": 33,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "roller_mop_filter_dirty_time_left",
+    "siid": 33,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "block_exception_list",
+    "siid": 34,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "map_floor_matching",
+    "siid": 34,
+    "piid": 4,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "climber_error_code",
+    "siid": 34,
+    "piid": 5,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "multi_floor_cleaning",
+    "siid": 34,
+    "piid": 6,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "water_outlet_filter_dirty_time_left",
+    "siid": 35,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "water_outlet_filter_dirty_left",
+    "siid": 35,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "track_cleaning_time_left",
+    "siid": 36,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "track_cleaning_left",
+    "siid": 36,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "washboard_cleaning_time_left",
+    "siid": 37,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "washboard_cleaning_left",
+    "siid": 37,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "filter_cleaning_time_left",
+    "siid": 38,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "filter_cleaning_left",
+    "siid": 38,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "climber_ota_parameter",
+    "siid": 40,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "climber_ota_progress",
+    "siid": 40,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "climber_ota_status",
+    "siid": 40,
+    "piid": 3,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "climber_system_information",
+    "siid": 40,
+    "piid": 4,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "climber_connection_status",
+    "siid": 40,
+    "piid": 5,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "factory_test_status",
+    "siid": 99,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "factory_test_result",
+    "siid": 99,
+    "piid": 3,
+    "code": 0,
+    "value": ""
+  },
+  {
+    "key": "self_test_status",
+    "siid": 99,
+    "piid": 8,
+    "code": 0,
+    "value": ""
+  },
+  {
+    "key": "lsd_test_status",
+    "siid": 99,
+    "piid": 9,
+    "code": 0,
+    "value": 50.008094787597656
+  },
+  {
+    "key": "debug_switch",
+    "siid": 99,
+    "piid": 11,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "serial",
+    "siid": 99,
+    "piid": 14,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "calibration_status",
+    "siid": 99,
+    "piid": 15,
+    "code": 0,
+    "value": ""
+  },
+  {
+    "key": "version",
+    "siid": 99,
+    "piid": 17,
+    "code": 0,
+    "value": "2024-07-10 11:35:41,4.3.9_1616_release"
+  },
+  {
+    "key": "performance_switch",
+    "siid": 99,
+    "piid": 24,
+    "code": 0,
+    "value": 0
+  },
+  {
+    "key": "ai_test_status",
+    "siid": 99,
+    "piid": 25,
+    "code": 0,
+    "value": ""
+  },
+  {
+    "key": "public_key",
+    "siid": 99,
+    "piid": 27,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "auto_pair",
+    "siid": 99,
+    "piid": 28,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mcu_version",
+    "siid": 99,
+    "piid": 31,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "mop_test_status",
+    "siid": 99,
+    "piid": 35,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "tcp_dump",
+    "siid": 99,
+    "piid": 36,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "system_guard_monitoring",
+    "siid": 99,
+    "piid": 40,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "enable_system_guard",
+    "siid": 99,
+    "piid": 49,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "matter_qr_code",
+    "siid": 99,
+    "piid": 50,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "disable_dtof_verification",
+    "siid": 99,
+    "piid": 51,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "disable_dtof_left_back_tof",
+    "siid": 99,
+    "piid": 52,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "demo_mode_configuration",
+    "siid": 99,
+    "piid": 90,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "platform_network",
+    "siid": 99,
+    "piid": 95,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "wifi_info",
+    "siid": 99,
+    "piid": 98,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "disable_projector",
+    "siid": 99,
+    "piid": 100,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_status",
+    "siid": 10001,
+    "piid": 1,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_audio",
+    "siid": 10001,
+    "piid": 2,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_record",
+    "siid": 10001,
+    "piid": 4,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "take_photo",
+    "siid": 10001,
+    "piid": 5,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_keep_alive",
+    "siid": 10001,
+    "piid": 6,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_fault",
+    "siid": 10001,
+    "piid": 7,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "camera_light_brightness",
+    "siid": 10001,
+    "piid": 9,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "camera_light",
+    "siid": 10001,
+    "piid": 10,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_vendor",
+    "siid": 10001,
+    "piid": 11,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_property",
+    "siid": 10001,
+    "piid": 99,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_cruise_point",
+    "siid": 10001,
+    "piid": 101,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_task",
+    "siid": 10001,
+    "piid": 103,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "steam_human_follow",
+    "siid": 10001,
+    "piid": 110,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "obstacle_video_status",
+    "siid": 10001,
+    "piid": 111,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "obstacle_video_data",
+    "siid": 10001,
+    "piid": 112,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_upload",
+    "siid": 10001,
+    "piid": 1003,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_code",
+    "siid": 10001,
+    "piid": 1100,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_set_code",
+    "siid": 10001,
+    "piid": 1101,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_verify_code",
+    "siid": 10001,
+    "piid": 1102,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_reset_code",
+    "siid": 10001,
+    "piid": 1103,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "access_enable_status",
+    "siid": 10001,
+    "piid": 1104,
+    "code": -1,
+    "value": null
+  },
+  {
+    "key": "stream_space",
+    "siid": 10001,
+    "piid": 2003,
+    "code": -1,
+    "value": null
+  }
+]

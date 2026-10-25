@@ -1,0 +1,14 @@
+{
+  "domain": "dreame_vacuum_3d",
+  "name": "Dreame Vacuum 3D",
+  "after_dependencies": ["lovelace"],
+  "codeowners": ["@dortizesquivel"],
+  "config_flow": true,
+  "dependencies": ["http"],
+  "documentation": "https://github.com/dortizesquivel/dreame-vacuum-3d",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/dortizesquivel/dreame-vacuum-3d/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

@@ -1,0 +1,128 @@
+name: Release
+
+# Run it from Actions → Release → Run workflow, or:
+#   gh workflow run release.yml -f bump=patch        (patch | minor | major)
+# It runs the checks, bumps the version in manifest.json, updates CHANGELOG.md, commits, tags and
+# publishes a GitHub release. HACS installs from the tag and offers it to every install as soon as it's
+# out. The release also carries dreame_vacuum_3d.zip, the integration's folder for installing by hand, with a
+# signed build-provenance attestation.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      prerelease:
+        description: Pre-release (HACS only offers it with beta versions enabled)
+        type: boolean
+        default: false
+      dry_run:
+        description: Dry run (run the checks, show the version and notes, publish nothing)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # create the GitHub release (the commit and tag go in with the deploy key)
+      id-token: write        # sign the build-provenance attestation
+      attestations: write    # store it with the repository
+    env:
+      BUMP: ${{ inputs.bump }}
+      PRERELEASE: ${{ inputs.prerelease }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          # main is protected: the release commit goes in with the deploy key, the ruleset's only bypass.
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+
+      - run: pip install -r requirements_test.txt
+
+      - name: Checks
+        run: |
+          ruff check .
+          python scripts/check_translations.py
+          pytest
+
+      - name: Bump version
+        id: version
+        run: echo "tag=$(python scripts/release.py bump "$BUMP")" >> "$GITHUB_OUTPUT"
+
+      - name: Release notes and changelog
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            python scripts/release.py notes "$TAG" --dry-run
+          else
+            python scripts/release.py notes "$TAG"
+          fi
+
+      - name: Commit and tag
+        if: inputs.dry_run == false
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add custom_components/dreame_vacuum_3d/manifest.json CHANGELOG.md
+          git commit -m "chore(release): $TAG"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin HEAD:main "$TAG"
+
+      # From the tagged commit's files, so anyone can rebuild it from the tag and compare.
+      - name: Package the integration
+        run: python scripts/release.py package
+
+      # Proves the released zip was built by this workflow from this commit:
+      #   gh attestation verify dreame_vacuum_3d.zip --repo dortizesquivel/dreame-vacuum-3d
+      - name: Attest build provenance
+        id: attest
+        if: inputs.dry_run == false
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        with:
+          subject-path: dreame_vacuum_3d.zip
+
+      - name: Publish GitHub release
+        if: inputs.dry_run == false
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          # The attestation also goes with the release: the Sigstore bundle, and its signed in-toto statement.
+          cp "$BUNDLE" dreame_vacuum_3d.zip.sigstore.json
+          jq -c '.dsseEnvelope' "$BUNDLE" > dreame_vacuum_3d.zip.intoto.jsonl
+          flags=()
+          [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
+          gh release create "$TAG" dreame_vacuum_3d.zip dreame_vacuum_3d.zip.sigstore.json dreame_vacuum_3d.zip.intoto.jsonl \
+            --verify-tag --title "$TAG" --notes-file release-notes.md "${flags[@]}"
+
+      - name: Summary
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run for **$TAG**: nothing was committed or published." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Published [$TAG](https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG)." >> "$GITHUB_STEP_SUMMARY"
+          fi
