@@ -201,9 +201,7 @@ class DreameNotifier:
 
     def _handle_consumable(self, prop: str, values: dict[str, Any]) -> None:
         name = CONSUMABLE_LIFE[prop]
-        threshold = int(
-            self.entry.options.get(CONF_CONSUMABLE_THRESHOLD, DEFAULT_CONSUMABLE_THRESHOLD)
-        )
+        threshold = int(self.entry.options.get(CONF_CONSUMABLE_THRESHOLD, DEFAULT_CONSUMABLE_THRESHOLD))
         current = values.get(prop)
         previous = self._prev.get(prop)
         if not isinstance(current, (int, float)):

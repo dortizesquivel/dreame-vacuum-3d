@@ -301,9 +301,7 @@ class DreameDevice:
         params = json.dumps({"areas": areas}, separators=(",", ":"))
         return await self._start_custom(Status.ZONE_CLEANING.value, params)
 
-    async def remote_control_move_step(
-        self, rotation: int = 0, velocity: int = 0, prompt: bool | None = None
-    ) -> None:
+    async def remote_control_move_step(self, rotation: int = 0, velocity: int = 0, prompt: bool | None = None) -> None:
         """Nudge the robot while remote-controlling (sets remote_control property)."""
         silent = prompt is False or (prompt is None and self._remote_control)
         audio = "false" if silent else "true"

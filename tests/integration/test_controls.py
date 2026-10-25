@@ -78,9 +78,7 @@ async def test_switches_and_numbers(hass: HomeAssistant) -> None:
     numbers = _by_key(hass, "number")
     times = _by_key(hass, "time")
 
-    assert {"carpet_boost", "dnd", "child_lock", "obstacle_avoidance", "self_clean", "resume_cleaning"} <= set(
-        switches
-    )
+    assert {"carpet_boost", "dnd", "child_lock", "obstacle_avoidance", "self_clean", "resume_cleaning"} <= set(switches)
     assert "auto_mount_mop" not in switches  # answers, but the X10+ doesn't mount its mop
     assert set(numbers) == {"volume"}
     assert set(times) == {"dnd_start", "dnd_end"}
@@ -98,9 +96,7 @@ async def test_switches_and_numbers(hass: HomeAssistant) -> None:
         {ATTR_ENTITY_ID: switches["dnd"].entity_id},
         blocking=True,
     )
-    assert any(
-        m == "set_properties" and any(p.get("value") is False for p in params) for m, params in miio.calls
-    )
+    assert any(m == "set_properties" and any(p.get("value") is False for p in params) for m, params in miio.calls)
 
     miio.calls.clear()
     await hass.services.async_call(
@@ -118,9 +114,7 @@ async def test_switches_and_numbers(hass: HomeAssistant) -> None:
         {ATTR_ENTITY_ID: times["dnd_start"].entity_id, "time": "23:30:00"},
         blocking=True,
     )
-    assert any(
-        m == "set_properties" and any(p.get("value") == "23:30" for p in params) for m, params in miio.calls
-    )
+    assert any(m == "set_properties" and any(p.get("value") == "23:30" for p in params) for m, params in miio.calls)
 
 
 async def test_ai_switches_flip_one_bit(hass: HomeAssistant) -> None:
@@ -137,9 +131,7 @@ async def test_ai_switches_flip_one_bit(hass: HomeAssistant) -> None:
         miio.overrides[(4, 22)] = 287
         await entry.runtime_data.coordinator.async_refresh()
         miio.calls.clear()
-        await hass.services.async_call(
-            "switch", service, {ATTR_ENTITY_ID: switches[key].entity_id}, blocking=True
-        )
+        await hass.services.async_call("switch", service, {ATTR_ENTITY_ID: switches[key].entity_id}, blocking=True)
         writes = [p for m, params in miio.calls if m == "set_properties" for p in params]
         assert writes == [{"did": "set", "siid": 4, "piid": 22, "value": expected}]
 
@@ -149,9 +141,7 @@ async def test_failed_command_is_a_readable_error(hass: HomeAssistant) -> None:
     switches = _by_key(hass, "switch")
     miio.send.side_effect = MiotError(-4004)
     with pytest.raises(HomeAssistantError) as err:
-        await hass.services.async_call(
-            "switch", "turn_off", {ATTR_ENTITY_ID: switches["dnd"].entity_id}, blocking=True
-        )
+        await hass.services.async_call("switch", "turn_off", {ATTR_ENTITY_ID: switches["dnd"].entity_id}, blocking=True)
     assert err.value.translation_key == "command_failed"
 
 

@@ -37,9 +37,7 @@ async def async_setup_entry(
     coordinator: DreameDataUpdateCoordinator = entry.runtime_data.coordinator
     available = coordinator.device.available
     async_add_entities(
-        DreameNumberEntity(coordinator, description)
-        for description in NUMBERS
-        if description.key in available
+        DreameNumberEntity(coordinator, description) for description in NUMBERS if description.key in available
     )
 
 

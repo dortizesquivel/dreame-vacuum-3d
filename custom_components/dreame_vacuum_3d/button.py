@@ -60,22 +60,25 @@ BUTTONS: tuple[DreameButtonEntityDescription, ...] = (
         translation_key="empty",
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda device: device.start_auto_empty(),
-        available_fn=lambda device: "start_auto_empty" in device.caps.actions
-        and "auto_empty_status" in device.available,
+        available_fn=lambda device: (
+            "start_auto_empty" in device.caps.actions and "auto_empty_status" in device.available
+        ),
     ),
     DreameButtonEntityDescription(
         key="wash_mop",
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda device: device.start_washing(),
-        available_fn=lambda device: "start_washing" in device.caps.actions
-        and "self_wash_base_status" in device.available,
+        available_fn=lambda device: (
+            "start_washing" in device.caps.actions and "self_wash_base_status" in device.available
+        ),
     ),
     DreameButtonEntityDescription(
         key="dry_mop",
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda device: device.start_drying(),
-        available_fn=lambda device: "start_washing" in device.caps.actions
-        and "self_wash_base_status" in device.available,
+        available_fn=lambda device: (
+            "start_washing" in device.caps.actions and "self_wash_base_status" in device.available
+        ),
     ),
 )
 
@@ -89,9 +92,7 @@ async def async_setup_entry(
     coordinator: DreameDataUpdateCoordinator = entry.runtime_data.coordinator
     device = coordinator.device
     async_add_entities(
-        DreameButtonEntity(coordinator, description)
-        for description in BUTTONS
-        if description.available_fn(device)
+        DreameButtonEntity(coordinator, description) for description in BUTTONS if description.available_fn(device)
     )
 
 

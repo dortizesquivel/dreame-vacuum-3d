@@ -35,9 +35,7 @@ TO_REDACT = {
 }
 
 
-async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> dict[str, Any]:
+async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
     """Return redacted entry data and raw MIoT properties (no serial_number)."""
     device = entry.runtime_data.coordinator.device
     # Map object names (6.8, 6.9) carry "<user id>/<did>/..." inside the value.

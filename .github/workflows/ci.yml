@@ -29,6 +29,8 @@ jobs:
       - run: pip install -r requirements_test.txt
       - name: Lint (ruff)
         run: ruff check .
+      - name: Formatting (ruff format)
+        run: ruff format --check .
       - name: Types (mypy)
         run: mypy
       - name: Translations have the same keys

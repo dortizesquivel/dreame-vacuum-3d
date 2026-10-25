@@ -42,7 +42,6 @@ async def test_vacuum_created_from_fixture(hass: HomeAssistant) -> None:
     assert state.attributes.get("battery_level") == 100
 
 
-
 async def test_vacuum_absent_without_state(hass: HomeAssistant) -> None:
     class NoStateMiio(FixtureMiio):
         async def _send(self, method: str, params: Any = None) -> Any:

@@ -79,7 +79,6 @@ async def test_task_status_completed_and_cancelled(hass: HomeAssistant) -> None:
     assert events[0].data["completed"] is False
 
 
-
 async def test_consumable_threshold_cross(hass: HomeAssistant) -> None:
     entry, miio = await setup_fixture_entry(hass)
     entity_id = _vacuum_entity_id(hass)

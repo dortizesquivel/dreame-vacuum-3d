@@ -74,9 +74,7 @@ class FixtureMiio:
         if method == "set_properties":
             for item in params or []:
                 self.overrides[(item["siid"], item["piid"])] = item["value"]
-            return [
-                {"did": p["did"], "siid": p["siid"], "piid": p["piid"], "code": 0} for p in (params or [])
-            ]
+            return [{"did": p["did"], "siid": p["siid"], "piid": p["piid"], "code": 0} for p in (params or [])]
         if method == "action":
             return {"did": "call", "siid": params["siid"], "aiid": params["aiid"], "code": 0, "out": []}
         raise AssertionError(f"unexpected method {method}")

@@ -60,7 +60,6 @@ async def test_sensors_from_fixture(hass: HomeAssistant) -> None:
     assert state is not None
     assert state.state == "charging_completed"
 
-
     battery = hass.states.get(sensors["battery_level"].entity_id)
     assert battery is not None
     assert float(battery.state) == 100
@@ -91,7 +90,6 @@ async def test_binary_sensors_from_fixture(hass: HomeAssistant) -> None:
     assert charging is not None
     assert charging.state == "on"  # fixture charging_status=1 CHARGING
     assert binaries["charging_status"].translation_key == "charging"
-
 
     mop = hass.states.get(binaries["water_tank"].entity_id)
     assert mop is not None

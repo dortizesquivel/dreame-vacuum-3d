@@ -130,9 +130,7 @@ async def test_setup_and_unload(hass: HomeAssistant) -> None:
     assert entry.runtime_data.miio is miio
 
     registry = dr.async_get(hass)
-    device = registry.async_get_device_by_identifier(
-        (DOMAIN, ENTRY_DATA[CONF_DID]), entry.entry_id
-    )
+    device = registry.async_get_device_by_identifier((DOMAIN, ENTRY_DATA[CONF_DID]), entry.entry_id)
     assert device is not None
     assert device.model == ENTRY_DATA[CONF_MODEL]
     assert device.sw_version == INFO["fw_ver"]
@@ -219,9 +217,7 @@ async def test_miio_info_falls_back_to_cloud(hass: HomeAssistant) -> None:
         await hass.async_block_till_done()
 
     cloud.rpc.assert_any_await(ENTRY_DATA[CONF_DID], "miIO.info", [])
-    device = dr.async_get(hass).async_get_device_by_identifier(
-        (DOMAIN, ENTRY_DATA[CONF_DID]), entry.entry_id
-    )
+    device = dr.async_get(hass).async_get_device_by_identifier((DOMAIN, ENTRY_DATA[CONF_DID]), entry.entry_id)
     assert device is not None
     assert device.sw_version == INFO["fw_ver"]
 

@@ -38,9 +38,7 @@ class FakeSend:
         fail: Exception | None = None,
         overrides: dict[tuple[int, int], Any] | None = None,
     ) -> None:
-        self.by_siid_piid = {
-            (item["siid"], item["piid"]): item for item in (by_key or _fixture_by_key()).values()
-        }
+        self.by_siid_piid = {(item["siid"], item["piid"]): item for item in (by_key or _fixture_by_key()).values()}
         self.fail = fail
         self.overrides = overrides or {}
         self.calls: list[tuple[str, Any]] = []
@@ -183,9 +181,7 @@ async def test_action_commands_payloads(device: DreameDevice) -> None:
     ]:
         local.calls.clear()
         await method()
-        assert local.calls == [
-            ("action", {"did": "call", "siid": expected[0], "aiid": expected[1], "in": []})
-        ]
+        assert local.calls == [("action", {"did": "call", "siid": expected[0], "aiid": expected[1], "in": []})]
 
 
 async def test_set_and_reset_consumable(device: DreameDevice) -> None:

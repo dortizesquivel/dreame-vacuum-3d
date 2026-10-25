@@ -15,7 +15,7 @@ def parse_enum[E: IntEnum](enum_cls: type[E], value: object) -> E | None:
     """Map an int to enum_cls, or None (and debug-log) if it is not a known member."""
     try:
         return enum_cls(value)  # type: ignore[arg-type]  # a bad value raises, handled below
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         _LOGGER.debug("unknown %s value: %r", enum_cls.__name__, value)
         return None
 
@@ -450,7 +450,6 @@ class DustBagStatus(IntEnum):
     INSTALLED = 0
     NOT_INSTALLED = 1
     CHECK = 2
-
 
 
 class LowWaterWarning(IntEnum):

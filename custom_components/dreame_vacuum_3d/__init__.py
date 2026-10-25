@@ -101,9 +101,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bo
         raise
 
     notifier = DreameNotifier(hass, entry, coordinator)
-    entry.runtime_data = RuntimeData(
-        coordinator=coordinator, cloud=cloud, miio=miio, notifier=notifier
-    )
+    entry.runtime_data = RuntimeData(coordinator=coordinator, cloud=cloud, miio=miio, notifier=notifier)
     _async_register_device(hass, entry, info)
     _async_remove_dnd_numbers(hass, did)
 
@@ -166,9 +164,7 @@ async def _miio_info(miio: MiioClient, cloud: XiaomiCloud, did: str) -> dict[str
     return result if isinstance(result, dict) else {}
 
 
-def _async_register_device(
-    hass: HomeAssistant, entry: ConfigEntry, info: dict[str, Any]
-) -> None:
+def _async_register_device(hass: HomeAssistant, entry: ConfigEntry, info: dict[str, Any]) -> None:
     mac = entry.data.get(CONF_MAC) or info.get("mac") or ""
     connections = {(dr.CONNECTION_NETWORK_MAC, dr.format_mac(mac))} if mac else set()
     dr.async_get(hass).async_get_or_create(

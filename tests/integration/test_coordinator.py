@@ -46,9 +46,7 @@ def _entry(**options: Any) -> MockConfigEntry:
     return MockConfigEntry(domain=DOMAIN, data={}, options=options)
 
 
-async def _make(
-    hass, device: FakeDevice, entry: MockConfigEntry | None = None
-) -> DreameDataUpdateCoordinator:
+async def _make(hass, device: FakeDevice, entry: MockConfigEntry | None = None) -> DreameDataUpdateCoordinator:
     config_entry = entry or _entry()
     config_entry.add_to_hass(hass)
     coordinator = DreameDataUpdateCoordinator(hass, config_entry, device)  # type: ignore[arg-type]
