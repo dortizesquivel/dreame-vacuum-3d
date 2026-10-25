@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import json
 import logging
+import time
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.core import HomeAssistant
@@ -16,7 +18,7 @@ from custom_components.dreame_vacuum_3d.const import DOMAIN
 from custom_components.dreame_vacuum_3d.device.capabilities import load
 from custom_components.dreame_vacuum_3d.device.enums import Status
 from custom_components.dreame_vacuum_3d.live_map import IDLE_EVERY
-from custom_components.dreame_vacuum_3d.protocol.cloud import CloudAuthError
+from custom_components.dreame_vacuum_3d.protocol.cloud import CloudAuthError, CloudConnectionError
 from custom_components.dreame_vacuum_3d.protocol.miio import MiioTimeoutError
 from tests.integration.helpers import setup_fixture_entry
 from tests.integration.test_init import ENTRY_DATA
@@ -96,19 +98,31 @@ async def test_frames_while_moving_then_one_more(hass: HomeAssistant, monkeypatc
     device = entry.runtime_data.coordinator.device
     start = _map_requests(miio)
 
+    ticks = iter(range(1, 100))
+
+    def status(value: Status) -> None:
+        # In the robot too: the coordinator reads it again as time moves on.
+        miio.overrides[(4, 1)] = device.values["status"] = value.value
+
     def tick() -> None:
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=5), fire_all=True)
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=5 * next(ticks)), fire_all=True)
 
     tick()
     await hass.async_block_till_done(wait_background_tasks=True)
     assert _map_requests(miio) == start  # docked: nothing new
 
-    device.values["status"] = Status.CLEANING.value
+    # Cleaning: each tick reads what the robot logged in the cloud; a whole frame only every WHOLE_EVERY.
+    status(Status.CLEANING)
+    tick()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert _map_requests(miio) == start
+    assert miio.cloud.device_data.await_count == 2  # its partial frames (6.1) and whole ones (6.3)
+    monkeypatch.setattr("custom_components.dreame_vacuum_3d.live_map.WHOLE_EVERY", 0)
     tick()
     await hass.async_block_till_done(wait_background_tasks=True)
     assert _map_requests(miio) == start + 1
 
-    device.values["status"] = Status.IDLE.value
+    status(Status.IDLE)
     tick()
     await hass.async_block_till_done(wait_background_tasks=True)
     assert _map_requests(miio) == start + 2  # the frame with the whole path
@@ -159,7 +173,10 @@ def _with(*things: tuple[int, int], map_id: int = 45) -> str:
     return frame(rows, data)
 
 
-async def test_obstacles_furniture_and_what_is_new_since_the_last_cleaning(hass: HomeAssistant) -> None:
+async def test_obstacles_furniture_and_what_is_new_since_the_last_cleaning(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("custom_components.dreame_vacuum_3d.live_map.WHOLE_EVERY", 0)  # a whole frame each time
     entry, _miio = await setup(hass)  # its first frame, with nothing on the floor, is the reference
 
     async def frame_with(*things: tuple[int, int], map_id: int = 45) -> list[int]:
@@ -193,6 +210,69 @@ async def test_obstacles_furniture_and_what_is_new_since_the_last_cleaning(hass:
 
     # Another saved map starts a new reference.
     assert await frame_with((7, 0), (5, 0), map_id=46) == []
+
+
+def _logged(*frames: str, start: int = 100) -> list[dict]:
+    """Cloud log entries for these frames, newest first as the cloud lists them."""
+    return [{"time": start + i, "value": json.dumps([f])} for i, f in enumerate(frames)][::-1]
+
+
+async def test_partial_frames_from_the_cloud_log_while_cleaning(hass: HomeAssistant) -> None:
+    entry, miio = await setup(hass)  # a whole frame of map 7, frame 1, robot in room 1
+    live_map = entry.runtime_data.map
+    entry.runtime_data.coordinator.device.values["status"] = Status.CLEANING.value
+    sent: list[dict] = []
+    live_map.listen(sent.append)
+    p2 = frame([[0]], {"tr": "l-850,-400L50,0", "sa": [[2, 1]]}, kind="P", frame_id=2, robot=(-800, -400, 0))
+    p3 = frame([[0]], {"tr": "l-800,-400L0,50", "ai_obstacle": [[-700, -400, 134, 0.9]]}, kind="P", frame_id=3,
+               robot=(-700, -400, 45))  # fmt: skip
+    other_map = frame([[0]], {}, kind="P", map_id=8, frame_id=4)
+    now = int(time.time())  # cloud time, about the same as ours
+    miio.cloud.device_data.side_effect = lambda _did, key, _since: (
+        [*_logged(p2, p3, other_map, "not json", start=now), {"time": now - 1, "value": '[""]'}] if key == "6.1" else []
+    )
+    await live_map.refresh()
+
+    pose = live_map.pose
+    assert pose["frame_id"] == 3 and pose["robot"] == [-700, -400, 45] and pose["room"] == 2
+    assert pose["active"] == [2]
+    assert pose["obstacles"] == [{"x": -700, "y": -400, "type": "sock", "confidence": 90, "source": "camera"}]
+    # The live frame's path was M-900,-450 L50,0 L0,50 then S…, M…; each P continues the last stroke.
+    assert pose["path"][-1]["points"][-3:] == [[-800, -400], [-800, -400], [-800, -350]]
+    assert len(sent) == 2 and "cells" not in sent[0]
+    # The log is read from where it was left; frames already applied are skipped.
+    miio.cloud.device_data.side_effect = lambda _did, key, _since: _logged(p2, p3, start=now) if key == "6.1" else []
+    await live_map.refresh()
+    assert miio.cloud.device_data.await_args.args[2] == now + 4
+    assert len(sent) == 2
+
+
+async def test_a_whole_frame_from_the_cloud_log(hass: HomeAssistant) -> None:
+    entry, miio = await setup(hass)
+    live_map = entry.runtime_data.map
+    entry.runtime_data.coordinator.device.values["status"] = Status.CLEANING.value
+    miio.cloud.device_data.side_effect = lambda _did, key, _since: (
+        [{"time": 5, "value": json.dumps(["1000001/123/1"])}] if key == "6.3" else []
+    )
+    miio.cloud.download.return_value = live(robot=(-700, -400, 0), frame_id=9).encode()
+    await live_map.refresh()
+    assert live_map.pose["frame_id"] == 9 and live_map.pose["room"] == 2
+    miio.cloud.interim_file_url.assert_awaited_with("1000001/123/1", model="dreame.vacuum.p2114a")
+
+
+async def test_a_cloud_log_error_falls_back_to_asking_the_robot(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    entry, miio = await setup(hass)
+    live_map = entry.runtime_data.map
+    entry.runtime_data.coordinator.device.values["status"] = Status.CLEANING.value
+    miio.cloud.device_data.side_effect = CloudConnectionError("down")
+    await live_map.refresh()  # no whole frame due yet: nothing, and a warning
+    assert "Couldn't fetch the map: down" in caplog.text
+    monkeypatch.setattr("custom_components.dreame_vacuum_3d.live_map.WHOLE_EVERY", 0)
+    miio.cloud.download.return_value = live(robot=(-700, -400, 0), frame_id=5).encode()
+    await live_map.refresh()
+    assert live_map.pose["frame_id"] == 5
 
 
 async def test_live_map_without_saved_rooms_and_unknown_robot(hass: HomeAssistant) -> None:

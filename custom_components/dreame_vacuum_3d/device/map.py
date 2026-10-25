@@ -217,7 +217,7 @@ def path(frame: Frame) -> list[dict[str, Any]]:
     """The path in mm, as strokes {"mode": vacuum | mop | both, "points": [[x, y], …]}.
 
     S, W and M start a stroke at a point; L continues it, relative to the last point; l (in P-frames) continues the
-    previous frame's stroke.
+    previous frame's last stroke: that stroke is marked "joins".
     """
     strokes: list[dict[str, Any]] = []
     x = y = 0
@@ -228,7 +228,7 @@ def path(frame: Frame) -> list[dict[str, Any]]:
         else:
             x, y = int(a), int(b)
             mode = _MODES.get(op) or (strokes[-1]["mode"] if strokes else "vacuum")
-            strokes.append({"mode": mode, "points": [[x, y]]})
+            strokes.append({"mode": mode, "points": [[x, y]], **({"joins": True} if op == "l" else {})})
     return strokes
 
 

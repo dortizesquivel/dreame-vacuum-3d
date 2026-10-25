@@ -33,7 +33,7 @@ from .const import CONF_AUTH, CONF_DID, DOMAIN
 from .coordinator import DreameDataUpdateCoordinator
 from .device.capabilities import load
 from .device.device import DreameDevice
-from .live_map import MAP_LISTENERS, FileFetcher, LiveMap
+from .live_map import MAP_LISTENERS, FileFetcher, HistoryFetcher, LiveMap
 from .notifications import DreameNotifier
 from .protocol.cloud import (
     CloudAuth,
@@ -139,7 +139,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bo
 
     notifier = DreameNotifier(hass, entry, coordinator)
     listeners = hass.data[MAP_LISTENERS].setdefault(entry.entry_id, [])
-    live_map = LiveMap(hass, device, _map_file(hass, entry, cloud), listeners, _obstacle_store(hass, entry))
+    live_map = LiveMap(
+        hass,
+        device,
+        _map_file(hass, entry, cloud),
+        listeners,
+        _obstacle_store(hass, entry),
+        _map_history(hass, entry, cloud, did),
+    )
     entry.runtime_data = RuntimeData(coordinator=coordinator, cloud=cloud, miio=miio, notifier=notifier, map=live_map)
     _async_register_device(hass, entry, info)
     _async_remove_dnd_numbers(hass, did)
@@ -208,6 +215,15 @@ def _map_file(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud) -> Fi
         return await _with_relogin(hass, entry, cloud, fetch)
 
     return fetch_file
+
+
+def _map_history(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud, did: str) -> HistoryFetcher:
+    """What the robot logged in the cloud for a property: its map frames while it cleans."""
+
+    async def fetch(key: str, since: int) -> list[dict[str, Any]]:
+        return await _with_relogin(hass, entry, cloud, lambda: cloud.device_data(did, key, since))
+
+    return fetch
 
 
 async def _with_relogin[T](

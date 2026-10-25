@@ -74,7 +74,7 @@ def test_path_active_rooms_and_room_at() -> None:
         {"mode": "both", "points": [[-900, -450], [-850, -450], [-850, -400]]},
         {"mode": "vacuum", "points": [[-700, -300], [-690, -290]]},
         {"mode": "mop", "points": [[0, 0]]},
-        {"mode": "mop", "points": [[5, 5]]},
+        {"mode": "mop", "points": [[5, 5]], "joins": True},
     ]
     assert dmap.active_rooms(f) == [2]
     cells, rooms = dmap.rooms(dmap.saved_map(f), saved=True)  # type: ignore[arg-type]
