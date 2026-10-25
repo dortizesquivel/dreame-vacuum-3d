@@ -7,9 +7,9 @@
 [![License: MIT](https://img.shields.io/github/license/dortizesquivel/dreame-vacuum-3d)](LICENSE)
 [![Home Assistant 2026.10+](https://img.shields.io/badge/Home%20Assistant-2026.10%2B-blue.svg)](https://www.home-assistant.io/)
 
-A Home Assistant integration for Dreame robot vacuums: local miIO control, Xiaomi cloud login for maps and fallback, Tasshack-compatible cleaning services, and a capability table per model. Phase 1 ships the backend (entities, services, events, diagnostics). The 3D map card comes in a later phase.
+A Home Assistant integration for Dreame robot vacuums: local miIO control, Xiaomi cloud login for maps and fallback, Tasshack-compatible cleaning services, a capability table per model, and a 3D card that draws the robot moving through a 3D model of your house.
 
-**Contents:** [Requirements](#requirements) · [Installation](#installation) · [Configuration](#configuration) · [Models](#models) · [Services](#services) · [Events](#events) · [Options](#options) · [Development](#development) · [Credits](#credits) · [License](#license)
+**Contents:** [Requirements](#requirements) · [Installation](#installation) · [Configuration](#configuration) · [The 3D card](#the-3d-card) · [Models](#models) · [Services](#services) · [Events](#events) · [Options](#options) · [Development](#development) · [Credits](#credits) · [License](#license)
 
 ## Requirements
 
@@ -49,6 +49,29 @@ The entry stores the local IP, token, cloud session and account password (needed
 
 If you still run [Tasshack/dreame-vacuum](https://github.com/Tasshack/dreame-vacuum) or another Dreame integration on the same robot, leave **Coexist** enabled (the default) so this integration polls more slowly while docked.
 
+## The 3D card
+
+The integration serves the card itself: after installing it, edit a dashboard, select **Add card** and search for **Dreame Vacuum 3D Card**, or in YAML:
+
+```yaml
+type: custom:dreame-vacuum-3d-card
+entity: vacuum.xiaomi_robot_vacuum_x10
+model:                              # optional: a 3D model of your house
+  url: /local/house.glb
+  dock: { position: [4.2, 0, 3.1], heading: 180 }
+```
+
+The robot moves on the card as it cleans, with its path, the rooms it is cleaning and the room it is in. Tap a room to clean it. **3D**, **Plan** and **Follow** change the view; pinch, Ctrl/⌘ + wheel or **+**/**−** zoom.
+
+- **The house.** Without `model`, the card draws the robot's own map: rooms in colours, walls and the dock. With `model`, it draws your 3D model (glTF/GLB) and puts the robot on it: `model.dock.position` is the point of the model's floor under the docked robot (metres, y up) and `model.dock.heading` the way the docked robot faces (degrees: 0 = the model's +z, 90 = +x). `style: futuristic` draws the model as a hologram; `units` (`m`, `cm`, `mm`, `in`, `ft`), `up` (`y` or `z`) and `opacity` are as in the [mmWave 3D Card](https://github.com/dortizesquivel/mmwave-3d-card#a-3d-model-of-your-room).
+- **Make a model from photos.** [docs/house-model.md](docs/house-model.md) is a prompt for an AI coding agent that turns phone photos of each room into a model of the house, built on the robot's floor plan (**⤓** on the card downloads it), with the `model:` config ready.
+- **Other options.** `title`, `height` (pixels, default 420), `view` (`3d` or `plan`) and `labels` (room names, default on).
+- **Where the map comes from.** While the robot moves, the integration asks it for a map frame every 5 seconds (every 15 minutes while it is docked) and sends the card the robot's pose, the dock, the rooms and the path. The robot uploads each frame to the Xiaomi cloud, so the map needs the cloud; commands don't.
+
+Two entities come from the map too: **Current room** (a sensor) and a **Clean *room*** button per room.
+
+To try the card without a robot: `cd card && npm install && npm run build && npm run demo`, then open <http://127.0.0.1:8792/card/demo/?house=URL> with a folder that has a `map.json` (a map from Tasshack's integration) and, optionally, a `config.json` with the `model:` block.
+
 ## Models
 
 Capabilities come from YAML under `custom_components/dreame_vacuum_3d/device/models/`. A model with no dedicated file inherits the untested family base.
@@ -69,12 +92,12 @@ Entity services under domain `dreame_vacuum_3d` (names match Tasshack for Node-R
 | `vacuum_clean_segment` | Clean room segment(s); optional repeats, suction, water |
 | `vacuum_clean_zone` | Clean zone rectangle(s) |
 | `vacuum_clean_spot` | Spot-clean at point(s) |
-
-Without `suction_level` or `water_volume`, the cleaning services use the robot's current settings, as the app does.
 | `vacuum_goto` | Go to coordinates (mm) |
 | `vacuum_remote_control_move_step` | One remote-control step |
 | `vacuum_select_map` | Select map / floor by `map_id` |
 | `vacuum_reset_consumable` | Reset a consumable life counter |
+
+Without `suction_level` or `water_volume`, the cleaning services use the robot's current settings, as the app does.
 
 Map-edit services (restricted zones, merge/split/rename segments) are planned for a later phase.
 
@@ -113,6 +136,7 @@ ruff format --check .
 mypy
 python scripts/check_translations.py
 pytest
+cd card && npm ci && npm test && npm run build   # the card; commit the rebuilt bundle with its source
 ```
 
 `main` is protected: changes go in through a pull request. Required checks are **Python tests** (ruff, formatting, mypy, translations, pytest with a 95 % coverage floor), **DCO** (every commit signed off with `git commit -s`) and **Validate** (HACS + hassfest); see [CONTRIBUTING.md](CONTRIBUTING.md).

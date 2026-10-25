@@ -1,0 +1,20 @@
+{
+  "name": "dreame-vacuum-3d-card",
+  "version": "0.0.0",
+  "description": "3D Lovelace card (three.js) for the Dreame Vacuum 3D integration: the robot moving through a 3D model of the house",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "test": "node --test \"test/**/*.test.js\"",
+    "demo": "python3 -m http.server 8792 --bind 127.0.0.1 --directory .."
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}
