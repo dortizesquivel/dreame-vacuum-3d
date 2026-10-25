@@ -1,5 +1,5 @@
 import {
-  AdditiveBlending, Box3, BoxGeometry, BufferGeometry, Color, CylinderGeometry, DirectionalLight, EdgesGeometry, Float32BufferAttribute,
+  AdditiveBlending, Box3, BoxGeometry, BufferGeometry, CircleGeometry, Color, CylinderGeometry, DirectionalLight, EdgesGeometry, Float32BufferAttribute,
   FrontSide, GreaterDepth, Group, HemisphereLight, InstancedMesh, LineBasicMaterial, LineSegments, Mesh, MeshBasicMaterial, MeshStandardMaterial, NormalBlending,
   Object3D, PerspectiveCamera, Plane, Raycaster, RingGeometry, Scene, ShaderMaterial, TOUCH, Vector2, Vector3, WebGLRenderer,
 } from 'three';
@@ -9,6 +9,7 @@ import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer
 import { FloorEffects } from './effects.js';
 import { cellRects, robotToModel, roomAt } from './model.js';
 import { cssColor, mix } from './theme.js';
+import { FURNITURE_HEIGHT, NEW_HEIGHT, OBSTACLES, thingLabel, turnOf } from './things.js';
 
 // The scene is in the house model's frame (metres, y up). Without a model it is the robot's map in metres:
 // x → X, y → -Z. Map coordinates (mm) go through robotToModel.
@@ -118,11 +119,14 @@ export class VacuumScene {
     this.modelGroup = new Group();      // the house model, as the file has it after units and up
     this.mapGroup = new Group();        // rooms and walls drawn from the robot's map when there is no model
     this.overlayGroup = new Group();    // rooms being cleaned or picked
+    this.thingGroup = new Group();      // obstacles, furniture and what the lidar newly sees
+    this.thingSig = '';
+    this.lang = 'en';
     this.labelGroup = new Group();
     this.robot = makeRobot();
     this.robot.visible = false;
     this.effects = new FloorEffects(this.renderer, this.robot);
-    this.scene.add(this.modelGroup, this.mapGroup, this.effects.group, this.overlayGroup, this.labelGroup, this.robot);
+    this.scene.add(this.modelGroup, this.mapGroup, this.effects.group, this.overlayGroup, this.thingGroup, this.labelGroup, this.robot);
     this.path = null;
 
     this.model = null;
@@ -166,7 +170,7 @@ export class VacuumScene {
     this.robot.userData.ring.material.color.set(theme.accent);
     this.robot.userData.ghost.material.color.set(theme.accent);
     this.effects.setTheme(theme);
-    this.mapSig = this.overlaySig = '';
+    this.mapSig = this.overlaySig = this.thingSig = '';
     this._holoTheme();
     if (this.map) this.setMap(this.map);
     this.dirty = true;
@@ -208,7 +212,7 @@ export class VacuumScene {
 
   _modelChanged() {
     this.xf = null;
-    this.mapSig = this.overlaySig = '';
+    this.mapSig = this.overlaySig = this.thingSig = '';
     if (this.map) this.setMap(this.map);
     this.dirty = true;
   }
@@ -223,7 +227,7 @@ export class VacuumScene {
     const dockSig = map.dock.join();
     if (!this.xf || this.xf.dockSig !== dockSig) {
       this.xf = { ...robotToModel(map.dock, this.model), dockSig };
-      this.mapSig = this.overlaySig = '';
+      this.mapSig = this.overlaySig = this.thingSig = '';
     }
     const sig = `${map.map_id}|${Object.entries(map.cells ?? {}).map(([k, v]) => `${k}:${v.length}`).join()}`;
     if (sig !== this.mapSig) {
@@ -234,6 +238,11 @@ export class VacuumScene {
     if (overlay !== this.overlaySig) {
       this.overlaySig = overlay;
       this._buildOverlay();
+    }
+    const things = JSON.stringify([map.obstacles, map.furniture, map.new_cells, this.lang]);
+    if (things !== this.thingSig) {
+      this.thingSig = things;
+      this._buildThings();
     }
     this._setPath(map.path);
     this.effects.setMap(map, this.xf);
@@ -253,6 +262,13 @@ export class VacuumScene {
   /** Minutes the mopped floor takes to dry. */
   setDryTime(minutes) {
     this.effects.setDryTime(minutes);
+  }
+
+  /** Language of the obstacles' names ('en', 'es'). */
+  setLanguage(lang) {
+    if (lang === this.lang) return;
+    this.lang = lang;
+    if (this.map) this.setMap(this.map);
   }
 
   select(id) {
@@ -321,6 +337,62 @@ export class VacuumScene {
       this.labelGroup.add(label);
     }
     this.labelGroup.visible = this.showLabels;
+  }
+
+  /** Obstacles where the robot found them, what the lidar newly sees, and (without a model) recognised furniture. */
+  _buildThings() {
+    clearGroup(this.thingGroup);
+    const { obstacles = [], furniture = [], new_cells: fresh = [], grid } = this.map;
+    const th = this.theme, floor = this.xf.floor;
+    for (const o of obstacles) {
+      const kind = OBSTACLES[o.type] ?? OBSTACLES.obstacle;
+      const [w, h, d] = kind.size;
+      const color = kind.warn ? th.error : th.warning;
+      const geo = kind.flat ? new CircleGeometry(0.5, 32) : kind.round ? new CylinderGeometry(0.5, 0.5, 1, 24) : new BoxGeometry(1, 1, 1);
+      const mesh = new Mesh(geo, kind.flat
+        ? new MeshBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false })
+        : new MeshStandardMaterial({ color, roughness: 0.6 }));
+      const [X, Z] = this.xf.point(o.x, o.y);
+      if (kind.flat) {
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.scale.set(w, d, 1);
+        mesh.position.set(X, floor + LIFT * 3, Z);
+      } else {
+        mesh.scale.set(w, h, d);
+        mesh.position.set(X, floor + h / 2, Z);
+        mesh.rotation.y = turnOf(o.x, o.y);
+      }
+      // A ring so a 3 cm sock still shows from across the house.
+      const ring = new Mesh(new RingGeometry(0.2, 0.24, 40), new MeshBasicMaterial({ color, transparent: true, opacity: 0.8, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(X, floor + LIFT * 2, Z);
+      const el = document.createElement('div');
+      el.className = 'thing';
+      el.dataset.warn = String(!!kind.warn);
+      el.textContent = thingLabel(o.type, this.lang);
+      el.title = `${el.textContent} · ${o.confidence} %`;
+      const tag = new CSS2DObject(el);
+      tag.position.set(X, floor + Math.max(0.25, h + 0.15), Z);
+      this.thingGroup.add(mesh, ring, tag);
+    }
+    if (fresh.length && grid) {
+      const blocks = this._wallMesh(fresh, NEW_HEIGHT, th.warning);
+      blocks.material.transparent = true;
+      blocks.material.opacity = 0.8;
+      this.thingGroup.add(blocks);
+    }
+    if (!this.model) {
+      const mat = new MeshStandardMaterial({ color: mix(th.bg, th.fg2, th.dark ? 0.45 : 0.35), roughness: 0.8, transparent: true, opacity: 0.85 });
+      for (const f of furniture) {
+        const h = FURNITURE_HEIGHT[f.type] ?? 0.6;
+        const [X, Z] = this.xf.point(f.x0 + f.width / 2, f.y0 + f.height / 2);
+        const box = new Mesh(new BoxGeometry(f.width / 1000, h, f.height / 1000), mat);
+        box.position.set(X, floor + h / 2, Z);
+        box.rotation.y = this.xf.heading(f.angle) - Math.PI / 2;   // its width along the map's x turned by angle
+        this.thingGroup.add(box);
+      }
+    }
+    this.dirty = true;
   }
 
   _dockMesh() {

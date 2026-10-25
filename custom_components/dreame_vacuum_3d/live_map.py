@@ -53,6 +53,7 @@ class LiveMap:
         self._fetch_file = fetch_file
         self._listeners = listeners  # shared with the WebSocket subscriptions, which outlive a reload
         self._rooms: tuple[str, dict[str, Any]] | None = None  # (the saved map it came from, grid + cells + rooms)
+        self._saved: tuple[dmap.Grid, bytearray, list[dict[str, Any]]] | None = None  # its grid, open floor, furniture
         self._fetching = False
         self._next = 0.0
         self._was_active = False
@@ -128,6 +129,7 @@ class LiveMap:
             base = saved or frame
             cells, info = dmap.rooms(base, saved=saved is not None)
             self._rooms = (source, {"map_id": base.map_id, "grid": asdict(base.grid), "cells": cells, "rooms": info})
+            self._saved = (saved.grid, dmap.floor_mask(saved), dmap.furniture(saved)) if saved else None
             changed = True
         else:
             changed = False
@@ -145,6 +147,10 @@ class LiveMap:
             "path": dmap.path(frame),
             "room": dmap.room_at(grid, rooms["cells"], rooms["rooms"], robot[0], robot[1]) if robot else None,
             "active": dmap.active_rooms(frame) or list(self._device.segments or []),
+            "obstacles": dmap.obstacles(frame),
+            "furniture": dmap.furniture(frame) or (self._saved[2] if self._saved else []),
+            # What the lidar sees now on floor that was open when the house was mapped.
+            "new_cells": dmap.new_cells(frame, self._saved[0], self._saved[1]) if self._saved else [],
         }
         self.pose = pose
         message = {**rooms, **pose} if changed else pose

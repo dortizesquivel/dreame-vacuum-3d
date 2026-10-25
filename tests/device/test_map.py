@@ -135,3 +135,65 @@ def test_any_bytes_decode_or_raise_map_error(blob: bytes) -> None:
     for raw in (blob, base64.b64encode(zlib.compress(blob))):
         with contextlib.suppress(dmap.MapError):
             dmap.decode(raw)
+
+
+def test_obstacles_as_the_app_shows_them() -> None:
+    f = dmap.decode(
+        frame(
+            [[0]],
+            {
+                "ai_obstacle": [
+                    [-4672.6, 6268.6, 133, 0.99, "1700", "", "", "", "", "", "", "", "", "", "", "", "", "0", 0],
+                    [100, 200, 134, "0.4"],  # not sure enough
+                    [100, 200, 128, 0.9],  # the dock
+                    [100, 200, 131, 0.9, *[""] * 13, "1"],  # a "small object"
+                    [100, 200, 132, 0.9, *[""] * 14, 4],  # hidden
+                    [300, 400, 999, 0.8],  # a code it doesn't name: an obstacle
+                    [1, 2],
+                    "junk",
+                    [1, 2, "x", 0.9],
+                ],
+                "laser_obstacle": [[500, 600, 142], [700, 800, 135, 0.6, "id"]],
+            },
+        )
+    )
+    assert dmap.obstacles(f) == [
+        {"x": -4673, "y": 6269, "type": "shoes", "confidence": 99, "source": "camera"},
+        {"x": 300, "y": 400, "type": "obstacle", "confidence": 80, "source": "camera"},
+        {"x": 500, "y": 600, "type": "obstacle", "confidence": 100, "source": "lidar"},
+        {"x": 700, "y": 800, "type": "pet_waste", "confidence": 60, "source": "lidar"},
+    ]
+    assert dmap.obstacles(dmap.decode(frame([[0]], {"ai_obstacle": "nope"}))) == []
+
+
+def test_furniture_prefers_the_newest_list() -> None:
+    old = [[0, 0, 2, 3, -100, -200, 1750, 2000], [0, 0, 6, 3, 0, 0, 800, 400, 0]]
+    f = dmap.decode(frame([[0]], {"ai_furniture": old}))
+    assert dmap.furniture(f) == [
+        {"type": "double_bed", "x0": -100, "y0": -200, "width": 1750, "height": 2000, "angle": 0.0},
+        {"type": "dining_table", "x0": 0, "y0": 0, "width": 800, "height": 400, "angle": 180.0},  # flipped
+    ]
+    new = [[0, 0, 5, 2, -1725, -825, -2300, 750, 90], [0, 0, 99, 1, 0, 0, 5, 5], [0, 0, 4, 1], [0, 0, 4, 1, 0, 0, 0, 5]]
+    f = dmap.decode(frame([[0]], {"ai_furniture": old, "ai_furniture_new": new}))
+    assert dmap.furniture(f) == [
+        {"type": "three_seat_sofa", "x0": -1725, "y0": -825, "width": 2300, "height": 750, "angle": 90.0}
+    ]
+    assert dmap.furniture(dmap.decode(frame([[0]], {"ai_furniture": [[0, 0, "x", 1, 0, 0, 1, 1]]}))) == []
+
+
+def test_new_cells_are_walls_on_open_floor_away_from_old_walls() -> None:
+    # Saved: a 10 by 6 room (id 1) with an edge of walls all round.
+    rows = [[0x81] * 10] + [[0x81] + [1] * 8 + [0x81] for _ in range(4)] + [[0x81] * 10]
+    saved = dmap.decode(frame(rows))
+    mask = dmap.floor_mask(saved, margin=1)
+    assert sum(mask) == 6 * 2  # 8 by 4 floor, less one cell along each wall
+    # Live, half a cell to the left: the old walls, a new 2-cell thing in the middle and one by the wall.
+    live_rows = [[2 if v & 0x80 else 3 for v in row] for row in rows]
+    live_rows[3][4] = live_rows[3][5] = 2
+    live_rows[1][1] = 2
+    live = dmap.Frame(
+        1, 1, "I", None, None, dmap.Grid(LEFT - 25, TOP, SIZE, 10, 6), bytes(v for row in live_rows for v in row), {}
+    )
+    assert dmap.new_cells(live, saved.grid, mask) == [4, 3, 2]  # live cell 4's centre is on saved cell 4's edge
+    framed = dmap.Frame(1, 1, "I", None, None, saved.grid, bytes([63 << 2] * 60), {"fsm": 1})
+    assert sum(dmap.new_cells(framed, saved.grid, mask)[2::3]) == 12  # the whole open floor

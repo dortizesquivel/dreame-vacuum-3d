@@ -43,6 +43,9 @@ const STYLE = `
   .room { font-size: 11px; font-weight: 500; padding: 2px 6px; border-radius: 6px; white-space: nowrap; color: var(--primary-text-color);
     background: color-mix(in srgb, var(--card-background-color, #fff) 80%, transparent); }
   .room[data-current="true"] { color: var(--text-primary-color, #fff); background: var(--primary-color); }
+  .thing { font-size: 11px; font-weight: 500; padding: 2px 6px; border-radius: 6px; white-space: nowrap; color: #1a1a1a;
+    background: color-mix(in srgb, var(--warning-color, #ffa600) 85%, white); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
+  .thing[data-warn="true"] { color: #fff; background: var(--error-color, #db4437); }
   .status[hidden] { display: none; }
   .status { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; padding: 24px; text-align: center;
     color: var(--secondary-text-color); background: color-mix(in srgb, var(--card-background-color, #fff) 82%, transparent); }
@@ -95,6 +98,7 @@ class DreameVacuum3DCard extends HTMLElement {
     if (!this._root) this._build();
     if (first || this._dark !== !!hass.themes?.darkMode) this._applyTheme();
     this._subscribe();
+    this._scene?.setLanguage(this._lang());
     this._renderHead();
   }
 
@@ -112,8 +116,12 @@ class DreameVacuum3DCard extends HTMLElement {
     this._unsubscribe();
   }
 
+  _lang() {
+    return (this._hass?.locale?.language ?? this._hass?.language ?? 'en').split('-')[0];
+  }
+
   _t(key, vars = {}) {
-    const lang = (this._hass?.locale?.language ?? this._hass?.language ?? 'en').split('-')[0];
+    const lang = this._lang();
     const text = (STRINGS[lang] ?? STRINGS.en)[key] ?? STRINGS.en[key];
     return text.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? '');
   }
@@ -182,6 +190,7 @@ class DreameVacuum3DCard extends HTMLElement {
     this._els.title.hidden = c.title === false || c.title === '';
     if (!this._scene) return;
     this._scene.setLabels(c.labels);
+    this._scene.setLanguage(this._lang());
     this._scene.setDryTime(c.dryTime);
     this._scene.setModel(c.model);
     this._scene.setView(this._view, true);
