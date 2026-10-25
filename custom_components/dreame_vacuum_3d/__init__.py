@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
+import hashlib
+from pathlib import Path
 from typing import Any
 
 from aiohttp import CookieJar
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_COUNTRY,
@@ -18,13 +23,15 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import config_validation as cv, device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .const import CONF_AUTH, CONF_DID, DOMAIN
 from .coordinator import DreameDataUpdateCoordinator
 from .device.capabilities import load
 from .device.device import DreameDevice
+from .live_map import MAP_LISTENERS, FileFetcher, LiveMap
 from .notifications import DreameNotifier
 from .protocol.cloud import (
     CloudAuth,
@@ -36,6 +43,12 @@ from .protocol.cloud import (
 from .protocol.miio import MiioClient
 from .protocol.miio_codec import MiioError
 from .protocol.miot import Send
+from .websocket import async_register_websocket
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+CARD = Path(__file__).parent / "frontend" / "dreame-vacuum-3d-card.js"
+CARD_URL = f"/{DOMAIN}/{CARD.name}"
 
 PLATFORMS: list[str] = [
     "vacuum",
@@ -57,9 +70,28 @@ class RuntimeData:
     cloud: XiaomiCloud
     miio: MiioClient
     notifier: DreameNotifier
+    map: LiveMap
 
 
 type DreameConfigEntry = ConfigEntry[RuntimeData]
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Serve the 3D card and its WebSocket API, once per Home Assistant run."""
+    hass.data[MAP_LISTENERS] = {}
+    async_register_websocket(hass)
+    await hass.http.async_register_static_paths([StaticPathConfig(CARD_URL, str(CARD), cache_headers=False)])
+    # The content hash in the URL makes browsers fetch the card again after an update.
+    digest = await hass.async_add_executor_job(_file_hash, CARD)
+    add_extra_js_url(hass, f"{CARD_URL}?v={digest}")
+    return True
+
+
+def _file_hash(path: Path) -> str:
+    try:
+        return hashlib.sha1(path.read_bytes(), usedforsecurity=False).hexdigest()[:10]
+    except OSError:
+        return "0"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bool:
@@ -101,13 +133,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bo
         raise
 
     notifier = DreameNotifier(hass, entry, coordinator)
-    entry.runtime_data = RuntimeData(coordinator=coordinator, cloud=cloud, miio=miio, notifier=notifier)
+    listeners = hass.data[MAP_LISTENERS].setdefault(entry.entry_id, [])
+    live_map = LiveMap(hass, device, _map_file(hass, entry, cloud), listeners)
+    entry.runtime_data = RuntimeData(coordinator=coordinator, cloud=cloud, miio=miio, notifier=notifier, map=live_map)
     _async_register_device(hass, entry, info)
     _async_remove_dnd_numbers(hass, did)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     # Listen after entities exist so events can resolve entity_id / device_id.
     await notifier.async_setup()
+    entry.async_on_unload(live_map.start())
     return True
 
 
@@ -134,17 +169,37 @@ def _cloud_sender(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud, d
     """
 
     async def send(method: str, params: Any) -> Any:
-        try:
-            return await cloud.rpc(did, method, params)
-        except CloudAuthError:
-            try:
-                await cloud.login(entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
-            except CloudLoginRequired as err:
-                raise CloudAuthError("invalid_auth") from err
-            _persist_auth(hass, entry, cloud)
-            return await cloud.rpc(did, method, params)
+        return await _with_relogin(hass, entry, cloud, lambda: cloud.rpc(did, method, params))
 
     return send
+
+
+def _map_file(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud) -> FileFetcher:
+    """Download a map file the robot uploaded, logging in again like _cloud_sender."""
+    model = entry.data[CONF_MODEL]
+
+    async def fetch_file(object_name: str) -> bytes | None:
+        async def fetch() -> bytes | None:
+            url = await cloud.interim_file_url(object_name, model=model)
+            return await cloud.download(url) if url else None
+
+        return await _with_relogin(hass, entry, cloud, fetch)
+
+    return fetch_file
+
+
+async def _with_relogin[T](
+    hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud, call: Callable[[], Awaitable[T]]
+) -> T:
+    try:
+        return await call()
+    except CloudAuthError:
+        try:
+            await cloud.login(entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
+        except CloudLoginRequired as err:
+            raise CloudAuthError("invalid_auth") from err
+        _persist_auth(hass, entry, cloud)
+        return await call()
 
 
 def _async_remove_dnd_numbers(hass: HomeAssistant, did: str) -> None:

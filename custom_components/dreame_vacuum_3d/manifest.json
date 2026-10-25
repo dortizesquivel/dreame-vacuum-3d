@@ -4,7 +4,7 @@
   "after_dependencies": ["lovelace"],
   "codeowners": ["@dortizesquivel"],
   "config_flow": true,
-  "dependencies": ["http"],
+  "dependencies": ["frontend", "http", "websocket_api"],
   "documentation": "https://github.com/dortizesquivel/dreame-vacuum-3d",
   "integration_type": "device",
   "iot_class": "local_polling",

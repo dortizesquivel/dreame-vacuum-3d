@@ -29,7 +29,11 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 # shortcut: Home Assistant 2026.10 annotates schemas as probatio; ours are voluptuous, which it still accepts.
 # Move the schemas to probatio when Home Assistant stops accepting voluptuous.
-module = ["custom_components.dreame_vacuum_3d.config_flow", "custom_components.dreame_vacuum_3d.vacuum"]
+module = [
+    "custom_components.dreame_vacuum_3d.config_flow",
+    "custom_components.dreame_vacuum_3d.vacuum",
+    "custom_components.dreame_vacuum_3d.websocket",
+]
 disable_error_code = ["arg-type", "dict-item"]
 
 [tool.ruff]

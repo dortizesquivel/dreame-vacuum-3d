@@ -41,6 +41,7 @@ from .device.enums import (
     parse_enum,
 )
 from .entity import DreameEntity
+from .live_map import LiveMap
 
 
 def _enum_options(enum_cls: type[IntEnum]) -> list[str]:
@@ -244,11 +245,12 @@ async def async_setup_entry(
     """Set up sensors that the robot actually exposes (plus diagnostic channel)."""
     coordinator: DreameDataUpdateCoordinator = entry.runtime_data.coordinator
     available = coordinator.device.available
-    entities = [
+    entities: list[SensorEntity] = [
         DreameSensorEntity(coordinator, description)
         for description in SENSORS
         if description.always or description.key in available
     ]
+    entities.append(DreameRoomSensor(coordinator, entry.runtime_data.map))
     async_add_entities(entities)
 
 
@@ -277,3 +279,28 @@ class DreameSensorEntity(DreameEntity, SensorEntity):
         if description.value_fn is not None:
             return description.value_fn(self.device.values, description.key)
         return _raw(self.device.values, description.key)
+
+
+class DreameRoomSensor(DreameEntity, SensorEntity):
+    """The room the robot is in, from its map."""
+
+    entity_description: SensorEntityDescription
+
+    def __init__(self, coordinator: DreameDataUpdateCoordinator, live_map: LiveMap) -> None:
+        super().__init__(coordinator, SensorEntityDescription(key="current_room"))
+        self._map = live_map
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._map.listen(lambda _message: self.async_write_ha_state()))
+
+    @property
+    def native_value(self) -> str | None:
+        room = (self._map.pose or {}).get("room")
+        if room is None:
+            return None
+        return self._map.rooms.get(str(room), {}).get("name") or str(room)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"segment_id": (self._map.pose or {}).get("room")}

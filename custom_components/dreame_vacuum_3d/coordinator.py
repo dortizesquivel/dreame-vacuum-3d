@@ -25,7 +25,7 @@ INTERVAL_DOCKED_COEXIST = 60
 INTERVAL_SLEEP = 120
 
 # Cleaning / returning → poll every 2 s.
-_ACTIVE_STATUSES = frozenset(
+ACTIVE_STATUSES = frozenset(
     {
         Status.CLEANING,
         Status.BACK_HOME,
@@ -95,7 +95,7 @@ class DreameDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _interval_seconds(self) -> int:
         status = parse_enum(Status, self.device.values.get("status"))
-        if status in _ACTIVE_STATUSES:
+        if status in ACTIVE_STATUSES:
             return INTERVAL_ACTIVE
         if status in _SLEEP_STATUSES:
             return INTERVAL_SLEEP
