@@ -2,6 +2,11 @@
 
 All notable releases of Dreame Vacuum 3D are listed here. The [Release workflow](.github/workflows/release.yml) prepends each tagged version.
 
+## v0.1.2 - 2026-10-25
+
+- feat: floor effects for vacuuming and mopping (6f25516)
+- fix: decrypt the X10+'s live map and wait for its upload (971ff86)
+
 ## v0.1.1 - 2026-10-25
 
 - docs: the map pipeline, the card and their trust boundaries (afae1f3)
