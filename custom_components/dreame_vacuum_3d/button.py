@@ -48,7 +48,7 @@ def _make_reset(name: str) -> DreameButtonEntityDescription:
     return DreameButtonEntityDescription(
         key=action,
         entity_category=EntityCategory.CONFIG,
-        press_fn=lambda device, n=name: device.reset_consumable(n),
+        press_fn=lambda device: device.reset_consumable(name),
         available_fn=_available,
     )
 

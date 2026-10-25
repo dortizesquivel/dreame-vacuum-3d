@@ -190,7 +190,7 @@ class DreameDevice:
     async def _start_custom(self, status: int, parameters: str) -> Any:
         status_piid = self.caps.properties["status"][1]
         props_piid = self.caps.properties["cleaning_properties"][1]
-        payload = [
+        payload: list[dict] = [
             {"piid": status_piid, "value": status},
             {"piid": props_piid, "value": parameters},
         ]

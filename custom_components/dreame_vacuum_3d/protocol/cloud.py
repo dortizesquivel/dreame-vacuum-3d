@@ -401,10 +401,10 @@ class XiaomiCloud:
             if (await self._http("GET", _server_url(location), headers=_FORM)).status != 200:
                 return False
             state.user_id = self._jar_user_id() or state.user_id
-            location, _sign = await self._service_login(state)
-            if not location:
+            sts, _sign = await self._service_login(state)
+            if not sts:
                 return False
-            await self._fetch_service_token(state, location)
+            await self._fetch_service_token(state, sts)
         except CloudError:
             return False
         return True

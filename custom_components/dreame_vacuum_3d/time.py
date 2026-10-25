@@ -45,6 +45,8 @@ async def async_setup_entry(
 class DreameTimeEntity(DreameEntity, TimeEntity):
     """A time of day kept by the robot."""
 
+    entity_description: TimeEntityDescription
+
     def __init__(
         self,
         coordinator: DreameDataUpdateCoordinator,

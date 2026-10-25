@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any
 
 from homeassistant.components.vacuum import (
     StateVacuumEntity,
@@ -213,7 +213,6 @@ class DreameVacuumEntity(DreameEntity, StateVacuumEntity):
         | VacuumEntityFeature.LOCATE
         | VacuumEntityFeature.START
     )
-    _attr_fan_speed_list: ClassVar[list[str]] = list(_FAN_SPEEDS)
 
     def __init__(
         self,
@@ -222,6 +221,7 @@ class DreameVacuumEntity(DreameEntity, StateVacuumEntity):
     ) -> None:
         super().__init__(coordinator, description)
         self._attr_name = None  # device name is the vacuum's name
+        self._attr_fan_speed_list = list(_FAN_SPEEDS)
         self._sync_from_device()
 
     @callback

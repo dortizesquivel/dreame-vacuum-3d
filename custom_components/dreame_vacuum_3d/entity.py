@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable, Coroutine
 from functools import wraps
+from typing import Any
 
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -18,7 +19,7 @@ from .protocol.miio_codec import MiioError
 from .protocol.miot import MiotError
 
 
-def command[**P, R](func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+def command[**P, R](func: Callable[P, Coroutine[Any, Any, R]]) -> Callable[P, Coroutine[Any, Any, R]]:
     """Report a command the robot rejects or doesn't answer as a readable error, not a traceback."""
 
     @wraps(func)

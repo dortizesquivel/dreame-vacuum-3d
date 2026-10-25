@@ -46,6 +46,8 @@ async def async_setup_entry(
 class DreameNumberEntity(DreameEntity, NumberEntity):
     """Numeric setting for one Dreame property."""
 
+    entity_description: NumberEntityDescription
+
     def __init__(
         self,
         coordinator: DreameDataUpdateCoordinator,
