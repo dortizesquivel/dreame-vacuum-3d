@@ -34,6 +34,7 @@ class Capabilities:
     tested: bool
     properties: Mapping[str, Ids]
     actions: Mapping[str, Ids]
+    map_iv: str | None = None  # IV of the AES-CBC the robot encrypts its live map frames with, if it does
 
     @cached_property
     def _keys(self) -> Mapping[Ids, str]:
@@ -62,15 +63,19 @@ def load(model: str, models_dir: Path = MODELS_DIR) -> Capabilities:
     spec = _read(own) if own.is_file() else {"extends": BASE}
     properties: dict[str, Ids] = {}
     actions: dict[str, Ids] = {}
+    map_iv: str | None = None
     for layer in _chain(spec, models_dir):
         _merge(properties, layer.get("properties"))
         _merge(actions, layer.get("actions"))
+        if "map_iv" in layer:
+            map_iv = layer["map_iv"]
     return Capabilities(
         model=model,
         name=spec.get("name"),
         tested=spec.get("tested") is True,
         properties=MappingProxyType(properties),
         actions=MappingProxyType(actions),
+        map_iv=str(map_iv) if map_iv else None,
     )
 
 

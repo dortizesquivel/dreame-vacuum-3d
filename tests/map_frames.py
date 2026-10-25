@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import struct
 from typing import Any
 import zlib
+
+from cryptography.hazmat.primitives import padding
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 LEFT, TOP, SIZE = -1000, -500, 50
 
@@ -52,5 +56,16 @@ def live(data: dict[str, Any] | None = None, **kwargs: Any) -> str:
     """A live I-frame of the same house, carrying the saved map as `rism`."""
     rows = [[3 if v else 0 for v in row] for row in SAVED_ROWS]
     return frame(
-        rows, {"rism": saved(), "tr": "M-900,-450L50,0L0,50S-700,-300L10,10", "sa": [[2, 1]], **(data or {})}, **kwargs
+        rows,
+        {"rism": saved(), "tr": "W-900,-450L50,0L0,50S-700,-300L10,10M0,0l5,5", "sa": [[2, 1]], **(data or {})},
+        **kwargs,
     )
+
+
+def encrypt(text: str, key: str, iv: str) -> str:
+    """A map file as an encrypting robot uploads it: AES-CBC over the zlib data, keyed by sha256(key)."""
+    padder = padding.PKCS7(128).padder()
+    data = padder.update(base64.b64decode(text)) + padder.finalize()
+    aes = hashlib.sha256(key.encode()).hexdigest()[:32].encode()
+    encryptor = Cipher(algorithms.AES(aes), modes.CBC(iv.encode())).encryptor()
+    return base64.b64encode(encryptor.update(data) + encryptor.finalize()).decode()

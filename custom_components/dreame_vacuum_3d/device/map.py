@@ -12,12 +12,15 @@ import base64
 import binascii
 from collections.abc import Callable
 from dataclasses import dataclass
+import hashlib
 from itertools import groupby
 import json
 import re
 import struct
 from typing import Any
 import zlib
+
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 # map id, frame id, frame type, robot x, y, angle, dock x, y, angle, cell size (mm), width, height, left, top
 _HEADER = struct.Struct("<hhbhhhhhhhhhhh")
@@ -57,15 +60,22 @@ class Frame:
     data: dict[str, Any]
 
 
-def decode(raw: str | bytes) -> Frame:
-    """Decode one map file, as the cloud serves it."""
+def decode(raw: str | bytes, *, key: str | None = None, iv: str | None = None) -> Frame:
+    """Decode one map file, as the cloud serves it.
+
+    Live frames can be encrypted (AES-CBC): with the key the robot names with the file ("name,key", or "map,key" when
+    the map comes inline) and the model's IV.
+    """
     text = (raw.decode("latin-1") if isinstance(raw, bytes) else raw).strip()  # base64 is ASCII; never fails here
     if "," in text:
-        # shortcut: the X10+ doesn't encrypt its maps; port Tasshack's AES-CBC when a model that does is added.
-        raise MapError("encrypted map")
+        text, _, inline_key = text.partition(",")
+        key = key or inline_key
     try:
+        payload = base64.b64decode(text.replace("_", "/").replace("-", "+"))
+        if key:
+            payload = _decrypt(payload, key, iv)
         inflate = zlib.decompressobj()
-        blob = inflate.decompress(base64.b64decode(text.replace("_", "/").replace("-", "+")), _MAX_SIZE)
+        blob = inflate.decompress(payload, _MAX_SIZE)
     except (binascii.Error, zlib.error, ValueError) as err:
         raise MapError(f"not a map file: {err}") from err
     if inflate.unconsumed_tail:
@@ -95,6 +105,16 @@ def decode(raw: str | bytes) -> Frame:
         cells=blob[_HEADER.size : end],
         data=data,
     )
+
+
+def _decrypt(data: bytes, key: str, iv: str | None) -> bytes:
+    if not iv:
+        raise MapError("the map is encrypted, and this model's IV isn't known")
+    if len(data) % 16:
+        raise MapError("encrypted map cut short")
+    aes = hashlib.sha256(key.encode()).hexdigest()[:32].encode()
+    decryptor = Cipher(algorithms.AES(aes), modes.CBC(iv.encode())).decryptor()
+    return decryptor.update(data) + decryptor.finalize()  # zlib stops at its end: the padding is left over
 
 
 def _pose(x: int, y: int, angle: int) -> Pose | None:
@@ -189,18 +209,27 @@ def _centre(grid: Grid, runs: list[int]) -> tuple[int, int]:
     return grid.left + bx * grid.size + grid.size // 2, grid.top + by * grid.size + grid.size // 2
 
 
-def path(frame: Frame) -> list[list[list[int]]]:
-    """The path in mm, as polylines: L continues the line (relative), any other operator starts one."""
-    lines: list[list[list[int]]] = []
+# What the robot did along a stroke of its path.
+_MODES = {"S": "vacuum", "W": "both", "M": "mop"}
+
+
+def path(frame: Frame) -> list[dict[str, Any]]:
+    """The path in mm, as strokes {"mode": vacuum | mop | both, "points": [[x, y], …]}.
+
+    S, W and M start a stroke at a point; L continues it, relative to the last point; l (in P-frames) continues the
+    previous frame's stroke.
+    """
+    strokes: list[dict[str, Any]] = []
     x = y = 0
     for op, a, b in _PATH.findall(str(frame.data.get("tr") or "")):
-        if op == "L" and lines:
+        if op == "L" and strokes:
             x, y = x + int(a), y + int(b)
-            lines[-1].append([x, y])
+            strokes[-1]["points"].append([x, y])
         else:
             x, y = int(a), int(b)
-            lines.append([[x, y]])
-    return lines
+            mode = _MODES.get(op) or (strokes[-1]["mode"] if strokes else "vacuum")
+            strokes.append({"mode": mode, "points": [[x, y]]})
+    return strokes
 
 
 def active_rooms(frame: Frame) -> list[int]:

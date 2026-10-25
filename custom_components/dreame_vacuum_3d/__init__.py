@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 import hashlib
@@ -46,6 +47,9 @@ from .protocol.miot import Send
 from .websocket import async_register_websocket
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+MAP_FILE_TRIES = 4
+MAP_FILE_WAIT = 1.0  # s between tries
 
 CARD = Path(__file__).parent / "frontend" / "dreame-vacuum-3d-card.js"
 CARD_URL = f"/{DOMAIN}/{CARD.name}"
@@ -181,7 +185,15 @@ def _map_file(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud) -> Fi
     async def fetch_file(object_name: str) -> bytes | None:
         async def fetch() -> bytes | None:
             url = await cloud.interim_file_url(object_name, model=model)
-            return await cloud.download(url) if url else None
+            if url is None:
+                return None
+            # The robot uploads the file just after it answers: give it a moment, as Tasshack does.
+            for attempt in range(MAP_FILE_TRIES):
+                if attempt:
+                    await asyncio.sleep(MAP_FILE_WAIT)
+                if (data := await cloud.download(url)) is not None:
+                    return data
+            return None
 
         return await _with_relogin(hass, entry, cloud, fetch)
 
