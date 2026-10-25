@@ -33,9 +33,9 @@ Security requirements for this phase:
 ## Design principles applied
 
 - **Least privilege.** Cloud is used for login, device discovery, session renew and fallback RPC; day-to-day control prefers local miIO. Workflow tokens in CI are read-only except for the release job.
-- **Redaction by default.** Diagnostics use `async_redact_data` on password, `auth`, token, `did`, MAC, host, username, `unique_id` and nested session fields (`ssecurity`, `service_token`, …). `serial_number` is omitted from the properties dump.
+- **Redaction by default.** Diagnostics use `async_redact_data` on password, `auth`, token, `did`, MAC, host, username, `unique_id` and nested session fields (`ssecurity`, `service_token`, …). `serial_number` is omitted from the properties dump, and the Xiaomi user id and `did` are masked inside property values (map file names carry both).
 - **Password kept for re-login.** Xiaomi sessions expire; the entry stores the password so the integration can renew without a full reauth every time. That is intentional and documented; treat Home Assistant backups as containing it.
-- **Fail closed on auth.** `CloudAuthError` / login required → `ConfigEntryAuthFailed` (reauth). Connection failures → `ConfigEntryNotReady`. Details stay in the log, not in user-visible entity attributes.
+- **Fail closed on auth.** An expired session is renewed once with the saved password; if that fails, or Xiaomi asks for a captcha or a verification code, `ConfigEntryAuthFailed` (reauth). Connection failures → `ConfigEntryNotReady`. Details stay in the log, not in user-visible entity attributes.
 - **Open design.** Source is public; release zips carry build provenance and can be rebuilt from the tag.
 
 ## Sensitive data inventory

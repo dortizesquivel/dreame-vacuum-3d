@@ -26,12 +26,18 @@ from homeassistant.helpers.typing import StateType
 
 from .coordinator import DreameDataUpdateCoordinator
 from .device.enums import (
+    AutoEmptyStatus,
     CleanWaterTankStatus,
     DirtyWaterTankStatus,
     DreameVacuumState,
     DustBagStatus,
+    DustCollection,
     ErrorCode,
+    LowWaterWarning,
+    RelocationStatus,
+    SelfWashBaseStatus,
     Status,
+    TaskStatus,
     parse_enum,
 )
 from .entity import DreameEntity
@@ -56,6 +62,18 @@ class DreameSensorEntityDescription(SensorEntityDescription):
     always: bool = False  # True for diagnostic channel (not a MIoT property)
 
 
+def _enum_sensor(
+    key: str, enum_cls: type[IntEnum], category: EntityCategory | None = EntityCategory.DIAGNOSTIC
+) -> DreameSensorEntityDescription:
+    return DreameSensorEntityDescription(
+        key=key,
+        device_class=SensorDeviceClass.ENUM,
+        options=_enum_options(enum_cls),
+        entity_category=category,
+        value_fn=lambda values, k: _enum_name(enum_cls, values.get(k)),
+    )
+
+
 def _raw(values: dict[str, Any], key: str) -> StateType:
     value = values.get(key)
     if isinstance(value, bool):
@@ -66,25 +84,15 @@ def _raw(values: dict[str, Any], key: str) -> StateType:
 
 
 SENSORS: tuple[DreameSensorEntityDescription, ...] = (
-    DreameSensorEntityDescription(
-        key="state",
-        device_class=SensorDeviceClass.ENUM,
-        options=_enum_options(DreameVacuumState),
-        value_fn=lambda values, key: _enum_name(DreameVacuumState, values.get(key)),
-    ),
-    DreameSensorEntityDescription(
-        key="status",
-        device_class=SensorDeviceClass.ENUM,
-        options=_enum_options(Status),
-        value_fn=lambda values, key: _enum_name(Status, values.get(key)),
-    ),
-    DreameSensorEntityDescription(
-        key="error",
-        device_class=SensorDeviceClass.ENUM,
-        options=_enum_options(ErrorCode),
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda values, key: _enum_name(ErrorCode, values.get(key)),
-    ),
+    _enum_sensor("state", DreameVacuumState, None),
+    _enum_sensor("status", Status, None),
+    _enum_sensor("task_status", TaskStatus, None),
+    _enum_sensor("error", ErrorCode),
+    _enum_sensor("relocation_status", RelocationStatus),
+    _enum_sensor("self_wash_base_status", SelfWashBaseStatus),
+    _enum_sensor("auto_empty_status", AutoEmptyStatus),
+    _enum_sensor("dust_collection", DustCollection),
+    _enum_sensor("low_water_warning", LowWaterWarning),
     DreameSensorEntityDescription(
         key="battery_level",
         device_class=SensorDeviceClass.BATTERY,
@@ -214,27 +222,9 @@ SENSORS: tuple[DreameSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfTime.HOURS,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-    DreameSensorEntityDescription(
-        key="clean_water_tank_status",
-        device_class=SensorDeviceClass.ENUM,
-        options=_enum_options(CleanWaterTankStatus),
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda values, key: _enum_name(CleanWaterTankStatus, values.get(key)),
-    ),
-    DreameSensorEntityDescription(
-        key="dirty_water_tank_status",
-        device_class=SensorDeviceClass.ENUM,
-        options=_enum_options(DirtyWaterTankStatus),
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda values, key: _enum_name(DirtyWaterTankStatus, values.get(key)),
-    ),
-    DreameSensorEntityDescription(
-        key="dust_bag_status",
-        device_class=SensorDeviceClass.ENUM,
-        options=_enum_options(DustBagStatus),
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda values, key: _enum_name(DustBagStatus, values.get(key)),
-    ),
+    _enum_sensor("clean_water_tank_status", CleanWaterTankStatus),
+    _enum_sensor("dirty_water_tank_status", DirtyWaterTankStatus),
+    _enum_sensor("dust_bag_status", DustBagStatus),
     DreameSensorEntityDescription(
         key="channel",
         entity_category=EntityCategory.DIAGNOSTIC,

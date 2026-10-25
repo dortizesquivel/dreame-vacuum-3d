@@ -69,6 +69,8 @@ Entity services under domain `dreame_vacuum_3d` (names match Tasshack for Node-R
 | `vacuum_clean_segment` | Clean room segment(s); optional repeats, suction, water |
 | `vacuum_clean_zone` | Clean zone rectangle(s) |
 | `vacuum_clean_spot` | Spot-clean at point(s) |
+
+Without `suction_level` or `water_volume`, the cleaning services use the robot's current settings, as the app does.
 | `vacuum_goto` | Go to coordinates (mm) |
 | `vacuum_remote_control_move_step` | One remote-control step |
 | `vacuum_select_map` | Select map / floor by `map_id` |
@@ -82,12 +84,12 @@ Fired on the Home Assistant bus (payload always includes `entity_id` and `device
 
 | Event | When |
 |---|---|
-| `dreame_vacuum_3d_task_status` | Cleaning task status changes |
+| `dreame_vacuum_3d_task_status` | A cleaning task ends: `completed`, `area`, `duration`, and `segments` when this integration started a room clean |
 | `dreame_vacuum_3d_consumable` | A consumable drops to or below the warning threshold |
 | `dreame_vacuum_3d_error` | Robot reports an error |
 | `dreame_vacuum_3d_information` | Warnings / informational codes (low water, paused, etc.) |
 
-Persistent notifications can be enabled per category in the options.
+Persistent notifications can be enabled per category in the options. They are written in Home Assistant's language (English and Spanish so far).
 
 ## Options
 
@@ -99,7 +101,7 @@ From the integration's **Configure** button:
 | Notification categories | Persistent notifications for cleanup completed, consumables, information, warnings, errors | as configured |
 | Consumable warning threshold | Remaining % that triggers a consumable event/notification | 15 |
 
-Reconfigure the local IP if the robot's address changed. Reauthenticate when the cloud session expires.
+Reconfigure the local IP if the robot's address changed. When the cloud session expires, the integration logs in again with the saved password; it asks you to reauthenticate only when Xiaomi wants a captcha or a verification code.
 
 ## Development
 

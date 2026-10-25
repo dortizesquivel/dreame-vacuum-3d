@@ -451,3 +451,36 @@ class DustBagStatus(IntEnum):
     NOT_INSTALLED = 1
     CHECK = 2
 
+
+
+class LowWaterWarning(IntEnum):
+    """Clean water warning from the robot or its base."""
+
+    UNKNOWN = -1
+    NO_WARNING = 0
+    NO_WATER_LEFT_DISMISS = 1
+    NO_WATER_LEFT = 2
+    NO_WATER_LEFT_AFTER_CLEAN = 3
+    NO_WATER_FOR_CLEAN = 4
+    LOW_WATER = 5
+    TANK_NOT_INSTALLED = 6
+
+
+class RelocationStatus(IntEnum):
+    """Whether the robot knows where it is on the map."""
+
+    UNKNOWN = -1
+    LOCATED = 0
+    LOCATING = 1
+    FAILED = 10
+    SUCCESS = 11
+
+
+class DustCollection(IntEnum):
+    """Whether the base can empty the dust bin now."""
+
+    UNKNOWN = -1
+    NOT_AVAILABLE = 0
+    AVAILABLE = 1
+    OVER_USE = 2
+    NEVER = 3

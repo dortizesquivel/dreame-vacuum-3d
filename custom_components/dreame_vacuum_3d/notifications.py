@@ -12,6 +12,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_DEVICE_ID, ATTR_ENTITY_ID, CONF_MAC
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.translation import async_get_translations
 
 from .const import (
     CONF_CONSUMABLE_THRESHOLD,
@@ -27,7 +28,7 @@ from .const import (
     NOTIFICATION,
 )
 from .coordinator import DreameDataUpdateCoordinator
-from .device.enums import ErrorCode, TaskStatus, parse_enum
+from .device.enums import ErrorCode, LowWaterWarning, TaskStatus, parse_enum
 
 _ACTIVE_TASK = frozenset(
     {
@@ -60,10 +61,22 @@ class DreameNotifier:
         self.entry = entry
         self.coordinator = coordinator
         self._prev: dict[str, Any] = dict(coordinator.device.values)
+        self._texts: dict[str, str] = {}
 
-    def async_setup(self) -> None:
-        """Start listening; call once after the first coordinator refresh."""
+    async def async_setup(self) -> None:
+        """Load the texts in Home Assistant's language and start listening; call once after the first refresh."""
+        language = self.hass.config.language
+        # Notification texts live under "exceptions", the only free-text category hassfest accepts.
+        for category in ("exceptions", "entity"):
+            self._texts |= await async_get_translations(self.hass, language, category, [DOMAIN])
         self.entry.async_on_unload(self.coordinator.async_add_listener(self._async_handle))
+
+    def _text(self, key: str, fallback: str, **placeholders: object) -> str:
+        """Translated text for key (relative to the integration), fallback if there's none."""
+        return self._texts.get(f"component.{DOMAIN}.{key}", fallback).format(**placeholders)
+
+    def _state_text(self, sensor: str, state: str) -> str:
+        return self._text(f"entity.sensor.{sensor}.state.{state}", state.replace("_", " ").capitalize())
 
     @callback
     def _async_handle(self) -> None:
@@ -133,15 +146,18 @@ class DreameNotifier:
             return
         area = values.get("cleaned_area")
         duration = values.get("cleaning_time")
+        device = self.coordinator.device
         data = {
             "completed": completed,
             "area": area,
             "duration": duration,
-            "segments": values.get("cleaning_progress"),
+            "segments": device.segments,
         }
+        device.segments = None  # they belonged to this task
         self._fire(EVENT_TASK_STATUS, data)
         if completed:
-            self._create("cleanup_completed", "Cleaning completed", "cleanup_completed")
+            message = self._text("exceptions.notify_cleanup_completed.message", "Cleaning completed")
+            self._create("cleanup_completed", message, "cleanup_completed")
         else:
             self._dismiss("cleanup_completed")
 
@@ -152,30 +168,34 @@ class DreameNotifier:
         if code is ErrorCode.NO_ERROR or code.value == 0:
             self._dismiss("error")
             return
-        description = _error_description(code)
-        self._fire(EVENT_ERROR, {"error": description, "code": code.value})
-        self._create("error", description, "error")
+        name = code.name.lower()
+        self._fire(EVENT_ERROR, {"error": name.replace("_", " "), "code": code.value})
+        self._create("error", self._state_text("error", name), "error")
 
     def _handle_information(self, values: dict[str, Any], changed: frozenset[str]) -> None:
         if "warn_status" in changed:
             warn = values.get("warn_status")
             if isinstance(warn, int) and warn != 0:
                 self._fire(EVENT_INFORMATION, {"information": "warn_status", "code": warn})
-                self._create("information", f"Station warning ({warn})", "warn_status")
+                message = self._text("exceptions.notify_station_warning.message", "Station warning ({code})", code=warn)
+                self._create("information", message, "warn_status")
             else:
                 self._dismiss("warn_status")
         if "low_water_warning" in changed:
             low = values.get("low_water_warning")
             if isinstance(low, int) and low != 0:
                 self._fire(EVENT_INFORMATION, {"information": "low_water_warning", "code": low})
-                self._create("warning", f"Low water warning ({low})", "low_water")
+                warning = parse_enum(LowWaterWarning, low)
+                name = warning.name.lower() if warning is not None else str(low)
+                self._create("warning", self._state_text("low_water_warning", name), "low_water")
             else:
                 self._dismiss("low_water")
         if "cleaning_paused" in changed:
             paused = values.get("cleaning_paused")
             if paused:
                 self._fire(EVENT_INFORMATION, {"information": "cleaning_paused"})
-                self._create("information", "Cleaning paused", "cleaning_paused")
+                message = self._text("exceptions.notify_cleaning_paused.message", "Cleaning paused")
+                self._create("information", message, "cleaning_paused")
             else:
                 self._dismiss("cleaning_paused")
 
@@ -197,15 +217,10 @@ class DreameNotifier:
                         EVENT_CONSUMABLE,
                         {"consumable": name, "life_left": int(current)},
                     )
-                self._create(
-                    "consumable",
-                    f"{name.replace('_', ' ').title()} life at {int(current)}%",
-                    nid,
+                label = self._text(f"entity.sensor.{prop}.name", name.replace("_", " ").capitalize())
+                message = self._text(
+                    "exceptions.notify_consumable.message", "{name}: {life}% left", name=label, life=int(current)
                 )
+                self._create("consumable", message, nid)
         else:
             self._dismiss(nid)
-
-
-def _error_description(code: ErrorCode) -> str:
-    """Human-readable error label (translation keys land in a later task)."""
-    return code.name.lower().replace("_", " ")

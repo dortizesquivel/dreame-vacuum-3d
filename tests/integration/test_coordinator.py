@@ -20,7 +20,7 @@ from custom_components.dreame_vacuum_3d.coordinator import (
     DreameDataUpdateCoordinator,
 )
 from custom_components.dreame_vacuum_3d.device.enums import Status
-from custom_components.dreame_vacuum_3d.protocol.cloud import CloudAuthError
+from custom_components.dreame_vacuum_3d.protocol.cloud import CloudAuthError, CloudConnectionError
 from custom_components.dreame_vacuum_3d.protocol.miio_codec import MiioError
 
 
@@ -97,12 +97,13 @@ async def test_interval_adapts_when_status_changes(hass) -> None:
     assert coordinator.update_interval == timedelta(seconds=INTERVAL_ACTIVE)
 
 
-async def test_miio_error_marks_update_failed(hass) -> None:
+@pytest.mark.parametrize("error", [MiioError("unreachable"), CloudConnectionError("can't reach de.api.io.mi.com")])
+async def test_unreachable_robot_marks_update_failed(hass, error: Exception) -> None:
     device = FakeDevice()
     coordinator = await _make(hass, device)
     assert coordinator.last_update_success is True
 
-    device.error = MiioError("unreachable")
+    device.error = error
     await coordinator.async_refresh()
     assert coordinator.last_update_success is False
     assert isinstance(coordinator.last_exception, UpdateFailed)

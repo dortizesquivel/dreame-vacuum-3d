@@ -18,7 +18,7 @@ import voluptuous as vol
 
 from .coordinator import DreameDataUpdateCoordinator
 from .device.enums import DreameVacuumState, SuctionLevel, parse_enum
-from .entity import DreameEntity
+from .entity import DreameEntity, command
 
 # Portions of service schemas derived from Tasshack/dreame-vacuum (MIT), see NOTICE.
 _OPTIONAL_INT_OR_LIST = vol.Any(vol.Coerce(int), [vol.Coerce(int)])
@@ -211,7 +211,6 @@ class DreameVacuumEntity(DreameEntity, StateVacuumEntity):
         | VacuumEntityFeature.RETURN_HOME
         | VacuumEntityFeature.FAN_SPEED
         | VacuumEntityFeature.LOCATE
-        | VacuumEntityFeature.CLEAN_SPOT
         | VacuumEntityFeature.START
     )
     _attr_fan_speed_list: ClassVar[list[str]] = list(_FAN_SPEEDS)
@@ -243,30 +242,31 @@ class DreameVacuumEntity(DreameEntity, StateVacuumEntity):
         suction = parse_enum(SuctionLevel, self.device.values.get("suction_level"))
         self._attr_fan_speed = suction.name.lower() if suction is not None else None
 
+    @command
     async def async_start(self) -> None:
         await self.device.start()
         await self.coordinator.async_request_refresh()
 
+    @command
     async def async_pause(self) -> None:
         await self.device.pause()
         await self.coordinator.async_request_refresh()
 
+    @command
     async def async_stop(self, **kwargs: Any) -> None:
         await self.device.stop()
         await self.coordinator.async_request_refresh()
 
+    @command
     async def async_return_to_base(self, **kwargs: Any) -> None:
         await self.device.return_to_base()
         await self.coordinator.async_request_refresh()
 
+    @command
     async def async_locate(self, **kwargs: Any) -> None:
         await self.device.locate()
 
-    async def async_clean_spot(self, **kwargs: Any) -> None:
-        """Spot-clean at the charger origin; map UI / services supply real points later."""
-        await self.device.clean_spot([0, 0])
-        await self.coordinator.async_request_refresh()
-
+    @command
     async def async_set_fan_speed(self, fan_speed: str, **kwargs: Any) -> None:
         key = fan_speed.lower()
         if key not in _FAN_SPEEDS:
@@ -276,6 +276,7 @@ class DreameVacuumEntity(DreameEntity, StateVacuumEntity):
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
 
+    @command
     async def async_clean_segment(
         self,
         segments: int | list[int],
@@ -291,6 +292,7 @@ class DreameVacuumEntity(DreameEntity, StateVacuumEntity):
         )
         await self.coordinator.async_request_refresh()
 
+    @command
     async def async_clean_zone(
         self,
         zone: list[int] | list[list[int]],
@@ -306,6 +308,7 @@ class DreameVacuumEntity(DreameEntity, StateVacuumEntity):
         )
         await self.coordinator.async_request_refresh()
 
+    @command
     async def async_clean_spot_points(
         self,
         points: list[int] | list[list[int]],
@@ -321,20 +324,24 @@ class DreameVacuumEntity(DreameEntity, StateVacuumEntity):
         )
         await self.coordinator.async_request_refresh()
 
+    @command
     async def async_goto(self, x: int, y: int) -> None:
         """Drive to a map coordinate."""
         await self.device.goto(x, y)
         await self.coordinator.async_request_refresh()
 
+    @command
     async def async_remote_control_move_step(self, rotation: int, velocity: int) -> None:
         """Nudge the robot while remote-controlling."""
         await self.device.remote_control_move_step(rotation=rotation, velocity=velocity)
 
+    @command
     async def async_select_map(self, map_id: int) -> None:
         """Select a multi-floor map."""
         await self.device.select_map(map_id)
         await self.coordinator.async_request_refresh()
 
+    @command
     async def async_reset_consumable(self, consumable: str) -> None:
         """Reset a consumable life counter."""
         await self.device.reset_consumable(consumable)

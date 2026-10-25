@@ -42,3 +42,16 @@ async def test_diagnostics_redacts_secrets_and_omits_serial(hass: HomeAssistant)
     assert dump["channel"] in {"local", "cloud"}
     assert dump["entry"]["data"]["password"] == "**REDACTED**"
     assert dump["entry"]["unique_id"] == "**REDACTED**"
+
+
+async def test_diagnostics_hides_ids_inside_map_object_names(hass: HomeAssistant) -> None:
+    """6.8 and 6.9 name the map file "<user id>/<did>/<n>"."""
+    entry, _miio = await setup_fixture_entry(hass)
+    user_id = ENTRY_DATA["auth"]["user_id"]
+    did = ENTRY_DATA["did"]
+    values = entry.runtime_data.coordinator.device.values
+    values["map_list"] = f'{{"object_name":"{user_id}/{did}/9","md5":"x"}}'
+
+    dump = await async_get_config_entry_diagnostics(hass, entry)
+
+    assert dump["properties"]["6.8"] == '{"object_name":"**REDACTED**/**REDACTED**/9","md5":"x"}'

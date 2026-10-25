@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import DreameDataUpdateCoordinator
 from .device.device import DreameDevice
-from .entity import DreameEntity
+from .entity import DreameEntity, command
 
 # reset_<name> action ↔ property that must be available for the button to appear.
 _RESET_REQUIRES: dict[str, str] = {
@@ -100,6 +100,7 @@ class DreameButtonEntity(DreameEntity, ButtonEntity):
 
     entity_description: DreameButtonEntityDescription
 
+    @command
     async def async_press(self) -> None:
         await self.entity_description.press_fn(self.device)
         await self.coordinator.async_request_refresh()

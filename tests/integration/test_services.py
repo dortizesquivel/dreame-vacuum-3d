@@ -48,7 +48,8 @@ async def test_vacuum_clean_segment_node_red_payload(hass: HomeAssistant) -> Non
     status_in, props_in = action["in"]
     assert status_in == {"piid": 1, "value": Status.SEGMENT_CLEANING.value}
     payload = json.loads(props_in["value"])
-    assert payload == {"selects": [[6, 1, 1, 2, 1]]}
+    # The robot's own suction (strong, 2) and water (high, 3), as the app does.
+    assert payload == {"selects": [[6, 1, 2, 3, 1]]}
 
 
 async def test_vacuum_clean_zone_and_spot_payloads(hass: HomeAssistant) -> None:
@@ -63,7 +64,7 @@ async def test_vacuum_clean_zone_and_spot_payloads(hass: HomeAssistant) -> None:
         blocking=True,
     )
     props = _action_payload(miio)["in"][1]["value"]
-    assert json.loads(props) == {"areas": [[819, -263, 4424, 2105, 2, 1, 2]]}
+    assert json.loads(props) == {"areas": [[819, -263, 4424, 2105, 2, 2, 3]]}
 
     miio.calls.clear()
     await hass.services.async_call(

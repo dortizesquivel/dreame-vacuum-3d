@@ -198,3 +198,30 @@ async def test_low_water_and_cleaning_paused_information(hass: HomeAssistant) ->
     await entry.runtime_data.coordinator.async_refresh()
     await hass.async_block_till_done()
     assert not any(nid.endswith("cleaning_paused") for nid in _notifications(hass))
+
+
+async def test_notifications_speak_home_assistants_language(hass: HomeAssistant) -> None:
+    hass.config.language = "es"
+    entry, miio = await setup_fixture_entry(hass)
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_TASK_STATUS, events.append)
+
+    # A room clean started here reports its rooms when it ends.
+    await hass.services.async_call(
+        DOMAIN, "vacuum_clean_segment", {ATTR_ENTITY_ID: _vacuum_entity_id(hass), "segments": [6, 3]}, blocking=True
+    )
+    miio.overrides[_TASK] = TaskStatus.SEGMENT_CLEANING.value
+    miio.overrides[_FILTER] = 40
+    await entry.runtime_data.coordinator.async_refresh()
+    miio.overrides[_TASK] = TaskStatus.COMPLETED.value
+    miio.overrides[_FILTER] = 10
+    miio.overrides[_LOW_WATER] = 5
+    await entry.runtime_data.coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert events[0].data["segments"] == [6, 3]
+    assert entry.runtime_data.coordinator.device.segments is None
+    messages = {nid.rsplit("_", 1)[-1]: n["message"] for nid, n in _notifications(hass).items()}
+    assert messages["completed"] == "Limpieza completada"
+    assert messages["filter"] == "Filtro: queda un 10 %"
+    assert messages["water"] == "Poca agua"

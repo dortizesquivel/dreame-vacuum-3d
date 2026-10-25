@@ -22,7 +22,7 @@ from .device.enums import (
     WaterVolume,
     parse_enum,
 )
-from .entity import DreameEntity
+from .entity import DreameEntity, command
 
 
 def _options(enum_cls: type[IntEnum]) -> list[str]:
@@ -146,6 +146,7 @@ class DreameSelectEntity(DreameEntity, SelectEntity):
             return _current_enum(self.coordinator, description.key, description.enum_cls)
         return None
 
+    @command
     async def async_select_option(self, option: str) -> None:
         description = self.entity_description
         if description.select_fn is not None:

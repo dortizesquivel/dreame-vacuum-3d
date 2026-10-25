@@ -6,7 +6,7 @@ from dataclasses import asdict
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.const import (
     CONF_COUNTRY,
     CONF_HOST,
@@ -17,11 +17,11 @@ from homeassistant.const import (
     CONF_USERNAME,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.dreame_vacuum_3d.const import CONF_AUTH, CONF_DID, DOMAIN
-from custom_components.dreame_vacuum_3d.protocol.cloud import CloudAuth, CloudAuthError
+from custom_components.dreame_vacuum_3d.protocol.cloud import CloudAuth, CloudAuthError, CloudLoginRequired
 from custom_components.dreame_vacuum_3d.protocol.miio_codec import MiioError
 
 USER = "user@example.com"
@@ -99,7 +99,6 @@ def _mock_cloud(*, auth: CloudAuth = AUTH) -> MagicMock:
     cloud.auth = auth
     cloud.login = AsyncMock(return_value=auth)
     cloud.rpc = AsyncMock(side_effect=_rpc)
-    cloud.rpc_sender = MagicMock(return_value=AsyncMock(side_effect=_send))
     return cloud
 
 
@@ -171,7 +170,6 @@ async def test_setup_raises_not_ready_when_robot_silent(hass: HomeAssistant) -> 
     miio = _mock_miio()
     miio.send = AsyncMock(side_effect=_fail)
     cloud = _mock_cloud()
-    cloud.rpc_sender = MagicMock(return_value=AsyncMock(side_effect=_fail))
     cloud.rpc = AsyncMock(side_effect=MiioError("no reply"))
 
     with (
@@ -226,3 +224,104 @@ async def test_miio_info_falls_back_to_cloud(hass: HomeAssistant) -> None:
     )
     assert device is not None
     assert device.sw_version == INFO["fw_ver"]
+
+
+async def _setup_on_cloud(hass: HomeAssistant) -> tuple[MockConfigEntry, MagicMock, MagicMock]:
+    """Set up normally, then lose the local channel so every call goes through the cloud."""
+    entry = _entry()
+    entry.add_to_hass(hass)
+    miio = _mock_miio()
+    cloud = _mock_cloud()
+    with (
+        patch("custom_components.dreame_vacuum_3d.XiaomiCloud", return_value=cloud),
+        patch("custom_components.dreame_vacuum_3d.MiioClient", return_value=miio),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    miio.send.side_effect = MiioError("no reply")
+    return entry, miio, cloud
+
+
+async def test_expired_cloud_session_logs_in_again(hass: HomeAssistant) -> None:
+    entry, _miio, cloud = await _setup_on_cloud(hass)
+    expired = True
+
+    async def _rpc(_did: str, method: str, params: Any = None) -> Any:
+        if expired:
+            raise CloudAuthError("invalid_auth")
+        return await _send(method, params)
+
+    async def _login(*_args: Any, **_kwargs: Any) -> CloudAuth:
+        nonlocal expired
+        expired = False
+        cloud.auth = AUTH_RENEWED
+        return AUTH_RENEWED
+
+    cloud.rpc.side_effect = _rpc
+    cloud.login.reset_mock()
+    cloud.login.side_effect = _login
+
+    coordinator = entry.runtime_data.coordinator
+    await coordinator.async_refresh()
+
+    assert coordinator.last_update_success is True
+    cloud.login.assert_awaited_once_with(USER, PASSWORD)
+    assert entry.data[CONF_AUTH] == asdict(AUTH_RENEWED)
+    assert not hass.config_entries.flow.async_progress_by_handler(DOMAIN, match_context={"source": SOURCE_REAUTH})
+
+
+async def test_login_that_needs_a_person_asks_for_reauth(hass: HomeAssistant) -> None:
+    entry, _miio, cloud = await _setup_on_cloud(hass)
+    cloud.rpc.side_effect = CloudAuthError("invalid_auth")
+    cloud.login.side_effect = CloudLoginRequired(verification_url="https://account.xiaomi.com/verify")
+
+    await entry.runtime_data.coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hass.config_entries.flow.async_progress_by_handler(DOMAIN, match_context={"source": SOURCE_REAUTH})
+
+
+async def test_setup_removes_the_old_dnd_numbers(hass: HomeAssistant) -> None:
+    registry = er.async_get(hass)
+    entry = _entry()
+    entry.add_to_hass(hass)
+    old = registry.async_get_or_create("number", DOMAIN, f"{ENTRY_DATA[CONF_DID]}_dnd_start", config_entry=entry)
+    with (
+        patch("custom_components.dreame_vacuum_3d.XiaomiCloud", return_value=_mock_cloud()),
+        patch("custom_components.dreame_vacuum_3d.MiioClient", return_value=_mock_miio()),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    assert registry.async_get(old.entity_id) is None
+
+
+async def test_failed_first_refresh_closes_the_udp_client(hass: HomeAssistant) -> None:
+    entry = _entry()
+    entry.add_to_hass(hass)
+    discovered = False
+
+    async def _robot(method: str, params: Any = None) -> Any:
+        nonlocal discovered
+        if method == "miIO.info":
+            discovered = True
+        elif discovered:
+            raise MiioError("no reply")
+        return await _send(method, params)
+
+    async def _rpc(_did: str, method: str, params: Any = None) -> Any:
+        return await _robot(method, params)
+
+    miio = _mock_miio()
+    miio.send.side_effect = _robot
+    cloud = _mock_cloud()
+    cloud.rpc.side_effect = _rpc
+
+    with (
+        patch("custom_components.dreame_vacuum_3d.XiaomiCloud", return_value=cloud),
+        patch("custom_components.dreame_vacuum_3d.MiioClient", return_value=miio),
+    ):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.SETUP_RETRY
+    miio.close.assert_awaited_once()

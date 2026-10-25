@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.diagnostics import async_redact_data
+from homeassistant.components.diagnostics import REDACTED, async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_HOST,
@@ -40,14 +40,19 @@ async def async_get_config_entry_diagnostics(
 ) -> dict[str, Any]:
     """Return redacted entry data and raw MIoT properties (no serial_number)."""
     device = entry.runtime_data.coordinator.device
+    # Map object names (6.8, 6.9) carry "<user id>/<did>/..." inside the value.
+    private = [str(v) for v in (entry.data.get(CONF_DID), (entry.data.get(CONF_AUTH) or {}).get("user_id")) if v]
     properties: dict[str, Any] = {}
     for key, value in sorted(device.values.items()):
         if key == "serial_number":
             continue
-        ids = device.caps.properties.get(key)
-        if ids is None:
+        prop = device.caps.properties.get(key)
+        if prop is None:
             continue
-        siid, piid = ids
+        siid, piid = prop
+        if isinstance(value, str):
+            for secret in private:
+                value = value.replace(secret, REDACTED)
         properties[f"{siid}.{piid}"] = value
 
     return {

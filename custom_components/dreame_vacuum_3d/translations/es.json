@@ -318,6 +318,104 @@
           "local": "Local",
           "cloud": "Nube"
         }
+      },
+      "task_status": {
+        "name": "Tarea",
+        "state": {
+          "completed": "Completada",
+          "auto_cleaning": "Limpieza automática",
+          "zone_cleaning": "Limpieza por zonas",
+          "segment_cleaning": "Limpieza por habitaciones",
+          "spot_cleaning": "Limpieza puntual",
+          "fast_mapping": "Mapeo rápido",
+          "auto_cleaning_paused": "Limpieza automática en pausa",
+          "zone_cleaning_paused": "Limpieza por zonas en pausa",
+          "segment_cleaning_paused": "Limpieza por habitaciones en pausa",
+          "spot_cleaning_paused": "Limpieza puntual en pausa",
+          "map_cleaning_paused": "Limpieza del mapa en pausa",
+          "docking_paused": "Vuelta a la base en pausa",
+          "mopping_paused": "Fregado en pausa",
+          "segment_mopping_paused": "Fregado por habitaciones en pausa",
+          "zone_mopping_paused": "Fregado por zonas en pausa",
+          "auto_mopping_paused": "Fregado automático en pausa",
+          "auto_docking_paused": "Vuelta automática en pausa",
+          "segment_docking_paused": "Vuelta tras habitaciones en pausa",
+          "zone_docking_paused": "Vuelta tras zonas en pausa",
+          "cruising_path": "Recorriendo ruta",
+          "cruising_path_paused": "Ruta en pausa",
+          "cruising_point": "Yendo a un punto",
+          "cruising_point_paused": "Ida a un punto en pausa",
+          "summon_clean_paused": "Limpieza a demanda en pausa",
+          "returning_install_mop": "Volviendo a poner la mopa",
+          "returning_remove_mop": "Volviendo a quitar la mopa",
+          "station_cleaning": "Limpiando la base",
+          "pet_finding": "Buscando mascota",
+          "auto_cleaning_washing_paused": "Limpieza automática en pausa para lavar",
+          "area_cleaning_washing_paused": "Limpieza por zonas en pausa para lavar",
+          "custom_cleaning_washing_paused": "Limpieza personalizada en pausa para lavar",
+          "picking_up_item": "Recogiendo un objeto",
+          "picking_up_item_paused": "Recogida en pausa",
+          "picking_up_item_success": "Objeto recogido",
+          "remote_pickup_initializing": "Preparando recogida remota",
+          "remote_pickup_identifing": "Identificando objeto",
+          "manual_remote_pickup": "Recogida remota manual",
+          "automatic_remote_pickup": "Recogida remota automática",
+          "remote_pickup_in_progress": "Recogida remota en curso",
+          "remote_pickup_paused": "Recogida remota en pausa",
+          "placing_item": "Dejando un objeto",
+          "placing_item_paused": "Dejada de objeto en pausa"
+        }
+      },
+      "relocation_status": {
+        "name": "Recolocalización",
+        "state": {
+          "located": "Localizado",
+          "locating": "Localizando",
+          "failed": "Fallida",
+          "success": "Correcta"
+        }
+      },
+      "self_wash_base_status": {
+        "name": "Base de autolavado",
+        "state": {
+          "idle": "En reposo",
+          "washing": "Lavando",
+          "drying": "Secando",
+          "returning": "Volviendo",
+          "paused": "En pausa",
+          "clean_add_water": "Añadiendo agua para limpiar",
+          "adding_water": "Añadiendo agua",
+          "returning_for_dry_mop": "Volviendo a secar la mopa"
+        }
+      },
+      "auto_empty_status": {
+        "name": "Estado del vaciado",
+        "state": {
+          "idle": "En reposo",
+          "active": "Vaciando",
+          "not_performed": "No realizado"
+        }
+      },
+      "dust_collection": {
+        "name": "Recogida de polvo",
+        "state": {
+          "not_available": "No disponible",
+          "available": "Disponible",
+          "over_use": "Uso excesivo",
+          "never": "Nunca"
+        }
+      },
+      "low_water_warning": {
+        "name": "Aviso de agua",
+        "state": {
+          "no_warning": "Sin aviso",
+          "no_water_left_dismiss": "Sin agua (descartable)",
+          "no_water_left": "Sin agua",
+          "no_water_left_after_clean": "Sin agua tras limpiar",
+          "no_water_for_clean": "Sin agua para limpiar",
+          "low_water": "Poca agua",
+          "tank_not_installed": "Depósito no instalado"
+        }
       }
     },
     "binary_sensor": {
@@ -412,17 +510,50 @@
       },
       "self_clean": {
         "name": "Autolavado"
+      },
+      "resume_cleaning": {
+        "name": "Reanudar limpieza"
+      },
+      "customized_cleaning": {
+        "name": "Limpieza personalizada"
+      },
+      "multi_floor_map": {
+        "name": "Mapa multipiso"
+      },
+      "auto_dust_collecting": {
+        "name": "Vaciado automático"
+      },
+      "carpet_recognition": {
+        "name": "Reconocimiento de alfombras"
+      },
+      "water_electrolysis": {
+        "name": "Electrólisis del agua"
+      },
+      "ai_furniture_detection": {
+        "name": "Detección de muebles con IA"
+      },
+      "ai_obstacle_detection": {
+        "name": "Detección de obstáculos con IA"
+      },
+      "ai_obstacle_picture": {
+        "name": "Fotos de obstáculos"
+      },
+      "ai_pet_detection": {
+        "name": "Detección de mascotas con IA"
+      },
+      "ai_image_upload": {
+        "name": "Subir fotos de IA"
+      },
+      "fuzzy_obstacle_detection": {
+        "name": "Detección de obstáculos difusos"
+      },
+      "pet_picture": {
+        "name": "Fotos de mascotas"
       }
     },
     "number": {
       "volume": {
         "name": "Volumen"
-      },
-      "dnd_start": {
-        "name": "Inicio de no molestar"
-      },
-      "dnd_end": {
-        "name": "Fin de no molestar"
       }
     },
     "button": {
@@ -465,6 +596,31 @@
       "dry_mop": {
         "name": "Secar mopa"
       }
+    },
+    "time": {
+      "dnd_start": {
+        "name": "Inicio de no molestar"
+      },
+      "dnd_end": {
+        "name": "Fin de no molestar"
+      }
+    }
+  },
+  "exceptions": {
+    "command_failed": {
+      "message": "El robot no ha aceptado la orden: {error}"
+    },
+    "notify_cleanup_completed": {
+      "message": "Limpieza completada"
+    },
+    "notify_cleaning_paused": {
+      "message": "Limpieza en pausa"
+    },
+    "notify_station_warning": {
+      "message": "Aviso de la base ({code})"
+    },
+    "notify_consumable": {
+      "message": "{name}: queda un {life} %"
     }
   }
 }

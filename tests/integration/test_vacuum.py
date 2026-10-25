@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-from homeassistant.components.vacuum import VacuumActivity
+from homeassistant.components.vacuum import VacuumActivity, VacuumEntityFeature
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -72,7 +72,7 @@ async def test_vacuum_absent_without_state(hass: HomeAssistant) -> None:
     entry.add_to_hass(hass)
     miio = NoStateMiio()
     cloud = _mock_cloud()
-    cloud.rpc_sender = MagicMock(return_value=AsyncMock(side_effect=miio._send))
+    cloud.rpc = AsyncMock(side_effect=miio.rpc)
     with (
         patch("custom_components.dreame_vacuum_3d.XiaomiCloud", return_value=cloud),
         patch("custom_components.dreame_vacuum_3d.MiioClient", return_value=miio),
@@ -135,11 +135,8 @@ async def test_commands_send_miot(hass: HomeAssistant) -> None:
     await call("locate")
     assert ("action", {"did": "call", "siid": 7, "aiid": 1, "in": []}) in miio.calls
 
-    await call("clean_spot")
-    action_calls = [c for c in miio.calls if c[0] == "action"]
-    assert action_calls
-    assert action_calls[0][1]["siid"] == 4
-    assert action_calls[0][1]["aiid"] == 1
+    # No spot clean: HA's has no point, and (0, 0) isn't the base.
+    assert not hass.states.get(entity_id).attributes["supported_features"] & VacuumEntityFeature.CLEAN_SPOT
 
     await call("set_fan_speed", fan_speed="quiet")
     assert any(
