@@ -10,7 +10,7 @@ from hypothesis import given, strategies as st
 import pytest
 
 from custom_components.dreame_vacuum_3d.device import map as dmap
-from tests.map_frames import LEFT, SIZE, TOP, frame, live
+from tests.map_frames import LEFT, SIZE, TOP, encrypt, frame, live
 
 
 def _cells(runs: list[int]) -> set[tuple[int, int]]:
@@ -70,13 +70,33 @@ def test_live_frames_without_a_saved_map() -> None:
 
 def test_path_active_rooms_and_room_at() -> None:
     f = dmap.decode(live())
-    assert dmap.path(f) == [[[-900, -450], [-850, -450], [-850, -400]], [[-700, -300], [-690, -290]]]
+    assert dmap.path(f) == [
+        {"mode": "both", "points": [[-900, -450], [-850, -450], [-850, -400]]},
+        {"mode": "vacuum", "points": [[-700, -300], [-690, -290]]},
+        {"mode": "mop", "points": [[0, 0]]},
+        {"mode": "mop", "points": [[5, 5]]},
+    ]
     assert dmap.active_rooms(f) == [2]
     cells, rooms = dmap.rooms(dmap.saved_map(f), saved=True)  # type: ignore[arg-type]
     assert dmap.room_at(f.grid, cells, rooms, LEFT + 60, TOP + 60) == 1
     assert dmap.room_at(f.grid, cells, rooms, LEFT + 5 * SIZE, TOP + 10) == 2
     assert dmap.room_at(f.grid, cells, rooms, LEFT + 3 * SIZE, TOP + 10) is None  # between the rooms
     assert dmap.saved_map(dmap.decode(frame([[0]]))) is None
+
+
+IV = "0123456789abcdef"
+
+
+def test_encrypted_frames_with_the_file_key_and_the_model_iv() -> None:
+    sealed = encrypt(live(), "k3y", IV)
+    assert dmap.decode(sealed, key="k3y", iv=IV).map_id == 7
+    assert dmap.decode(f"{sealed},k3y", iv=IV).map_id == 7  # inline, the key rides along
+    with pytest.raises(dmap.MapError, match="IV"):
+        dmap.decode(sealed, key="k3y")
+    with pytest.raises(dmap.MapError):
+        dmap.decode(sealed, key="wrong", iv=IV)
+    with pytest.raises(dmap.MapError, match="cut short"):
+        dmap.decode(base64.b64encode(base64.b64decode(sealed)[:-1]), key="k3y", iv=IV)
 
 
 @pytest.mark.parametrize(
@@ -86,7 +106,7 @@ def test_path_active_rooms_and_room_at() -> None:
         base64.b64encode(b"not zlib").decode(),
         base64.b64encode(zlib.compress(b"short")).decode(),
         frame([[0, 0]])[:-8] + base64.b64encode(zlib.compress(b"x" * 27)).decode()[:8],
-        "abc,key",
+        "abc,key",  # encrypted, but no IV
     ],
 )
 def test_bad_files_raise_map_error(raw: str) -> None:

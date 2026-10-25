@@ -121,21 +121,23 @@ export class Sim {
     return out;
   }
 
-  /** Clean these rooms, in order, then go back to the dock. */
-  clean(rooms) {
+  /** Clean these rooms, in order, then go back to the dock. modes: { room: vacuum | mop | both }, both by default. */
+  clean(rooms, modes = {}) {
     let at = this.toCell(this.pose);
     const route = [];
+    let mode = 'both';
     for (const room of rooms) {
+      mode = modes[room] ?? 'both';
       for (const [a, b] of this.lanes(room)) {
-        route.push(...this.way(at, a).map((c) => ({ c, room })), { c: b, room, lane: true });
+        route.push(...this.way(at, a).map((c) => ({ c, mode })), { c: b, mode });
         at = b;
       }
     }
-    route.push(...this.way(at, this.toCell(this.map.dock)).map((c) => ({ c, home: true })));
+    route.push(...this.way(at, this.toCell(this.map.dock)).map((c) => ({ c, mode, home: true })));
     this.route = route.map((r) => ({ ...r, mm: this.toMm(r.c) }));
-    this.route.push({ mm: this.map.dock.slice(0, 2), home: true });
+    this.route.push({ mm: this.map.dock.slice(0, 2), mode, home: true });
     this.active = rooms;
-    this.path = [this.pose.slice(0, 2)];
+    this.path = [];
     this.state = 'cleaning';
   }
 
@@ -157,8 +159,15 @@ export class Sim {
         this.pose[1] = y + ((ty - y) * budget) / d;
         budget = 0;
       }
-      const last = this.path[this.path.length - 1];
-      if (Math.hypot(this.pose[0] - last[0], this.pose[1] - last[1]) >= TRAIL_STEP) this.path.push([Math.round(this.pose[0]), Math.round(this.pose[1])]);
+      // The path is strokes, one per mode: a new one starts where the robot changes what it does.
+      const point = [Math.round(this.pose[0]), Math.round(this.pose[1])];
+      let stroke = this.path[this.path.length - 1];
+      if (!stroke || stroke.mode !== next.mode) {
+        stroke = { mode: next.mode, points: [stroke ? stroke.points[stroke.points.length - 1] : [x, y].map(Math.round)] };
+        this.path.push(stroke);
+      }
+      const last = stroke.points[stroke.points.length - 1];
+      if (Math.hypot(point[0] - last[0], point[1] - last[1]) >= TRAIL_STEP) stroke.points.push(point);
     }
     if (!this.route.length && this.state !== 'docked') {
       this.pose = [...this.map.dock];
@@ -175,7 +184,7 @@ export class Sim {
       ...this.map,
       frame_id: this.frame,
       robot: this.pose.map(Math.round),
-      path: [this.path.slice()],
+      path: this.path.map((st) => ({ mode: st.mode, points: st.points.slice() })),
       room: this.map.rooms[id] ? id : null,
       active: this.active.slice(),
     };

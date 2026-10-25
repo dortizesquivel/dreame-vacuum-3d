@@ -108,14 +108,16 @@ class LiveMap:
 
     async def _frame(self) -> dmap.Frame:
         inline, name = await self._device.request_map()
+        iv = self._device.caps.map_iv
         if inline:
-            return dmap.decode(inline)
+            return dmap.decode(inline, iv=iv)
         if not name:
             raise dmap.MapError("the robot sent no map")
+        name, _, key = name.partition(",")  # "<user id>/<did>/<n>,<key>": the key the file is encrypted with
         raw = await self._fetch_file(name)
         if raw is None:
             raise dmap.MapError("the cloud has no file for the map")
-        return dmap.decode(raw)
+        return dmap.decode(raw, key=key or None, iv=iv)
 
     @callback
     def _update(self, frame: dmap.Frame) -> None:

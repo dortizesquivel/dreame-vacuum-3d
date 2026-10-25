@@ -13,13 +13,14 @@ import pytest
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.dreame_vacuum_3d.const import DOMAIN
+from custom_components.dreame_vacuum_3d.device.capabilities import load
 from custom_components.dreame_vacuum_3d.device.enums import Status
 from custom_components.dreame_vacuum_3d.live_map import IDLE_EVERY
 from custom_components.dreame_vacuum_3d.protocol.cloud import CloudAuthError
 from custom_components.dreame_vacuum_3d.protocol.miio import MiioTimeoutError
 from tests.integration.helpers import setup_fixture_entry
 from tests.integration.test_init import ENTRY_DATA
-from tests.map_frames import frame, live
+from tests.map_frames import encrypt, frame, live
 
 DID = ENTRY_DATA["did"]
 IN_ROOM_1 = (-925, -425, 90)  # cell (1, 1)
@@ -41,7 +42,7 @@ async def test_map_feeds_the_room_entities(hass: HomeAssistant, card_urls: list[
     assert message["map_id"] == 45
     assert message["robot"] == list(IN_ROOM_1) and message["dock"] == [-900, -450, 90]
     assert message["room"] == 1 and message["active"] == [2]
-    assert message["path"][0][:2] == [[-900, -450], [-850, -450]]
+    assert message["path"][0] == {"mode": "both", "points": [[-900, -450], [-850, -450], [-850, -400]]}
     assert set(message["rooms"]) == {"1", "2"} and "255" in message["cells"]
 
     room = hass.states.get(_entity(hass, "sensor", "current_room"))
@@ -161,6 +162,24 @@ async def test_map_file_logs_in_again(hass: HomeAssistant) -> None:
     await entry.runtime_data.map.refresh()
     cloud.login.assert_awaited()
     assert entry.runtime_data.map.message["map_id"] == 45
+
+
+async def test_encrypted_frames_and_a_late_upload(hass: HomeAssistant) -> None:
+    """The X10+ names the file "<user>/<did>/<n>,<key>" and encrypts it; the file shows up a moment later."""
+    iv = load("dreame.vacuum.p2114a").map_iv
+    sealed = encrypt(live(robot=IN_ROOM_1), "k3y", iv)
+    entry, miio = await setup_fixture_entry(hass, map_file=sealed, map_key="k3y")
+    assert entry.runtime_data.map.message["room"] == 1
+    miio.cloud.interim_file_url.assert_awaited_with("1000001/123/0", model="dreame.vacuum.p2114a")
+
+    miio.cloud.download.side_effect = [None, None, sealed.encode()]
+    await entry.runtime_data.map.refresh()
+    assert miio.cloud.download.await_count == 1 + 3
+    miio.cloud.download.side_effect = None
+    miio.cloud.download.return_value = None
+    miio.cloud.interim_file_url.return_value = None
+    await entry.runtime_data.map.refresh()
+    assert entry.runtime_data.map.message["room"] == 1
 
 
 async def setup(hass: HomeAssistant):

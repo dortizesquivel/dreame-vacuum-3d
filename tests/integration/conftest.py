@@ -14,6 +14,12 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 
 
 @pytest.fixture(autouse=True)
+def no_map_file_wait(monkeypatch):
+    """Don't wait between tries for a map file the test cloud never has."""
+    monkeypatch.setattr("custom_components.dreame_vacuum_3d.MAP_FILE_WAIT", 0)
+
+
+@pytest.fixture(autouse=True)
 def card_urls(hass):
     """The frontend needs its own build, which tests don't have: mark it loaded and record the card URL."""
     hass.config.components.add("frontend")

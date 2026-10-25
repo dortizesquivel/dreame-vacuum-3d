@@ -34,7 +34,7 @@
 <header>
   <h1>Dreame Vacuum 3D · datos simulados</h1>
   <div class="controls">
-    <button type="button" id="go">Limpiar salón, comedor y cocina</button>
+    <button type="button" id="go">Salón (aspira y friega), comedor (aspira), cocina (friega)</button>
     <button type="button" id="model" aria-pressed="true">Modelo 3D</button>
     <button type="button" id="futuristic" aria-pressed="false">Futurista</button>
     <button type="button" id="speed">×10</button>
@@ -42,7 +42,7 @@
   </div>
 </header>
 <main id="cards"></main>
-<p class="note">Toca una habitación para limpiarla. El robot y su recorrido son simulados; el mapa es el del robot.</p>
+<p class="note">Toca una habitación para limpiarla. Aspirar quita el polvo de las habitaciones que limpia; fregar deja el suelo mojado, que se seca en un minuto en la demo (?dry=10 para diez). El robot y su recorrido son simulados; el mapa es el del robot.</p>
 <script type="module">
   import '../../custom_components/dreame_vacuum_3d/frontend/dreame-vacuum-3d-card.js';
   import { fromDump, Sim } from './sim.js';
@@ -85,6 +85,7 @@
   let model = config.model ?? null, futuristic = q.get('style') === 'futuristic', withModel = !!model && q.get('model') !== '0';
   const setConfig = () => card.setConfig({
     entity: 'vacuum.demo', height: Number(q.get('height') ?? 560), view: q.get('view') ?? '3d',
+    dry_time: Number(q.get('dry') ?? 1),   // minutes: short, so the floor dries while you watch
     model: withModel ? { ...model, style: futuristic ? 'futuristic' : 'textured' } : undefined,
   });
   setConfig();
@@ -96,7 +97,7 @@
   setInterval(() => { if (sim.state !== 'docked') { sim.step(speed); send(); } }, 1000);
 
   const press = (id, on) => document.getElementById(id).setAttribute('aria-pressed', String(on));
-  document.getElementById('go').onclick = () => { sim.clean([9, 13, 8]); send(); };
+  document.getElementById('go').onclick = () => { sim.clean([9, 13, 8], { 9: 'both', 13: 'vacuum', 8: 'mop' }); send(); };
   document.getElementById('model').onclick = () => { withModel = !withModel && !!model; press('model', withModel); setConfig(); };
   document.getElementById('futuristic').onclick = () => { futuristic = !futuristic; press('futuristic', futuristic); setConfig(); };
   document.getElementById('speed').onclick = (e) => { speed = speed === 10 ? 30 : speed === 30 ? 1 : 10; e.target.textContent = `×${speed}`; };

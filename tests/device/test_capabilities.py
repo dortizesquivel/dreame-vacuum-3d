@@ -158,3 +158,8 @@ def test_tasshack_counts() -> None:
     caps = load("dreame.vacuum.unknown")
     assert len(caps.properties) == 371
     assert len(caps.actions) == 45
+
+
+def test_map_iv_only_where_the_model_has_one() -> None:
+    assert len(load("dreame.vacuum.p2114a").map_iv or "") == 16
+    assert load("dreame.vacuum.unknown").map_iv is None

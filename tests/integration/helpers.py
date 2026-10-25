@@ -94,6 +94,7 @@ async def setup_fixture_entry(
     *,
     overrides: dict[tuple[int, int], Any] | None = None,
     map_file: str | None = None,
+    map_key: str = "",
 ) -> tuple[MockConfigEntry, FixtureMiio]:
     """Load the integration against the X10+ property fixture, with this map file in the cloud if given."""
     entry = MockConfigEntry(
@@ -103,7 +104,8 @@ async def setup_fixture_entry(
         title="X10+",
     )
     entry.add_to_hass(hass)
-    miio = FixtureMiio(overrides, map_object="1000001/123/0" if map_file else "")
+    name = "1000001/123/0" + (f",{map_key}" if map_key else "")
+    miio = FixtureMiio(overrides, map_object=name if map_file else "")
     cloud = _mock_cloud()
     cloud.rpc = AsyncMock(side_effect=miio.rpc)
     cloud.interim_file_url = AsyncMock(return_value="https://example.com/map")

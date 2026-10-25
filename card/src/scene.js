@@ -6,6 +6,7 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
+import { FloorEffects } from './effects.js';
 import { cellRects, robotToModel, roomAt } from './model.js';
 import { cssColor, mix } from './theme.js';
 
@@ -120,7 +121,8 @@ export class VacuumScene {
     this.labelGroup = new Group();
     this.robot = makeRobot();
     this.robot.visible = false;
-    this.scene.add(this.modelGroup, this.mapGroup, this.overlayGroup, this.labelGroup, this.robot);
+    this.effects = new FloorEffects(this.renderer, this.robot);
+    this.scene.add(this.modelGroup, this.mapGroup, this.effects.group, this.overlayGroup, this.labelGroup, this.robot);
     this.path = null;
 
     this.model = null;
@@ -163,6 +165,7 @@ export class VacuumScene {
     this.robot.userData.mark.material.color.set(theme.accent);
     this.robot.userData.ring.material.color.set(theme.accent);
     this.robot.userData.ghost.material.color.set(theme.accent);
+    this.effects.setTheme(theme);
     this.mapSig = this.overlaySig = '';
     this._holoTheme();
     if (this.map) this.setMap(this.map);
@@ -212,7 +215,7 @@ export class VacuumScene {
 
   /**
    * map: { grid: { left, top, size, width, height }, cells: { id: [x, y, n, …] }, rooms: { id: { name, x, y } },
-   *        robot: [x, y, angle], dock: [x, y, angle], path: [[[x, y], …], …], room, active: [id] }
+   *        robot: [x, y, angle], dock: [x, y, angle], path: [{ mode, points: [[x, y], …] }], room, active: [id] }
    */
   setMap(map) {
     this.map = map;
@@ -233,6 +236,7 @@ export class VacuumScene {
       this._buildOverlay();
     }
     this._setPath(map.path);
+    this.effects.setMap(map, this.xf);
     this._setPose(map.robot ?? map.dock);
     for (const l of this.labelGroup.children) l.element.dataset.current = String(l.userData.id === map.room);
     if (!this.framed) this.setView(this.view, true);
@@ -242,7 +246,13 @@ export class VacuumScene {
   /** While the robot cleans, a ring pulses around it (and the futuristic style's scan wave starts at it). */
   setCleaning(on) {
     this.robot.userData.cleaning = on;
+    this.effects.setCleaning(on);
     this.dirty = true;
+  }
+
+  /** Minutes the mopped floor takes to dry. */
+  setDryTime(minutes) {
+    this.effects.setDryTime(minutes);
   }
 
   select(id) {
@@ -335,7 +345,7 @@ export class VacuumScene {
     }
   }
 
-  /** path: polylines of map points, [[[x, y], …], …]. */
+  /** path: strokes [{ mode, points: [[x, y], …] }] in map mm. */
   _setPath(path) {
     if (this.path) {
       this.scene.remove(this.path);
@@ -347,9 +357,9 @@ export class VacuumScene {
     const y = this.xf.floor + LIFT * 1.5;
     const at = ([x, yy]) => { const [X, Z] = this.xf.point(x, yy); return V(X, y, Z); };
     const pts = [];
-    for (const line of path) for (let i = 1; i < line.length; i++) pts.push(at(line[i - 1]), at(line[i]));
+    for (const { points: line = [] } of path) for (let i = 1; i < line.length; i++) pts.push(at(line[i - 1]), at(line[i]));
     this.path = new LineSegments(new BufferGeometry().setFromPoints(pts),
-      new LineBasicMaterial({ color: this.theme.accent, transparent: true, opacity: 0.75 }));
+      new LineBasicMaterial({ color: this.theme.accent, transparent: true, opacity: 0.55 }));
     this.scene.add(this.path);
   }
 
@@ -503,6 +513,7 @@ export class VacuumScene {
     this.renderer.domElement.removeEventListener('pointerdown', this._onDown);
     this.renderer.domElement.removeEventListener('pointerup', this._onUp);
     this.controls.dispose();
+    this.effects.dispose();
     this.scene.traverse((o) => {
       o.geometry?.dispose();
       if (o.material) [].concat(o.material).forEach(disposeMaterial);
@@ -564,6 +575,7 @@ export class VacuumScene {
         u.center.value.set(this.robot.position.x, this.robot.position.z);
       }
     }
+    if (this.effects.frame(now)) moving = true;
     if (this.controls.update()) moving = true;
     if (!moving && !this.dirty) return;
     this.dirty = false;

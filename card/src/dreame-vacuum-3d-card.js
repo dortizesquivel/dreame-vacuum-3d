@@ -79,7 +79,11 @@ class DreameVacuum3DCard extends HTMLElement {
     const height = Number(config.height ?? 420);
     if (!Number.isFinite(height) || height < 200) throw new Error('"height" must be a number of pixels, 200 or more');
     if (config.view && !['3d', 'plan'].includes(config.view)) throw new Error('"view" must be 3d or plan');
-    this._config = { ...config, height, view: config.view ?? '3d', labels: config.labels !== false, model: normalizeModel(config.model) };
+    const dryTime = Number(config.dry_time ?? 10);
+    if (!Number.isFinite(dryTime) || dryTime <= 0) throw new Error('"dry_time" must be the minutes the mopped floor takes to dry');
+    this._config = {
+      ...config, height, dryTime, view: config.view ?? '3d', labels: config.labels !== false, model: normalizeModel(config.model),
+    };
     if (this._sub && this._subEntity !== config.entity) this._unsubscribe();
     if (this._root) this._applyConfig();
   }
@@ -178,6 +182,7 @@ class DreameVacuum3DCard extends HTMLElement {
     this._els.title.hidden = c.title === false || c.title === '';
     if (!this._scene) return;
     this._scene.setLabels(c.labels);
+    this._scene.setDryTime(c.dryTime);
     this._scene.setModel(c.model);
     this._scene.setView(this._view, true);
     this._renderButtons();
