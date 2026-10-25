@@ -1,0 +1,3 @@
+node_modules/
+# The demo house (a real floor plan and model) stays local: a folder or a link to one.
+demo/house

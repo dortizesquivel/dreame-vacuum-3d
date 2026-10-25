@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dreame Vacuum 3D · demo</title>
+<style>
+  /* Home Assistant's default theme variables, so the card renders as it would on a dashboard. */
+  :root {
+    --primary-background-color: #fafafa; --card-background-color: #ffffff; --primary-text-color: #212121;
+    --secondary-text-color: #727272; --disabled-text-color: #bdbdbd; --divider-color: rgba(0, 0, 0, .12);
+    --primary-color: #03a9f4; --text-primary-color: #ffffff; --error-color: #db4437;
+  }
+  :root[data-theme="dark"] {
+    --primary-background-color: #111111; --card-background-color: #1c1c1c; --primary-text-color: #e1e1e1;
+    --secondary-text-color: #9b9b9b; --disabled-text-color: #6f6f6f; --divider-color: rgba(225, 225, 225, .12);
+  }
+  html, body { background: var(--primary-background-color); color: var(--primary-text-color); }
+  body { margin: 0; font: 14px/1.5 Roboto, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px 0; }
+  h1 { font-size: 18px; font-weight: 500; margin: 0; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; }
+  .controls button { font: inherit; color: var(--primary-text-color); background: var(--card-background-color);
+    border: 1px solid var(--divider-color); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .controls button[aria-pressed="true"] { background: var(--primary-color); color: var(--text-primary-color); border-color: transparent; }
+  main { padding: 16px 20px; }
+  ha-card { display: block; background: var(--card-background-color); border-radius: 12px; border: 1px solid var(--divider-color); }
+  p.note { margin: 0 20px 24px; color: var(--secondary-text-color); font-size: 13px; }
+  body.capture header, body.capture p.note { display: none; }
+  body.capture main { padding: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Dreame Vacuum 3D · datos simulados</h1>
+  <div class="controls">
+    <button type="button" id="go">Limpiar salón, comedor y cocina</button>
+    <button type="button" id="model" aria-pressed="true">Modelo 3D</button>
+    <button type="button" id="futuristic" aria-pressed="false">Futurista</button>
+    <button type="button" id="speed">×10</button>
+    <button type="button" id="theme">Tema</button>
+  </div>
+</header>
+<main id="cards"></main>
+<p class="note">Toca una habitación para limpiarla. El robot y su recorrido son simulados; el mapa es el del robot.</p>
+<script type="module">
+  import '../../custom_components/dreame_vacuum_3d/frontend/dreame-vacuum-3d-card.js';
+  import { fromDump, Sim } from './sim.js';
+
+  const q = new URLSearchParams(location.search);
+  if (q.has('capture')) document.body.classList.add('capture');
+  const house = q.get('house') ?? './house/';
+  const [dump, config] = await Promise.all([
+    fetch(`${house}map.json`).then((r) => r.json()),
+    fetch(`${house}config.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
+  ]);
+  const map = fromDump(dump);
+  const sim = new Sim(map);
+  const subs = new Set();
+  const STATES = { cleaning: 'Limpiando', returning: 'Volviendo a la base', docked: 'En la base' };
+  let dark = q.get('theme') === 'dark';
+  let speed = Number(q.get('speed') ?? 10);
+
+  const hass = () => ({
+    states: { 'vacuum.demo': { entity_id: 'vacuum.demo', state: sim.state, attributes: { friendly_name: 'Robot (demo)', battery_level: 100 } } },
+    themes: { darkMode: dark },
+    locale: { language: 'es' },
+    language: 'es',
+    formatEntityState: (st) => STATES[st.state] ?? st.state,
+    connection: {
+      subscribeMessage(cb) {
+        subs.add(cb);
+        cb(sim.message());
+        return Promise.resolve(() => subs.delete(cb));
+      },
+    },
+    async callService(domain, service, data) {
+      if (service !== 'vacuum_clean_segment') throw new Error(`${domain}.${service} not in the demo`);
+      sim.clean(data.segments);
+      send();
+    },
+  });
+
+  const card = document.createElement('dreame-vacuum-3d-card');
+  let model = config.model ?? null, futuristic = q.get('style') === 'futuristic', withModel = !!model && q.get('model') !== '0';
+  const setConfig = () => card.setConfig({
+    entity: 'vacuum.demo', height: Number(q.get('height') ?? 560), view: q.get('view') ?? '3d',
+    model: withModel ? { ...model, style: futuristic ? 'futuristic' : 'textured' } : undefined,
+  });
+  setConfig();
+  document.getElementById('cards').append(card);
+  card.hass = hass();
+
+  const send = () => { const m = sim.message(); subs.forEach((cb) => cb(m)); card.hass = hass(); };
+  // A message a second, like the integration while the robot cleans (it sends one per map frame).
+  setInterval(() => { if (sim.state !== 'docked') { sim.step(speed); send(); } }, 1000);
+
+  const press = (id, on) => document.getElementById(id).setAttribute('aria-pressed', String(on));
+  document.getElementById('go').onclick = () => { sim.clean([9, 13, 8]); send(); };
+  document.getElementById('model').onclick = () => { withModel = !withModel && !!model; press('model', withModel); setConfig(); };
+  document.getElementById('futuristic').onclick = () => { futuristic = !futuristic; press('futuristic', futuristic); setConfig(); };
+  document.getElementById('speed').onclick = (e) => { speed = speed === 10 ? 30 : speed === 30 ? 1 : 10; e.target.textContent = `×${speed}`; };
+  document.getElementById('theme').onclick = () => {
+    dark = !dark;
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    card.hass = hass();
+  };
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  press('model', withModel);
+  press('futuristic', futuristic);
+  document.getElementById('speed').textContent = `×${speed}`;
+  if (q.has('start')) document.getElementById('go').click();
+  window.demo = { sim, card };
+</script>
+</body>
+</html>

@@ -416,6 +416,9 @@
           "low_water": "Low water",
           "tank_not_installed": "Tank not installed"
         }
+      },
+      "current_room": {
+        "name": "Current room"
       }
     },
     "binary_sensor": {
@@ -595,6 +598,9 @@
       },
       "dry_mop": {
         "name": "Dry mop"
+      },
+      "clean_room": {
+        "name": "Clean {room}"
       }
     },
     "time": {

@@ -33,12 +33,14 @@ def fixture_values(*, only_ok: bool = True) -> dict[str, Any]:
 class FixtureMiio:
     """miIO client that answers get_properties from the X10+ fixture and records writes."""
 
-    def __init__(self, overrides: dict[tuple[int, int], Any] | None = None) -> None:
+    def __init__(self, overrides: dict[tuple[int, int], Any] | None = None, map_object: str = "") -> None:
         by_key = fixture_by_key()
+        self.map_object = map_object  # the file name request_map answers with ("" = no map)
         self.by_siid_piid = {(item["siid"], item["piid"]): item for item in by_key.values()}
         self.overrides = dict(overrides or {})
         self.calls: list[tuple[str, Any]] = []
         self.send = AsyncMock(side_effect=self._send)
+        self.cloud: Any = None
         self.close = AsyncMock()
 
     async def rpc(self, _did: str, method: str, params: Any = None) -> Any:
@@ -76,7 +78,14 @@ class FixtureMiio:
                 self.overrides[(item["siid"], item["piid"])] = item["value"]
             return [{"did": p["did"], "siid": p["siid"], "piid": p["piid"], "code": 0} for p in (params or [])]
         if method == "action":
-            return {"did": "call", "siid": params["siid"], "aiid": params["aiid"], "code": 0, "out": []}
+            out = []
+            if (params["siid"], params["aiid"]) == (6, 1):  # request_map
+                out = [
+                    {"piid": 1, "value": ""},
+                    {"piid": 3, "value": self.map_object},
+                    {"piid": 5, "value": "1700000000"},
+                ]
+            return {"did": "call", "siid": params["siid"], "aiid": params["aiid"], "code": 0, "out": out}
         raise AssertionError(f"unexpected method {method}")
 
 
@@ -84,8 +93,9 @@ async def setup_fixture_entry(
     hass: HomeAssistant,
     *,
     overrides: dict[tuple[int, int], Any] | None = None,
+    map_file: str | None = None,
 ) -> tuple[MockConfigEntry, FixtureMiio]:
-    """Load the integration against the X10+ property fixture."""
+    """Load the integration against the X10+ property fixture, with this map file in the cloud if given."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data=ENTRY_DATA,
@@ -93,9 +103,11 @@ async def setup_fixture_entry(
         title="X10+",
     )
     entry.add_to_hass(hass)
-    miio = FixtureMiio(overrides)
+    miio = FixtureMiio(overrides, map_object="1000001/123/0" if map_file else "")
     cloud = _mock_cloud()
     cloud.rpc = AsyncMock(side_effect=miio.rpc)
+    cloud.interim_file_url = AsyncMock(return_value="https://example.com/map")
+    cloud.download = AsyncMock(return_value=map_file.encode() if map_file else None)
 
     with (
         patch("custom_components.dreame_vacuum_3d.XiaomiCloud", return_value=cloud),
@@ -103,4 +115,5 @@ async def setup_fixture_entry(
     ):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
+    miio.cloud = cloud
     return entry, miio

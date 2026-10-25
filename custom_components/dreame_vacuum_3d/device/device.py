@@ -311,6 +311,14 @@ class DreameDevice:
         self._remote_control = True
         await self.set("remote_control", payload)
 
+    async def request_map(self) -> tuple[str | None, str | None]:
+        """Ask for the whole current map (an I-frame): (the map itself, or the name of its file in the cloud)."""
+        props = self.caps.properties
+        value = json.dumps({"req_type": 1, "frame_type": "I", "force_type": 1}, separators=(",", ":"))
+        reply = await self._action("request_map", [{"piid": props["frame_info"][1], "value": value}])
+        out = {o.get("piid"): o.get("value") for o in reply.get("out", []) if isinstance(o, dict)}
+        return out.get(props["map_data"][1]) or None, out.get(props["object_name"][1]) or None
+
     async def select_map(self, map_id: int) -> Any:
         """Select a multi-floor map (Tasshack set_selected_map / update_map_data)."""
         piid = self.caps.properties["map_extend_data"][1]
