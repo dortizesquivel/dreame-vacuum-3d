@@ -26,6 +26,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
 from .const import CONF_AUTH, CONF_DID, DOMAIN
@@ -138,7 +139,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bo
 
     notifier = DreameNotifier(hass, entry, coordinator)
     listeners = hass.data[MAP_LISTENERS].setdefault(entry.entry_id, [])
-    live_map = LiveMap(hass, device, _map_file(hass, entry, cloud), listeners)
+    live_map = LiveMap(hass, device, _map_file(hass, entry, cloud), listeners, _obstacle_store(hass, entry))
     entry.runtime_data = RuntimeData(coordinator=coordinator, cloud=cloud, miio=miio, notifier=notifier, map=live_map)
     _async_register_device(hass, entry, info)
     _async_remove_dnd_numbers(hass, did)
@@ -148,6 +149,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bo
     await notifier.async_setup()
     entry.async_on_unload(live_map.start())
     return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> None:
+    """Forget what the lidar saw in this robot's house."""
+    await _obstacle_store(hass, entry).async_remove()
+
+
+def _obstacle_store(hass: HomeAssistant, entry: ConfigEntry) -> Store[dict[str, Any]]:
+    return Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.obstacles")
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bool:

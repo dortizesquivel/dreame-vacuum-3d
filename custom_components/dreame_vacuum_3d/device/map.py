@@ -317,9 +317,9 @@ def floor_mask(saved: Frame, margin: int = 2) -> bytearray:
     return mask
 
 
-def new_cells(live: Frame, saved: Grid, mask: bytearray) -> list[int]:
-    """Where the live map sees a wall or an obstacle on what the saved map has as open floor: something that wasn't
-    there when the house was mapped. Runs [x, y, n, …] in the saved map's grid."""
+def seen_cells(live: Frame, saved: Grid, mask: bytearray) -> set[tuple[int, int]]:
+    """Cells where the live map sees a wall or an obstacle on what the saved map has as open floor (furniture legs,
+    chairs, a box…), as (x, y) in the saved map's grid. The saved map keeps only the rooms and their edges."""
     key = _framed_cell if live.data.get("fsm") == 1 else _live_cell
     walls = bytes(1 if key(v) == WALL else 0 for v in range(256))
     width, size = live.grid.width, live.grid.size
@@ -332,13 +332,18 @@ def new_cells(live: Frame, saved: Grid, mask: bytearray) -> list[int]:
                 sx = int((live.grid.left + (x + 0.5) * size - saved.left) // saved.size)
                 if 0 <= sx < saved.width and 0 <= sy < saved.height and mask[sy * saved.width + sx]:
                     hits.add((sx, sy))
-    runs: list[int] = []
-    for sx, sy in sorted(hits, key=lambda c: (c[1], c[0])):
-        if runs and runs[-2] == sy and runs[-3] + runs[-1] == sx:
-            runs[-1] += 1
+    return hits
+
+
+def runs(cells: set[tuple[int, int]]) -> list[int]:
+    """Cells as runs [x, y, n, …], row by row."""
+    out: list[int] = []
+    for x, y in sorted(cells, key=lambda c: (c[1], c[0])):
+        if out and out[-2] == y and out[-3] + out[-1] == x:
+            out[-1] += 1
         else:
-            runs.extend((sx, sy, 1))
-    return runs
+            out.extend((x, y, 1))
+    return out
 
 
 def active_rooms(frame: Frame) -> list[int]:

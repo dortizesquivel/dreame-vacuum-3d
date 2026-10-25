@@ -181,7 +181,7 @@ def test_furniture_prefers_the_newest_list() -> None:
     assert dmap.furniture(dmap.decode(frame([[0]], {"ai_furniture": [[0, 0, "x", 1, 0, 0, 1, 1]]}))) == []
 
 
-def test_new_cells_are_walls_on_open_floor_away_from_old_walls() -> None:
+def test_seen_cells_are_walls_on_open_floor_away_from_old_walls() -> None:
     # Saved: a 10 by 6 room (id 1) with an edge of walls all round.
     rows = [[0x81] * 10] + [[0x81] + [1] * 8 + [0x81] for _ in range(4)] + [[0x81] * 10]
     saved = dmap.decode(frame(rows))
@@ -194,6 +194,8 @@ def test_new_cells_are_walls_on_open_floor_away_from_old_walls() -> None:
     live = dmap.Frame(
         1, 1, "I", None, None, dmap.Grid(LEFT - 25, TOP, SIZE, 10, 6), bytes(v for row in live_rows for v in row), {}
     )
-    assert dmap.new_cells(live, saved.grid, mask) == [4, 3, 2]  # live cell 4's centre is on saved cell 4's edge
+    # Live cell 4's centre is on saved cell 4's edge.
+    assert dmap.runs(dmap.seen_cells(live, saved.grid, mask)) == [4, 3, 2]
     framed = dmap.Frame(1, 1, "I", None, None, saved.grid, bytes([63 << 2] * 60), {"fsm": 1})
-    assert sum(dmap.new_cells(framed, saved.grid, mask)[2::3]) == 12  # the whole open floor
+    assert len(dmap.seen_cells(framed, saved.grid, mask)) == 12  # the whole open floor
+    assert dmap.runs({(5, 1), (3, 0), (4, 0), (7, 0)}) == [3, 0, 2, 7, 0, 1, 5, 1, 1]

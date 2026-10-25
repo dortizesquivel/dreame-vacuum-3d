@@ -15,6 +15,7 @@ from typing import Any
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.storage import Store
 from homeassistant.util.hass_dict import HassKey
 
 from .const import DOMAIN
@@ -47,6 +48,7 @@ class LiveMap:
         device: DreameDevice,
         fetch_file: FileFetcher,
         listeners: list[Listener],
+        store: Store[dict[str, Any]] | None = None,
     ) -> None:
         self._hass = hass
         self._device = device
@@ -58,6 +60,13 @@ class LiveMap:
         self._next = 0.0
         self._was_active = False
         self._warned = False
+        # What the lidar saw on open floor: in the last cleaning, and in the one before this one (the reference for
+        # what is new), kept in .storage so a restart doesn't make everything new.
+        self._store = store
+        self._known: dict[str, Any] | None = None
+        self._loaded = store is None
+        self._in_task = False
+        self._reference: tuple[int, set[tuple[int, int]]] | None = None  # (id of the list, its cells and neighbours)
         self.pose: dict[str, Any] | None = None  # robot, dock, path, room, active of the latest frame
 
     @property
@@ -105,6 +114,9 @@ class LiveMap:
             self._fetching = False
             self._next = monotonic() + IDLE_EVERY
         self._warned = False
+        if not self._loaded and self._store is not None:
+            self._known = await self._store.async_load()
+            self._loaded = True
         self._update(frame)
 
     async def _frame(self) -> dmap.Frame:
@@ -149,10 +161,41 @@ class LiveMap:
             "active": dmap.active_rooms(frame) or list(self._device.segments or []),
             "obstacles": dmap.obstacles(frame),
             "furniture": dmap.furniture(frame) or (self._saved[2] if self._saved else []),
-            # What the lidar sees now on floor that was open when the house was mapped.
-            "new_cells": dmap.new_cells(frame, self._saved[0], self._saved[1]) if self._saved else [],
+            "new_cells": dmap.runs(self._new(rooms["map_id"], dmap.seen_cells(frame, *self._saved[:2])))
+            if self._saved
+            else [],
         }
         self.pose = pose
         message = {**rooms, **pose} if changed else pose
         for cb in list(self._listeners):
             cb(message)
+
+    def _new(self, map_id: int, seen: set[tuple[int, int]]) -> set[tuple[int, int]]:
+        """What the lidar sees on open floor that it didn't in the cleaning before this one.
+
+        The first frame of a map is the reference: nothing is new then. When a cleaning starts, what the last one saw
+        becomes the reference, so what shows up stays new until the next cleaning.
+        """
+        active = parse_enum(Status, self._device.values.get("status")) in ACTIVE_STATUSES
+        known = self._known
+        if not known or known.get("map_id") != map_id:
+            known = self._known = {"map_id": map_id, "before": sorted(seen), "last": sorted(seen)}
+            self._save()
+        elif active and not self._in_task:
+            known["before"] = known["last"]
+            self._save()
+        if self._in_task and not active:
+            self._save()
+        self._in_task = active
+        known["last"] = sorted(seen)
+        before = known["before"]
+        if self._reference is None or self._reference[0] != id(before):
+            # A cell or its neighbour: the lidar's outline wobbles by a cell between cleanings.
+            near = {(x + dx, y + dy) for x, y in before for dx in (-1, 0, 1) for dy in (-1, 0, 1)}
+            self._reference = (id(before), near)
+        return seen - self._reference[1]
+
+    @callback
+    def _save(self) -> None:
+        if self._store is not None:
+            self._store.async_delay_save(lambda: self._known or {}, 5)

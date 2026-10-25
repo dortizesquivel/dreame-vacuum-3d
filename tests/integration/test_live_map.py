@@ -20,7 +20,7 @@ from custom_components.dreame_vacuum_3d.protocol.cloud import CloudAuthError
 from custom_components.dreame_vacuum_3d.protocol.miio import MiioTimeoutError
 from tests.integration.helpers import setup_fixture_entry
 from tests.integration.test_init import ENTRY_DATA
-from tests.map_frames import SAVED_ROWS, encrypt, frame, live, saved
+from tests.map_frames import SAVED_ROWS, SEG_INF, encrypt, frame, live
 
 DID = ENTRY_DATA["did"]
 IN_ROOM_1 = (-925, -425, 90)  # cell (1, 1)
@@ -146,22 +146,53 @@ async def test_errors_keep_the_last_map_and_warn_once(hass: HomeAssistant, caplo
     assert live_map.message["robot"] == [-700, -400, 0] and live_map.message["room"] == 2
 
 
-async def test_obstacles_furniture_and_new_cells_reach_the_card(hass: HomeAssistant) -> None:
-    entry, _miio = await setup(hass)
-    live_map = entry.runtime_data.map
+def _with(*things: tuple[int, int], map_id: int = 45) -> str:
+    """A live frame of the test house where the lidar sees these cells, and an obstacle and a sofa."""
     rows = [[3 if v else 0 for v in row] for row in SAVED_ROWS]
-    rows[0][5] = 2  # something new in room 2, three cells from its walls
+    for x, y in things:
+        rows[y][x] = 2
     data = {
-        "rism": saved(),
+        "rism": frame(SAVED_ROWS, {"seg_inf": SEG_INF}, map_id=map_id, frame_id=0),
         "ai_obstacle": [[-925, -425, 133, 0.99]],
         "ai_furniture_new": [[0, 0, 4, 1, -1000, -500, 150, 100]],
     }
-    entry.runtime_data.coordinator.device.request_map = AsyncMock(return_value=(frame(rows, data), None))
-    await live_map.refresh()
-    pose = live_map.pose
+    return frame(rows, data)
+
+
+async def test_obstacles_furniture_and_what_is_new_since_the_last_cleaning(hass: HomeAssistant) -> None:
+    entry, _miio = await setup(hass)  # its first frame, with nothing on the floor, is the reference
+
+    async def frame_with(*things: tuple[int, int], map_id: int = 45) -> list[int]:
+        entry.runtime_data.coordinator.device.request_map = AsyncMock(
+            return_value=(_with(*things, map_id=map_id), None)
+        )
+        await entry.runtime_data.map.refresh()
+        return entry.runtime_data.map.pose["new_cells"]
+
+    def status(value: Status) -> None:
+        entry.runtime_data.coordinator.device.values["status"] = value.value
+
+    status(Status.CLEANING)
+    assert await frame_with((7, 0)) == [7, 0, 1]  # the robot finds a box
+    pose = entry.runtime_data.map.pose
     assert pose["obstacles"] == [{"x": -925, "y": -425, "type": "shoes", "confidence": 99, "source": "camera"}]
     assert pose["furniture"][0]["type"] == "two_seat_sofa"
-    assert pose["new_cells"] == [5, 0, 1]
+    status(Status.IDLE)
+    assert await frame_with((7, 0)) == [7, 0, 1]  # still new after the cleaning
+
+    # After a restart the reference comes back from storage, so the box is still new…
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=10))
+    await hass.async_block_till_done()
+    await setup_reload(hass, entry)
+    assert await frame_with((7, 0)) == [7, 0, 1]
+
+    # …until the next cleaning starts: then the box is what was there last time.
+    status(Status.CLEANING)
+    assert await frame_with((7, 0)) == []
+    assert await frame_with((7, 0), (5, 0)) == [5, 0, 1]
+
+    # Another saved map starts a new reference.
+    assert await frame_with((7, 0), (5, 0), map_id=46) == []
 
 
 async def test_live_map_without_saved_rooms_and_unknown_robot(hass: HomeAssistant) -> None:
