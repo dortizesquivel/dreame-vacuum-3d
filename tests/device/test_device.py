@@ -18,6 +18,7 @@ from custom_components.dreame_vacuum_3d.device.enums import (
     SuctionLevel,
     parse_enum,
 )
+from custom_components.dreame_vacuum_3d.protocol.miio import MiioCommandError
 from custom_components.dreame_vacuum_3d.protocol.miio_codec import MiioError
 
 FIXTURE = Path(__file__).parents[1] / "fixtures" / "x10plus" / "properties.json"
@@ -37,9 +38,7 @@ class FakeSend:
         fail: Exception | None = None,
         overrides: dict[tuple[int, int], Any] | None = None,
     ) -> None:
-        self.by_siid_piid = {
-            (item["siid"], item["piid"]): item for item in (by_key or _fixture_by_key()).values()
-        }
+        self.by_siid_piid = {(item["siid"], item["piid"]): item for item in (by_key or _fixture_by_key()).values()}
         self.fail = fail
         self.overrides = overrides or {}
         self.calls: list[tuple[str, Any]] = []
@@ -132,7 +131,9 @@ async def test_refresh_returns_changed_keys(caps) -> None:
     assert requested == {caps.properties[k] for k in device.available}
 
 
-async def test_cloud_fallback_then_return_to_local(caps) -> None:
+async def test_cloud_fallback_then_return_to_local(caps, monkeypatch: pytest.MonkeyPatch) -> None:
+    now = 1000.0
+    monkeypatch.setattr("custom_components.dreame_vacuum_3d.device.device.monotonic", lambda: now)
     local = FakeSend(fail=MiioError("udp down"))
     cloud = FakeSend()
     device = DreameDevice(caps, local, cloud)
@@ -141,14 +142,32 @@ async def test_cloud_fallback_then_return_to_local(caps) -> None:
     assert cloud.calls
     assert all(m == "get_properties" for m, _ in cloud.calls)
 
-    # Local recovers on the next refresh.
+    # While on the cloud, local isn't retried (each retry waits for its timeouts).
     local.fail = None
     local.calls.clear()
+    await device.async_refresh()
+    assert device.channel == "cloud"
+    assert local.calls == []
+
+    # After the retry window, local is back.
+    now += 301
     cloud.calls.clear()
     await device.async_refresh()
     assert device.channel == "local"
     assert local.calls
     assert cloud.calls == []
+
+
+async def test_command_error_keeps_trying_local(caps) -> None:
+    """A robot that answers locally with an error still works locally."""
+    local = FakeSend(fail=MiioCommandError(-1, "busy"))
+    cloud = FakeSend()
+    device = DreameDevice(caps, local, cloud)
+    await device.async_discover()
+    assert device.channel == "cloud"
+    local.fail = None
+    await device.async_refresh()
+    assert device.channel == "local"
 
 
 async def test_action_commands_payloads(device: DreameDevice) -> None:
@@ -162,9 +181,7 @@ async def test_action_commands_payloads(device: DreameDevice) -> None:
     ]:
         local.calls.clear()
         await method()
-        assert local.calls == [
-            ("action", {"did": "call", "siid": expected[0], "aiid": expected[1], "in": []})
-        ]
+        assert local.calls == [("action", {"did": "call", "siid": expected[0], "aiid": expected[1], "in": []})]
 
 
 async def test_set_and_reset_consumable(device: DreameDevice) -> None:
@@ -196,6 +213,23 @@ async def test_clean_segment_payload(device: DreameDevice) -> None:
             },
         )
     ]
+
+
+async def test_clean_segment_defaults_to_the_robots_settings(caps) -> None:
+    """Like the app: no suction/water given → the robot's own; order 1 for every room on the X10+."""
+    local = FakeSend()
+    device = DreameDevice(caps, local, FakeSend())
+    await device.async_discover()  # fixture: suction strong (2), water high (3), customized_cleaning present
+    local.calls.clear()
+    await device.clean_segment([6, 3])
+    payload = json.dumps({"selects": [[6, 1, 2, 3, 1], [3, 1, 2, 3, 1]]}, separators=(",", ":"))
+    assert local.calls[-1][1]["in"][1] == {"piid": 10, "value": payload}
+    assert device.segments == [6, 3]
+
+    await device.clean_zone([1000, 2000, 3000, 4000])
+    assert '"areas":[[1000,2000,3000,4000,1,2,3]]' in local.calls[-1][1]["in"][1]["value"]
+    await device.clean_spot([1500, 2500], suction=[0])
+    assert '"points":[[1500,2500,1,0,3]]' in local.calls[-1][1]["in"][1]["value"]
 
 
 async def test_clean_zone_payload(device: DreameDevice) -> None:

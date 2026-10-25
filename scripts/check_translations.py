@@ -1,4 +1,5 @@
 """Fail if strings.json, en.json or es.json is missing a key another one has."""
+
 import json
 from pathlib import Path
 import sys

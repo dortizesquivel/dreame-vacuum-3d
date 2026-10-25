@@ -18,7 +18,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .const import CONF_AUTH, CONF_DID, DOMAIN
@@ -35,6 +35,7 @@ from .protocol.cloud import (
 )
 from .protocol.miio import MiioClient
 from .protocol.miio_codec import MiioError
+from .protocol.miot import Send
 
 PLATFORMS: list[str] = [
     "vacuum",
@@ -44,6 +45,7 @@ PLATFORMS: list[str] = [
     "switch",
     "number",
     "button",
+    "time",
 ]
 
 
@@ -79,7 +81,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bo
     miio = MiioClient(entry.data[CONF_HOST], entry.data[CONF_TOKEN])
     did = str(entry.data[CONF_DID])
     caps = await hass.async_add_executor_job(load, entry.data[CONF_MODEL])
-    device = DreameDevice(caps, miio.send, cloud.rpc_sender(did))
+    device = DreameDevice(caps, miio.send, _cloud_sender(hass, entry, cloud, did))
 
     try:
         await device.async_discover()
@@ -92,17 +94,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bo
         raise ConfigEntryNotReady(str(err)) from err
 
     coordinator = DreameDataUpdateCoordinator(hass, entry, device)
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except Exception:
+        await miio.close()
+        raise
 
     notifier = DreameNotifier(hass, entry, coordinator)
-    entry.runtime_data = RuntimeData(
-        coordinator=coordinator, cloud=cloud, miio=miio, notifier=notifier
-    )
+    entry.runtime_data = RuntimeData(coordinator=coordinator, cloud=cloud, miio=miio, notifier=notifier)
     _async_register_device(hass, entry, info)
+    _async_remove_dnd_numbers(hass, did)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     # Listen after entities exist so events can resolve entity_id / device_id.
-    notifier.async_setup()
+    await notifier.async_setup()
     return True
 
 
@@ -122,6 +127,34 @@ def _persist_auth(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud) -
         hass.config_entries.async_update_entry(entry, data={**entry.data, CONF_AUTH: payload})
 
 
+def _cloud_sender(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud, did: str) -> Send:
+    """Cloud RPC that logs in again with the saved password when the session expires.
+
+    Only a login that needs a person (captcha, two-factor) ends in a reauth.
+    """
+
+    async def send(method: str, params: Any) -> Any:
+        try:
+            return await cloud.rpc(did, method, params)
+        except CloudAuthError:
+            try:
+                await cloud.login(entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
+            except CloudLoginRequired as err:
+                raise CloudAuthError("invalid_auth") from err
+            _persist_auth(hass, entry, cloud)
+            return await cloud.rpc(did, method, params)
+
+    return send
+
+
+def _async_remove_dnd_numbers(hass: HomeAssistant, did: str) -> None:
+    """0.1.0 had the do-not-disturb window as numbers of minutes; they are time entities now."""
+    registry = er.async_get(hass)
+    for key in ("dnd_start", "dnd_end"):
+        if entity_id := registry.async_get_entity_id("number", DOMAIN, f"{did}_{key}"):
+            registry.async_remove(entity_id)
+
+
 async def _miio_info(miio: MiioClient, cloud: XiaomiCloud, did: str) -> dict[str, Any]:
     """Read `miIO.info` locally, falling back to the cloud."""
     try:
@@ -131,9 +164,7 @@ async def _miio_info(miio: MiioClient, cloud: XiaomiCloud, did: str) -> dict[str
     return result if isinstance(result, dict) else {}
 
 
-def _async_register_device(
-    hass: HomeAssistant, entry: ConfigEntry, info: dict[str, Any]
-) -> None:
+def _async_register_device(hass: HomeAssistant, entry: ConfigEntry, info: dict[str, Any]) -> None:
     mac = entry.data.get(CONF_MAC) or info.get("mac") or ""
     connections = {(dr.CONNECTION_NETWORK_MAC, dr.format_mac(mac))} if mac else set()
     dr.async_get(hass).async_get_or_create(

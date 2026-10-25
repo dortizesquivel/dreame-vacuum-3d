@@ -318,6 +318,104 @@
           "local": "Local",
           "cloud": "Cloud"
         }
+      },
+      "task_status": {
+        "name": "Task",
+        "state": {
+          "completed": "Completed",
+          "auto_cleaning": "Auto cleaning",
+          "zone_cleaning": "Zone cleaning",
+          "segment_cleaning": "Segment cleaning",
+          "spot_cleaning": "Spot cleaning",
+          "fast_mapping": "Fast mapping",
+          "auto_cleaning_paused": "Auto cleaning paused",
+          "zone_cleaning_paused": "Zone cleaning paused",
+          "segment_cleaning_paused": "Segment cleaning paused",
+          "spot_cleaning_paused": "Spot cleaning paused",
+          "map_cleaning_paused": "Map cleaning paused",
+          "docking_paused": "Docking paused",
+          "mopping_paused": "Mopping paused",
+          "segment_mopping_paused": "Segment mopping paused",
+          "zone_mopping_paused": "Zone mopping paused",
+          "auto_mopping_paused": "Auto mopping paused",
+          "auto_docking_paused": "Auto docking paused",
+          "segment_docking_paused": "Segment docking paused",
+          "zone_docking_paused": "Zone docking paused",
+          "cruising_path": "Cruising path",
+          "cruising_path_paused": "Cruising path paused",
+          "cruising_point": "Cruising point",
+          "cruising_point_paused": "Cruising point paused",
+          "summon_clean_paused": "Summon clean paused",
+          "returning_install_mop": "Returning install mop",
+          "returning_remove_mop": "Returning remove mop",
+          "station_cleaning": "Station cleaning",
+          "pet_finding": "Pet finding",
+          "auto_cleaning_washing_paused": "Auto cleaning washing paused",
+          "area_cleaning_washing_paused": "Area cleaning washing paused",
+          "custom_cleaning_washing_paused": "Custom cleaning washing paused",
+          "picking_up_item": "Picking up item",
+          "picking_up_item_paused": "Picking up item paused",
+          "picking_up_item_success": "Picking up item success",
+          "remote_pickup_initializing": "Remote pickup initializing",
+          "remote_pickup_identifing": "Remote pickup identifing",
+          "manual_remote_pickup": "Manual remote pickup",
+          "automatic_remote_pickup": "Automatic remote pickup",
+          "remote_pickup_in_progress": "Remote pickup in progress",
+          "remote_pickup_paused": "Remote pickup paused",
+          "placing_item": "Placing item",
+          "placing_item_paused": "Placing item paused"
+        }
+      },
+      "relocation_status": {
+        "name": "Relocation",
+        "state": {
+          "located": "Located",
+          "locating": "Locating",
+          "failed": "Failed",
+          "success": "Success"
+        }
+      },
+      "self_wash_base_status": {
+        "name": "Self-wash base",
+        "state": {
+          "idle": "Idle",
+          "washing": "Washing",
+          "drying": "Drying",
+          "returning": "Returning",
+          "paused": "Paused",
+          "clean_add_water": "Clean add water",
+          "adding_water": "Adding water",
+          "returning_for_dry_mop": "Returning for dry mop"
+        }
+      },
+      "auto_empty_status": {
+        "name": "Auto-empty status",
+        "state": {
+          "idle": "Idle",
+          "active": "Active",
+          "not_performed": "Not performed"
+        }
+      },
+      "dust_collection": {
+        "name": "Dust collection",
+        "state": {
+          "not_available": "Not available",
+          "available": "Available",
+          "over_use": "Over use",
+          "never": "Never"
+        }
+      },
+      "low_water_warning": {
+        "name": "Water warning",
+        "state": {
+          "no_warning": "No warning",
+          "no_water_left_dismiss": "No water left dismiss",
+          "no_water_left": "No water left",
+          "no_water_left_after_clean": "No water left after clean",
+          "no_water_for_clean": "No water for clean",
+          "low_water": "Low water",
+          "tank_not_installed": "Tank not installed"
+        }
       }
     },
     "binary_sensor": {
@@ -412,17 +510,50 @@
       },
       "self_clean": {
         "name": "Self-clean"
+      },
+      "resume_cleaning": {
+        "name": "Resume cleaning"
+      },
+      "customized_cleaning": {
+        "name": "Customized cleaning"
+      },
+      "multi_floor_map": {
+        "name": "Multi-floor map"
+      },
+      "auto_dust_collecting": {
+        "name": "Auto-empty"
+      },
+      "carpet_recognition": {
+        "name": "Carpet recognition"
+      },
+      "water_electrolysis": {
+        "name": "Water electrolysis"
+      },
+      "ai_furniture_detection": {
+        "name": "AI furniture detection"
+      },
+      "ai_obstacle_detection": {
+        "name": "AI obstacle detection"
+      },
+      "ai_obstacle_picture": {
+        "name": "Obstacle pictures"
+      },
+      "ai_pet_detection": {
+        "name": "AI pet detection"
+      },
+      "ai_image_upload": {
+        "name": "Upload AI pictures"
+      },
+      "fuzzy_obstacle_detection": {
+        "name": "Fuzzy obstacle detection"
+      },
+      "pet_picture": {
+        "name": "Pet pictures"
       }
     },
     "number": {
       "volume": {
         "name": "Volume"
-      },
-      "dnd_start": {
-        "name": "Do not disturb start"
-      },
-      "dnd_end": {
-        "name": "Do not disturb end"
       }
     },
     "button": {
@@ -465,6 +596,31 @@
       "dry_mop": {
         "name": "Dry mop"
       }
+    },
+    "time": {
+      "dnd_start": {
+        "name": "Do not disturb start"
+      },
+      "dnd_end": {
+        "name": "Do not disturb end"
+      }
+    }
+  },
+  "exceptions": {
+    "command_failed": {
+      "message": "The robot didn't take the command: {error}"
+    },
+    "notify_cleanup_completed": {
+      "message": "Cleaning completed"
+    },
+    "notify_cleaning_paused": {
+      "message": "Cleaning paused"
+    },
+    "notify_station_warning": {
+      "message": "Station warning ({code})"
+    },
+    "notify_consumable": {
+      "message": "{name}: {life}% left"
     }
   }
 }

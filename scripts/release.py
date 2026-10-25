@@ -7,6 +7,7 @@
 Notes come from the commit subjects since the previous v* tag. --dry-run
 only prints them.
 """
+
 from __future__ import annotations
 
 from datetime import date

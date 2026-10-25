@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -41,6 +41,10 @@ class FixtureMiio:
         self.send = AsyncMock(side_effect=self._send)
         self.close = AsyncMock()
 
+    async def rpc(self, _did: str, method: str, params: Any = None) -> Any:
+        """The same robot reached through the cloud."""
+        return await self._send(method, params)
+
     async def _send(self, method: str, params: Any = None) -> Any:
         self.calls.append((method, params))
         if method == "miIO.info":
@@ -70,9 +74,7 @@ class FixtureMiio:
         if method == "set_properties":
             for item in params or []:
                 self.overrides[(item["siid"], item["piid"])] = item["value"]
-            return [
-                {"did": p["did"], "siid": p["siid"], "piid": p["piid"], "code": 0} for p in (params or [])
-            ]
+            return [{"did": p["did"], "siid": p["siid"], "piid": p["piid"], "code": 0} for p in (params or [])]
         if method == "action":
             return {"did": "call", "siid": params["siid"], "aiid": params["aiid"], "code": 0, "out": []}
         raise AssertionError(f"unexpected method {method}")
@@ -93,7 +95,7 @@ async def setup_fixture_entry(
     entry.add_to_hass(hass)
     miio = FixtureMiio(overrides)
     cloud = _mock_cloud()
-    cloud.rpc_sender = MagicMock(return_value=AsyncMock(side_effect=miio._send))
+    cloud.rpc = AsyncMock(side_effect=miio.rpc)
 
     with (
         patch("custom_components.dreame_vacuum_3d.XiaomiCloud", return_value=cloud),

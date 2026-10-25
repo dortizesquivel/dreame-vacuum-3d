@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import DreameDataUpdateCoordinator
 from .device.device import DreameDevice
-from .entity import DreameEntity
+from .entity import DreameEntity, command
 
 # reset_<name> action ↔ property that must be available for the button to appear.
 _RESET_REQUIRES: dict[str, str] = {
@@ -48,7 +48,7 @@ def _make_reset(name: str) -> DreameButtonEntityDescription:
     return DreameButtonEntityDescription(
         key=action,
         entity_category=EntityCategory.CONFIG,
-        press_fn=lambda device, n=name: device.reset_consumable(n),
+        press_fn=lambda device: device.reset_consumable(name),
         available_fn=_available,
     )
 
@@ -60,22 +60,25 @@ BUTTONS: tuple[DreameButtonEntityDescription, ...] = (
         translation_key="empty",
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda device: device.start_auto_empty(),
-        available_fn=lambda device: "start_auto_empty" in device.caps.actions
-        and "auto_empty_status" in device.available,
+        available_fn=lambda device: (
+            "start_auto_empty" in device.caps.actions and "auto_empty_status" in device.available
+        ),
     ),
     DreameButtonEntityDescription(
         key="wash_mop",
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda device: device.start_washing(),
-        available_fn=lambda device: "start_washing" in device.caps.actions
-        and "self_wash_base_status" in device.available,
+        available_fn=lambda device: (
+            "start_washing" in device.caps.actions and "self_wash_base_status" in device.available
+        ),
     ),
     DreameButtonEntityDescription(
         key="dry_mop",
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda device: device.start_drying(),
-        available_fn=lambda device: "start_washing" in device.caps.actions
-        and "self_wash_base_status" in device.available,
+        available_fn=lambda device: (
+            "start_washing" in device.caps.actions and "self_wash_base_status" in device.available
+        ),
     ),
 )
 
@@ -89,9 +92,7 @@ async def async_setup_entry(
     coordinator: DreameDataUpdateCoordinator = entry.runtime_data.coordinator
     device = coordinator.device
     async_add_entities(
-        DreameButtonEntity(coordinator, description)
-        for description in BUTTONS
-        if description.available_fn(device)
+        DreameButtonEntity(coordinator, description) for description in BUTTONS if description.available_fn(device)
     )
 
 
@@ -100,6 +101,7 @@ class DreameButtonEntity(DreameEntity, ButtonEntity):
 
     entity_description: DreameButtonEntityDescription
 
+    @command
     async def async_press(self) -> None:
         await self.entity_description.press_fn(self.device)
         await self.coordinator.async_request_refresh()

@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from homeassistant.const import ATTR_ENTITY_ID, STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
+import pytest
 
 from custom_components.dreame_vacuum_3d.const import DOMAIN
 from custom_components.dreame_vacuum_3d.device.enums import CleaningMode, SuctionLevel
+from custom_components.dreame_vacuum_3d.protocol.miot import MiotError
 from tests.integration.helpers import setup_fixture_entry
 
 
@@ -73,18 +76,18 @@ async def test_switches_and_numbers(hass: HomeAssistant) -> None:
     _entry, miio = await setup_fixture_entry(hass)
     switches = _by_key(hass, "switch")
     numbers = _by_key(hass, "number")
+    times = _by_key(hass, "time")
 
-    assert {"carpet_boost", "dnd", "child_lock", "obstacle_avoidance", "auto_mount_mop", "self_clean"} <= set(
-        switches
-    )
-    assert {"volume", "dnd_start", "dnd_end"} <= set(numbers)
+    assert {"carpet_boost", "dnd", "child_lock", "obstacle_avoidance", "self_clean", "resume_cleaning"} <= set(switches)
+    assert "auto_mount_mop" not in switches  # answers, but the X10+ doesn't mount its mop
+    assert set(numbers) == {"volume"}
+    assert set(times) == {"dnd_start", "dnd_end"}
 
     assert hass.states.get(switches["dnd"].entity_id).state == STATE_ON
     assert hass.states.get(switches["child_lock"].entity_id).state == STATE_OFF
     assert float(hass.states.get(numbers["volume"].entity_id).state) == 100
-    # dnd_start 22:00 → 1320 minutes
-    assert float(hass.states.get(numbers["dnd_start"].entity_id).state) == 22 * 60
-    assert float(hass.states.get(numbers["dnd_end"].entity_id).state) == 8 * 60
+    assert hass.states.get(times["dnd_start"].entity_id).state == "22:00:00"
+    assert hass.states.get(times["dnd_end"].entity_id).state == "08:00:00"
 
     miio.calls.clear()
     await hass.services.async_call(
@@ -93,9 +96,7 @@ async def test_switches_and_numbers(hass: HomeAssistant) -> None:
         {ATTR_ENTITY_ID: switches["dnd"].entity_id},
         blocking=True,
     )
-    assert any(
-        m == "set_properties" and any(p.get("value") is False for p in params) for m, params in miio.calls
-    )
+    assert any(m == "set_properties" and any(p.get("value") is False for p in params) for m, params in miio.calls)
 
     miio.calls.clear()
     await hass.services.async_call(
@@ -108,14 +109,40 @@ async def test_switches_and_numbers(hass: HomeAssistant) -> None:
 
     miio.calls.clear()
     await hass.services.async_call(
-        "number",
+        "time",
         "set_value",
-        {ATTR_ENTITY_ID: numbers["dnd_start"].entity_id, "value": 23 * 60},
+        {ATTR_ENTITY_ID: times["dnd_start"].entity_id, "time": "23:30:00"},
         blocking=True,
     )
-    assert any(
-        m == "set_properties" and any(p.get("value") == "23:00" for p in params) for m, params in miio.calls
-    )
+    assert any(m == "set_properties" and any(p.get("value") == "23:30" for p in params) for m, params in miio.calls)
+
+
+async def test_ai_switches_flip_one_bit(hass: HomeAssistant) -> None:
+    entry, miio = await setup_fixture_entry(hass)
+    switches = _by_key(hass, "switch")
+    # Fixture 4.22 = 287: furniture, obstacle, picture, fluid, pet and fuzzy on; image upload and pet picture off.
+    assert hass.states.get(switches["ai_pet_detection"].entity_id).state == STATE_ON
+    assert hass.states.get(switches["ai_image_upload"].entity_id).state == STATE_OFF
+
+    for service, key, expected in [
+        ("turn_off", "ai_pet_detection", 287 - 16),
+        ("turn_on", "ai_image_upload", 287 + 32),
+    ]:
+        miio.overrides[(4, 22)] = 287
+        await entry.runtime_data.coordinator.async_refresh()
+        miio.calls.clear()
+        await hass.services.async_call("switch", service, {ATTR_ENTITY_ID: switches[key].entity_id}, blocking=True)
+        writes = [p for m, params in miio.calls if m == "set_properties" for p in params]
+        assert writes == [{"did": "set", "siid": 4, "piid": 22, "value": expected}]
+
+
+async def test_failed_command_is_a_readable_error(hass: HomeAssistant) -> None:
+    _entry, miio = await setup_fixture_entry(hass)
+    switches = _by_key(hass, "switch")
+    miio.send.side_effect = MiotError(-4004)
+    with pytest.raises(HomeAssistantError) as err:
+        await hass.services.async_call("switch", "turn_off", {ATTR_ENTITY_ID: switches["dnd"].entity_id}, blocking=True)
+    assert err.value.translation_key == "command_failed"
 
 
 async def test_buttons_reset_wash_dry_empty(hass: HomeAssistant) -> None:
@@ -123,7 +150,7 @@ async def test_buttons_reset_wash_dry_empty(hass: HomeAssistant) -> None:
     buttons = _by_key(hass, "button")
 
     assert "reset_main_brush" in buttons
-    assert "reset_detergent" in buttons
+    assert "reset_detergent" not in buttons  # no detergent on the X10+
     assert "reset_silver_ion" not in buttons  # property missing on X10+ dump
     assert "wash_mop" in buttons
     assert "dry_mop" in buttons

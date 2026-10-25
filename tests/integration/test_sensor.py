@@ -37,8 +37,13 @@ async def test_sensors_from_fixture(hass: HomeAssistant) -> None:
         "side_brush_left",
         "filter_left",
         "mop_pad_left",
-        "detergent_left",
         "channel",
+        "task_status",
+        "relocation_status",
+        "self_wash_base_status",
+        "auto_empty_status",
+        "dust_collection",
+        "low_water_warning",
     }
     assert expected_present <= set(sensors)
 
@@ -47,11 +52,13 @@ async def test_sensors_from_fixture(hass: HomeAssistant) -> None:
     assert "dirty_water_tank_status" not in sensors
     assert "dust_bag_status" not in sensors
     assert "silver_ion_left" not in sensors
+    assert "detergent_left" not in sensors  # answers, but the X10+ has no detergent
+    assert hass.states.get(sensors["dust_collection"].entity_id).state == "available"
+    assert hass.states.get(sensors["low_water_warning"].entity_id).state == "no_warning"
 
     state = hass.states.get(sensors["state"].entity_id)
     assert state is not None
     assert state.state == "charging_completed"
-
 
     battery = hass.states.get(sensors["battery_level"].entity_id)
     assert battery is not None
@@ -83,7 +90,6 @@ async def test_binary_sensors_from_fixture(hass: HomeAssistant) -> None:
     assert charging is not None
     assert charging.state == "on"  # fixture charging_status=1 CHARGING
     assert binaries["charging_status"].translation_key == "charging"
-
 
     mop = hass.states.get(binaries["water_tank"].entity_id)
     assert mop is not None

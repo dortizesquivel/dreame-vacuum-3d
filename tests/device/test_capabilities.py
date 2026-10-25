@@ -33,8 +33,10 @@ def test_x10_plus_extends_the_base() -> None:
     assert caps.model == "dreame.vacuum.p2114a"
     assert caps.name == "Xiaomi Robot Vacuum X10+"
     assert caps.tested is True
-    assert dict(caps.properties) == dict(base.properties)
-    assert dict(caps.actions) == dict(base.actions)
+    # The X10+ answers these but has no such hardware.
+    hidden = {"auto_mount_mop", "detergent_left", "detergent_time_left"}
+    assert dict(caps.properties) == {k: v for k, v in base.properties.items() if k not in hidden}
+    assert dict(caps.actions) == {k: v for k, v in base.actions.items() if k != "reset_detergent"}
 
 
 def test_spot_checks_against_tasshack() -> None:
@@ -153,6 +155,6 @@ def test_no_shared_property_ids_beyond_known_aliases() -> None:
 
 
 def test_tasshack_counts() -> None:
-    caps = load("dreame.vacuum.p2114a")
+    caps = load("dreame.vacuum.unknown")
     assert len(caps.properties) == 371
     assert len(caps.actions) == 45

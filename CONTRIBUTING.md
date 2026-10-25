@@ -26,7 +26,7 @@ Signed-off-by: Your Name <you@example.com>
 ## Style
 
 - Match the code around you. Python follows Home Assistant conventions (async; executor jobs for blocking work).
-- `ruff check .` must pass. User-visible text is in English and Spanish: `strings.json`, `translations/en.json` and `translations/es.json` must share the same keys.
+- `ruff check .`, `ruff format --check .` and `mypy` must pass. User-visible text is in English and Spanish: `strings.json`, `translations/en.json` and `translations/es.json` must share the same keys.
 - No runtime Python dependencies beyond Home Assistant.
 
 ## Adding a model via diagnostics
@@ -52,6 +52,8 @@ To contribute a model:
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements_test.txt
 ruff check .
+ruff format --check .
+mypy
 python scripts/check_translations.py
 pytest
 ```

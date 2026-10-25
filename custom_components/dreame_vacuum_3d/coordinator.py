@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import CONF_COEXIST, DEFAULT_COEXIST, DOMAIN
 from .device.device import DreameDevice
 from .device.enums import Status, parse_enum
-from .protocol.cloud import CloudAuthError
+from .protocol.cloud import CloudAuthError, CloudConnectionError
 from .protocol.miio_codec import MiioError
 
 _LOGGER = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ class DreameDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             changed = await self.device.async_refresh()
         except CloudAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
-        except MiioError as err:
+        except (MiioError, CloudConnectionError) as err:
             raise UpdateFailed(str(err)) from err
 
         self.changed_keys = frozenset(changed)

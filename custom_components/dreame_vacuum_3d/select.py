@@ -22,7 +22,7 @@ from .device.enums import (
     WaterVolume,
     parse_enum,
 )
-from .entity import DreameEntity
+from .entity import DreameEntity, command
 
 
 def _options(enum_cls: type[IntEnum]) -> list[str]:
@@ -38,9 +38,7 @@ class DreameSelectEntityDescription(SelectEntityDescription):
     enum_cls: type[IntEnum] | None = None
 
 
-async def _set_enum(
-    coordinator: DreameDataUpdateCoordinator, key: str, enum_cls: type[IntEnum], option: str
-) -> None:
+async def _set_enum(coordinator: DreameDataUpdateCoordinator, key: str, enum_cls: type[IntEnum], option: str) -> None:
     member = enum_cls[option.upper()]
     await coordinator.device.set(key, member.value)
 
@@ -84,9 +82,7 @@ SELECTS: tuple[DreameSelectEntityDescription, ...] = (
         options=["1", "2", "3"],
         entity_category=EntityCategory.CONFIG,
         current_fn=lambda c: (
-            str(v)
-            if isinstance((v := c.device.values.get("auto_empty_frequency")), int) and 1 <= v <= 3
-            else None
+            str(v) if isinstance((v := c.device.values.get("auto_empty_frequency")), int) and 1 <= v <= 3 else None
         ),
         select_fn=lambda c, option: c.device.set("auto_empty_frequency", int(option)),
     ),
@@ -114,9 +110,7 @@ async def async_setup_entry(
     coordinator: DreameDataUpdateCoordinator = entry.runtime_data.coordinator
     available = coordinator.device.available
     async_add_entities(
-        DreameSelectEntity(coordinator, description)
-        for description in SELECTS
-        if description.key in available
+        DreameSelectEntity(coordinator, description) for description in SELECTS if description.key in available
     )
 
 
@@ -146,6 +140,7 @@ class DreameSelectEntity(DreameEntity, SelectEntity):
             return _current_enum(self.coordinator, description.key, description.enum_cls)
         return None
 
+    @command
     async def async_select_option(self, option: str) -> None:
         description = self.entity_description
         if description.select_fn is not None:

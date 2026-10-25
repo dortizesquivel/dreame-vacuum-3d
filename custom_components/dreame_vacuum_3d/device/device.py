@@ -5,24 +5,30 @@ from __future__ import annotations
 import json
 import logging
 from random import randrange
+from time import monotonic
 from typing import Any
 
 from custom_components.dreame_vacuum_3d.device.capabilities import Capabilities
 from custom_components.dreame_vacuum_3d.device.enums import CleaningMode, Status, parse_enum
 from custom_components.dreame_vacuum_3d.protocol import miot
+from custom_components.dreame_vacuum_3d.protocol.miio import MiioCommandError
 from custom_components.dreame_vacuum_3d.protocol.miio_codec import MiioError
 from custom_components.dreame_vacuum_3d.protocol.miot import Send
 
 _LOGGER = logging.getLogger(__name__)
 
 _DEFAULT_GRID = 100
+# After the robot stops answering locally, stay on the cloud this long before trying local again.
+_LOCAL_RETRY_SECONDS = 300
 
 
 def _coord(value: float | int) -> int:
     return round(value)
 
 
-def _pick(values: int | list[int], index: int, default: int) -> int:
+def _pick(values: int | list[int] | None, index: int, default: int) -> int:
+    if values is None:
+        return default
     if isinstance(values, list):
         return int(values[index]) if index < len(values) else default
     return int(values)
@@ -55,12 +61,19 @@ class DreameDevice:
         self.available: frozenset[str] = frozenset()
         self.values: dict[str, Any] = {}
         self._remote_control = False
+        self._local_retry_at = 0.0
+        # Rooms of the segment clean this integration started, for the task_status event.
+        self.segments: list[int] | None = None
 
     async def _send(self, method: str, params: Any) -> Any:
+        if self.channel == "cloud" and monotonic() < self._local_retry_at:
+            return await self._send_cloud(method, params)
         try:
             result = await self._send_local(method, params)
-        except MiioError:
+        except MiioError as err:
             _LOGGER.debug("local %s failed; trying cloud", method)
+            if not isinstance(err, MiioCommandError):  # the robot answered: local works
+                self._local_retry_at = monotonic() + _LOCAL_RETRY_SECONDS
             result = await self._send_cloud(method, params)
             self.channel = "cloud"
             return result
@@ -177,42 +190,57 @@ class DreameDevice:
     async def _start_custom(self, status: int, parameters: str) -> Any:
         status_piid = self.caps.properties["status"][1]
         props_piid = self.caps.properties["cleaning_properties"][1]
-        payload = [
+        payload: list[dict] = [
             {"piid": status_piid, "value": status},
             {"piid": props_piid, "value": parameters},
         ]
         return await self._action("start_custom", payload)
 
+    def _levels(self) -> tuple[int, int]:
+        """Current suction and water settings, the defaults for room/zone/spot cleaning (as in the app)."""
+        suction = self.values.get("suction_level")
+        water = self.values.get("water_volume")
+        return (
+            suction if isinstance(suction, int) else 1,
+            water if isinstance(water, int) else 2,
+        )
+
     async def clean_segment(
         self,
         segments: int | list[int],
         repeats: int | list[int] = 1,
-        suction: int | list[int] = 1,
-        water: int | list[int] = 2,
+        suction: int | list[int] | None = None,
+        water: int | list[int] | None = None,
     ) -> Any:
         """Clean rooms by segment id (Tasshack clean_segment payload shape)."""
         selected = segments if isinstance(segments, list) else [segments]
+        fan, wet = self._levels()
+        # Tasshack: an order other than 1 breaks robots with customized cleaning, like the X10+.
+        same_order = "customized_cleaning" in self.available
         cleanlist = [
             [
                 segment_id,
                 max(1, _pick(repeats, index, 1)),
-                _pick(suction, index, 1),
-                _pick(water, index, 2),
-                index + 1,
+                _pick(suction, index, fan),
+                _pick(water, index, wet),
+                1 if same_order else index + 1,
             ]
             for index, segment_id in enumerate(selected)
         ]
         params = json.dumps({"selects": cleanlist}, separators=(",", ":"))
-        return await self._start_custom(Status.SEGMENT_CLEANING.value, params)
+        result = await self._start_custom(Status.SEGMENT_CLEANING.value, params)
+        self.segments = selected
+        return result
 
     async def clean_zone(
         self,
         zones: list[int] | list[list[int]],
         repeats: int | list[int] = 1,
-        suction: int | list[int] = 1,
-        water: int | list[int] = 2,
+        suction: int | list[int] | None = None,
+        water: int | list[int] | None = None,
     ) -> Any:
         """Clean rectangles [[x0,y0,x1,y1], ...] (Tasshack clean_zone payload)."""
+        fan, wet = self._levels()
         areas: list[list[int]] = []
         for index, zone in enumerate(_rects(zones)):
             if len(zone) != 4:
@@ -224,8 +252,8 @@ class DreameDevice:
                     _coord(zone[2]),
                     _coord(zone[3]),
                     max(1, _pick(repeats, index, 1)),
-                    _pick(suction, index, 1),
-                    _pick(water, index, 2),
+                    _pick(suction, index, fan),
+                    _pick(water, index, wet),
                 ]
             )
         params = json.dumps({"areas": areas}, separators=(",", ":"))
@@ -235,17 +263,18 @@ class DreameDevice:
         self,
         points: list[int] | list[list[int]],
         repeats: int | list[int] = 1,
-        suction: int | list[int] = 1,
-        water: int | list[int] = 2,
+        suction: int | list[int] | None = None,
+        water: int | list[int] | None = None,
     ) -> Any:
         """Clean around points (Tasshack clean_spot payload)."""
+        fan, wet = self._levels()
         cleanlist = [
             [
                 _coord(point[0]),
                 _coord(point[1]),
                 max(1, _pick(repeats, index, 1)),
-                _pick(suction, index, 1),
-                _pick(water, index, 2),
+                _pick(suction, index, fan),
+                _pick(water, index, wet),
             ]
             for index, point in enumerate(_points(points))
         ]
@@ -272,9 +301,7 @@ class DreameDevice:
         params = json.dumps({"areas": areas}, separators=(",", ":"))
         return await self._start_custom(Status.ZONE_CLEANING.value, params)
 
-    async def remote_control_move_step(
-        self, rotation: int = 0, velocity: int = 0, prompt: bool | None = None
-    ) -> None:
+    async def remote_control_move_step(self, rotation: int = 0, velocity: int = 0, prompt: bool | None = None) -> None:
         """Nudge the robot while remote-controlling (sets remote_control property)."""
         silent = prompt is False or (prompt is None and self._remote_control)
         audio = "false" if silent else "true"
