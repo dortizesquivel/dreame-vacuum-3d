@@ -2,6 +2,10 @@
 
 All notable releases of Dreame Vacuum 3D are listed here. The [Release workflow](.github/workflows/release.yml) prepends each tagged version.
 
+## v0.1.3 - 2026-10-25
+
+- feat: draw what the robot finds on the floor (b09e78d)
+
 ## v0.1.2 - 2026-10-25
 
 - feat: floor effects for vacuuming and mopping (6f25516)
