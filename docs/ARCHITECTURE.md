@@ -38,7 +38,7 @@ Dreame Vacuum 3D is a Home Assistant custom integration: Xiaomi cloud login, loc
 | `device/map.py` | Decodes map frames: header (robot and dock poses, grid), the saved map's rooms (cells as runs, names, centres), the path, the rooms being cleaned. Bad files raise `MapError` only (fuzzed). |
 | `live_map.py` | Asks for a frame every 5 s while the robot moves (one more when it stops, then every 15 min), downloads it, keeps the latest message and pushes it to listeners: the rooms only when they change, the pose with every frame. |
 | `websocket.py` | `dreame_vacuum_3d/map/subscribe` (entity read permission): the latest message at once, then each update. Subscriptions are kept per config entry, so they survive a reload. |
-| `card/` → `frontend/dreame-vacuum-3d-card.js` | The card's source (three.js, esbuild). The built bundle is committed; CI rebuilds it and fails if it differs. `__init__.py` serves it and adds it to the frontend with a content hash in the URL. |
+| `card/` → `frontend/dreame-vacuum-3d-card.js` | The card's source (three.js, esbuild). `effects.js` draws the floor effects along the path's strokes (vacuum, mop or both): dust cleared, a glint, the wet floor drying; `trail.js` dates each piece of the path so it dries in order. The built bundle is committed; CI rebuilds it and fails if it differs. `__init__.py` serves it and adds it to the frontend with a content hash in the URL. |
 | `diagnostics.py` | Redacted entry + raw MIoT properties for adding models. |
 | `strings.json`, `translations/en.json`, `es.json` | Config flow and entity texts; same keys (see `scripts/check_translations.py`). |
 
@@ -48,7 +48,7 @@ Dreame Vacuum 3D is a Home Assistant custom integration: Xiaomi cloud login, loc
 2. **Poll.** The coordinator asks the device for properties. While cleaning or returning it polls every ~2 s; while docked, 30 s (60 s with coexist); while sleeping or off, 120 s. Home Assistant entities update only when values change (`always_update=False`).
 3. **Control.** Vacuum services and entity writes go through `DreameDevice` → local miIO first; cloud RPC is the fallback channel when local fails.
 4. **Events.** The notifier watches task status, errors, warnings and consumable % against the configured threshold and fires domain events (and optional persistent notifications).
-5. **Map.** `LiveMap` runs `request_map` on the robot (locally, or through the cloud), downloads the file the robot uploaded, decodes it and sends the card the robot's pose, the dock, the path and the rooms of the saved map the frame carries (`rism`). The card turns map coordinates into the model's with the dock's pose in both.
+5. **Map.** `LiveMap` runs `request_map` on the robot (locally, or through the cloud), downloads the file the robot uploaded (named `<user id>/<did>/<n>,<key>`; the X10+ encrypts it with AES-CBC, keyed by that key and the model's `map_iv`), decodes it and sends the card the robot's pose, the dock, the path and the rooms of the saved map the frame carries (`rism`). The card turns map coordinates into the model's with the dock's pose in both.
 6. **Diagnostics.** Device page → Download diagnostics returns a redacted entry dump plus `siid.piid` property values (no token, password, auth, did, host, serial).
 
 ## Trust boundaries
