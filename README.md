@@ -109,11 +109,13 @@ Reconfigure the local IP if the robot's address changed. When the cloud session 
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements_test.txt
 ruff check .
+ruff format --check .
+mypy
 python scripts/check_translations.py
 pytest
 ```
 
-`main` is protected: changes go in through a pull request. Required checks are **Python tests** (ruff, translations, pytest with a coverage floor) and **Validate** (HACS + hassfest). Every commit must be signed off (`git commit -s`); see [CONTRIBUTING.md](CONTRIBUTING.md).
+`main` is protected: changes go in through a pull request. Required checks are **Python tests** (ruff, formatting, mypy, translations, pytest with a 95 % coverage floor), **DCO** (every commit signed off with `git commit -s`) and **Validate** (HACS + hassfest); see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Layout: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Security model: [docs/ASSURANCE.md](docs/ASSURANCE.md) and [SECURITY.md](SECURITY.md).
 
