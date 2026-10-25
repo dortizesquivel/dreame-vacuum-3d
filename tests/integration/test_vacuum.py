@@ -36,10 +36,11 @@ async def test_vacuum_created_from_fixture(hass: HomeAssistant) -> None:
 
     state = hass.states.get(entity_id)
     assert state is not None
-    # Fixture state=1 (SWEEPING) → cleaning; suction_level=2 → strong; battery 100.
-    assert state.state == VacuumActivity.CLEANING
+    # Fixture state=13 (CHARGING_COMPLETED) → docked; suction_level=2 → strong; battery 100.
+    assert state.state == VacuumActivity.DOCKED
     assert state.attributes.get("fan_speed") == "strong"
     assert state.attributes.get("battery_level") == 100
+
 
 
 async def test_vacuum_absent_without_state(hass: HomeAssistant) -> None:

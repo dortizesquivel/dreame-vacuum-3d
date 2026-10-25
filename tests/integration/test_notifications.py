@@ -44,7 +44,12 @@ async def test_task_status_completed_and_cancelled(hass: HomeAssistant) -> None:
     events: list[Event] = []
     hass.bus.async_listen(EVENT_TASK_STATUS, events.append)
 
-    # Fixture starts in SEGMENT_CLEANING (task_status=3); finish the job.
+    # Fixture task_status=0 (COMPLETED); enter an active task, then finish it.
+    miio.overrides[_TASK] = TaskStatus.SEGMENT_CLEANING.value
+    await entry.runtime_data.coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert events == []
+
     miio.overrides[_AREA] = 12
     miio.overrides[_TIME] = 8
     miio.overrides[_TASK] = TaskStatus.COMPLETED.value
@@ -72,6 +77,7 @@ async def test_task_status_completed_and_cancelled(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
     assert len(events) == 1
     assert events[0].data["completed"] is False
+
 
 
 async def test_consumable_threshold_cross(hass: HomeAssistant) -> None:
@@ -146,6 +152,11 @@ async def test_notify_options_gate_persistent_notifications(hass: HomeAssistant)
 
     events: list[Event] = []
     hass.bus.async_listen(EVENT_TASK_STATUS, events.append)
+
+    miio.overrides[_TASK] = TaskStatus.SEGMENT_CLEANING.value
+    await entry.runtime_data.coordinator.async_refresh()
+    await hass.async_block_till_done()
+    events.clear()
 
     miio.overrides[_TASK] = TaskStatus.COMPLETED.value
     await entry.runtime_data.coordinator.async_refresh()

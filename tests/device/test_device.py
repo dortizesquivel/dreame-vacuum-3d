@@ -104,8 +104,11 @@ async def test_discover_available_from_fixture(caps) -> None:
 
     expected = {k for k, row in _fixture_by_key().items() if row["code"] == 0 and k in caps.properties}
     assert device.available == frozenset(expected)
-    assert device.values["state"] == 1
+    # Live dump: docked after charge (CHARGING_COMPLETED).
+    assert device.values["state"] == 13
     assert device.values["battery_level"] == 100
+    assert device.values["charging_status"] == 1
+
     assert "off_peak_charging" not in device.available
     assert "off_peak_charging" not in device.values
     assert device.channel == "local"

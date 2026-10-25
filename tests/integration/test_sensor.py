@@ -50,7 +50,8 @@ async def test_sensors_from_fixture(hass: HomeAssistant) -> None:
 
     state = hass.states.get(sensors["state"].entity_id)
     assert state is not None
-    assert state.state == "sweeping"
+    assert state.state == "charging_completed"
+
 
     battery = hass.states.get(sensors["battery_level"].entity_id)
     assert battery is not None
@@ -60,7 +61,7 @@ async def test_sensors_from_fixture(hass: HomeAssistant) -> None:
 
     total_area = hass.states.get(sensors["total_cleaned_area"].entity_id)
     assert total_area is not None
-    assert float(total_area.state) == 33953
+    assert float(total_area.state) == 33956
     assert total_area.attributes.get("state_class") == "total_increasing"
 
     channel = hass.states.get(sensors["channel"].entity_id)
@@ -80,8 +81,9 @@ async def test_binary_sensors_from_fixture(hass: HomeAssistant) -> None:
 
     charging = hass.states.get(binaries["charging_status"].entity_id)
     assert charging is not None
-    assert charging.state == "off"  # fixture charging_status=2 NOT_CHARGING
+    assert charging.state == "on"  # fixture charging_status=1 CHARGING
     assert binaries["charging_status"].translation_key == "charging"
+
 
     mop = hass.states.get(binaries["water_tank"].entity_id)
     assert mop is not None
