@@ -2,6 +2,10 @@
 
 All notable releases of Dreame Vacuum 3D are listed here. The [Release workflow](.github/workflows/release.yml) prepends each tagged version.
 
+## v0.1.5 - 2026-10-26
+
+- feat: follow the robot while it cleans with the frames it logs in the cloud (27b4d9e)
+
 ## v0.1.4 - 2026-10-25
 
 - fix: new obstacles are what wasn't there in the last cleaning (d9f8955)
