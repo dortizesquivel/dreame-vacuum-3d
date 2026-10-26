@@ -6,6 +6,8 @@ const LANE = 6;            // cells between lanes (50 mm cells: 30 cm)
 const CLEARANCE = 4;       // cells kept from walls and furniture (20 cm: the robot's radius and a little)
 const SPEED = 300;         // mm/s, about a real robot's
 const TRAIL_STEP = 80;     // mm between path points
+const WASH_EVERY = 40000;  // mm mopped between trips to the dock to wash the mops, as the X10+ does
+const WASH_FOR = 20;       // s washing them
 
 /** A robot map from a Tasshack map dump (the JSON its camera keeps): the integration's message without the robot. */
 export function fromDump(d) {
@@ -65,7 +67,9 @@ export class Sim {
     this.newCells = [];
     this.route = [];
     this.active = [];
-    this.state = 'docked';
+    this.state = 'docked';    // as Home Assistant's vacuum entity has it
+    this.error = null;        // what stopped it, as the integration's error sensor has it
+    this.held = null;         // the state it had before a pause or an error
     this.frame = map.frame_id ?? 0;
   }
 
@@ -160,12 +164,20 @@ export class Sim {
   clean(rooms, modes = {}) {
     let at = this.toCell(this.pose);
     const route = [];
-    let mode = 'both';
+    let mode = 'both', mopped = 0;
+    const dock = this.toCell(this.map.dock);
     for (const room of rooms) {
       mode = modes[room] ?? 'both';
       for (const [a, b] of this.lanes(room)) {
         route.push(...this.way(at, a).map((c) => ({ c, mode })), { c: b, mode });
         at = b;
+        if (mode === 'vacuum') continue;
+        mopped += Math.abs(b[0] - a[0]) * this.g.size;
+        if (mopped < WASH_EVERY) continue;
+        // To the dock to wash the mops, and back to where it was.
+        mopped = 0;
+        route.push(...this.way(at, dock).map((c) => ({ c, mode, wash: 'to' })), { c: dock, mode, wash: 'at', wait: WASH_FOR },
+          ...this.way(dock, at).map((c) => ({ c, mode })));
       }
     }
     route.push(...this.way(at, this.toCell(this.map.dock)).map((c) => ({ c, mode, home: true })));
@@ -177,17 +189,67 @@ export class Sim {
     this.newCells = [];
     this.hidden = this.plantThings();
     this.state = 'cleaning';
+    this.error = this.held = null;
+  }
+
+  /** Home Assistant's vacuum services: pause, start (resume, or clean everything from the dock) and back to the dock. */
+  pause() {
+    if (!['cleaning', 'returning'].includes(this.state)) return;
+    this.held = this.state;
+    this.state = 'paused';
+  }
+
+  start(everything) {
+    if (this.held) [this.state, this.held, this.error] = [this.held, null, null];
+    else if (this.state === 'docked') everything();
+  }
+
+  goHome() {
+    if (this.state === 'docked') return;
+    const mode = this.path.at(-1)?.mode ?? 'vacuum';
+    this.route = [...this.way(this.toCell(this.pose), this.toCell(this.map.dock)).map((c) => ({ c, mode, home: true, mm: this.toMm(c) })),
+      { mm: this.map.dock.slice(0, 2), mode, home: true }];
+    this.state = 'returning';
+    this.error = this.held = null;
+  }
+
+  /** Stuck where it is, as when a wheel catches on something: it waits for start. */
+  stuck() {
+    if (!['cleaning', 'returning'].includes(this.state)) return;
+    this.held = this.state;
+    this.state = 'error';
+    this.error = 'robot_stuck';
+  }
+
+  /** What the robot itself says it does, as the integration's state sensor has it. */
+  get robotState() {
+    const next = this.route[0];
+    if (this.state === 'cleaning' && next?.wash === 'at') return 'washing';
+    if (this.state === 'returning' && next?.wash === 'to') return 'returning_to_wash';
+    const mode = this.path.at(-1)?.mode;
+    return { docked: 'charging_completed', paused: 'paused', error: 'error', returning: 'returning' }[this.state]
+      ?? { vacuum: 'sweeping', mop: 'mopping' }[mode] ?? 'sweeping_and_mopping';
   }
 
   /** Advance `seconds` of robot time. */
   step(seconds) {
+    if (this.state === 'paused' || this.state === 'error') return;
     let budget = SPEED * seconds;
     while (budget > 0 && this.route.length) {
       const next = this.route[0];
+      if (next.wait) {   // washing the mops at the dock
+        this.state = 'cleaning';
+        const t = budget / SPEED;
+        if (t < next.wait) { next.wait -= t; break; }
+        budget -= next.wait * SPEED;
+        this.route.shift();
+        continue;
+      }
       const [x, y] = this.pose, [tx, ty] = next.mm;
       const d = Math.hypot(tx - x, ty - y);
       if (d > 1) this.pose[2] = Math.round((Math.atan2(ty - y, tx - x) * 180) / Math.PI);
-      if (next.home && this.state === 'cleaning') this.state = 'returning';
+      // Heading to the dock (to finish, or to wash the mops) is "returning"; washing them there is still cleaning.
+      this.state = next.home || next.wash === 'to' ? 'returning' : 'cleaning';
       if (d <= budget) {
         this.pose[0] = tx; this.pose[1] = ty;
         budget -= d;

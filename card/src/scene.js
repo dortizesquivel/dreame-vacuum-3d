@@ -25,6 +25,8 @@ const MIN_GLIDE = 250;
 const BATCH_MS = 500;           // poses less than this apart came in the same batch
 const MAX_QUEUE = 8;
 const TURN = 0.2;               // of the way to its new heading the robot turns each frame, when it follows its path
+const BRUSH_SPIN = 14;          // rad/s of the side brushes while the robot vacuums
+const MOP_SPIN = 6;             // rad/s of the mop pads while it mops
 // Room tints without a model: categorical, mixed into the card's background so they work on light and dark themes.
 const ROOM_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#c84fb4', '#d6a72a', '#4fb6c8', '#7a5fd6', '#d65f5f', '#5f9e3a', '#8a8a8a'];
 const ease = (s) => (s < 0.5 ? 4 * s * s * s : 1 - Math.pow(-2 * s + 2, 3) / 2);
@@ -124,13 +126,19 @@ export class VacuumScene {
     this.mapGroup = new Group();        // rooms and walls drawn from the robot's map when there is no model
     this.overlayGroup = new Group();    // rooms being cleaned or picked
     this.thingGroup = new Group();      // obstacles, furniture and what the lidar newly sees
+    this.stuckGroup = new Group();      // where the robot got stuck in this task
     this.thingSig = '';
     this.lang = 'en';
     this.labelGroup = new Group();
     this.robot = makeRobot();
     this.robot.visible = false;
     this.effects = new FloorEffects(this.renderer, this.robot);
-    this.scene.add(this.modelGroup, this.mapGroup, this.effects.group, this.overlayGroup, this.thingGroup, this.labelGroup, this.robot);
+    this.badge = new CSS2DObject(document.createElement('div'));   // what the robot is doing, over it
+    this.badge.element.className = 'thing badge';
+    this.badge.position.y = 0.4;
+    this.badge.visible = false;
+    this.robot.add(this.badge);
+    this.scene.add(this.modelGroup, this.mapGroup, this.effects.group, this.overlayGroup, this.thingGroup, this.stuckGroup, this.labelGroup, this.robot);
     this.path = null;
 
     this.model = null;
@@ -266,6 +274,33 @@ export class VacuumScene {
   setCleaning(on) {
     this.robot.userData.cleaning = on;
     this.effects.setCleaning(on);
+    this.dirty = true;
+  }
+
+  /** A tag over the robot saying what it does (washing its mops, charging, an error…), or null for none. */
+  setBadge(text, warn = false) {
+    const el = this.badge.element;
+    this.badge.visible = !!text;
+    el.textContent = text ?? '';
+    el.dataset.warn = String(warn);
+    this.dirty = true;
+  }
+
+  /** Mark where the robot is now as where it got stuck, with why; it stays until a new task starts. */
+  markStuck(text) {
+    clearGroup(this.stuckGroup);
+    if (!this.robot.visible || !this.xf) return;
+    const { x, z } = this.robot.userData.pose, floor = this.xf.floor, color = this.theme?.error ?? '#db4437';
+    const ring = new Mesh(new RingGeometry(0.26, 0.32, 48), new MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(x, floor + LIFT * 2, z);
+    const el = document.createElement('div');
+    el.className = 'thing';
+    el.dataset.warn = 'true';
+    el.textContent = `⚠️ ${text}`;
+    const tag = new CSS2DObject(el);
+    tag.position.set(x, floor + 0.25, z);
+    this.stuckGroup.add(ring, tag);
     this.dirty = true;
   }
 
@@ -451,6 +486,7 @@ export class VacuumScene {
     const first = points[0]?.join() ?? null;
     const grew = first !== null && first === this.pathFirst && points.length >= this.pathCount;
     const since = grew ? points.slice(this.pathCount) : [];
+    if (!grew && first !== this.pathFirst && this.pathFirst !== null) clearGroup(this.stuckGroup);   // a new task
     this.pathFirst = first;
     this.pathCount = points.length;
     return since;
@@ -687,8 +723,16 @@ export class VacuumScene {
       }
     }
     const cleaning = this.robot.userData.cleaning;
-    const ring = this.robot.userData.ring;
+    const { ring, brushes, mops } = this.robot.userData;
     ring.visible = !!cleaning;
+    // The side brushes spin while it vacuums; the mop pads show, and spin, while it mops.
+    const mode = this.map?.path?.at(-1)?.mode ?? 'vacuum', dt = Math.min(0.1, (now - (this.lastFrame ?? now)) / 1000);
+    this.lastFrame = now;
+    mops.forEach((m) => { m.visible = mode !== 'vacuum'; });
+    if (cleaning) {
+      if (mode !== 'mop') brushes.forEach((b, i) => { b.rotation.y += (i ? -1 : 1) * BRUSH_SPIN * dt; });
+      if (mode !== 'vacuum') mops.forEach((m, i) => { m.rotation.y += (i ? -1 : 1) * MOP_SPIN * dt; });
+    }
     if (cleaning) {
       const p = (now / 1600) % 1;
       ring.scale.setScalar(1 + p * 1.6);
@@ -755,8 +799,31 @@ function makeRobot() {
   const ghost = new Mesh(body.geometry, new MeshBasicMaterial({ color: '#03a9f4', transparent: true, opacity: 0.7, depthWrite: false, depthFunc: GreaterDepth }));
   ghost.position.copy(body.position);
   ghost.renderOrder = 10;
-  g.add(body, lidar, mark, ring, ghost);
-  g.userData = { body, mark, ring, ghost, cleaning: false };
+  // Two side brushes at the front, three bristles each, peeking out under the body; two mop pads at the back.
+  const brushMat = new MeshBasicMaterial({ color: '#5a5f68' });
+  const brushes = [-1, 1].map((side) => {
+    const b = new Group();
+    for (let k = 0; k < 3; k++) {
+      const bristle = new Mesh(new BoxGeometry(0.008, 0.004, 0.07), brushMat);
+      bristle.position.z = 0.035;
+      const arm = new Group();
+      arm.rotation.y = (k * 2 * Math.PI) / 3;
+      arm.add(bristle);
+      b.add(arm);
+    }
+    b.position.set(side * 0.11, 0.008, 0.11);
+    return b;
+  });
+  const mops = [-1, 1].map((side) => {
+    const m = new Mesh(new CylinderGeometry(0.085, 0.085, 0.012, 32), new MeshStandardMaterial({ color: '#8fa3b8', roughness: 0.9 }));
+    m.position.set(side * 0.085, 0.008, -0.1);
+    const seam = new Mesh(new BoxGeometry(0.16, 0.013, 0.008), new MeshBasicMaterial({ color: '#6c7f93' }));   // shows it turning
+    m.add(seam);
+    m.visible = false;
+    return m;
+  });
+  g.add(body, lidar, mark, ring, ghost, ...brushes, ...mops);
+  g.userData = { body, mark, ring, ghost, brushes, mops, cleaning: false };
   return g;
 }
 
