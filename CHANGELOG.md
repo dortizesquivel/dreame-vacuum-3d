@@ -2,6 +2,17 @@
 
 All notable releases of Dreame Vacuum 3D are listed here. The [Release workflow](.github/workflows/release.yml) prepends each tagged version.
 
+## v0.1.8 - 2026-10-26
+
+- feat(card): past cleanings: replay one, and the coverage of the last five (d2f3122)
+- feat: the cleaning history, with when each room was last cleaned (cb04859)
+- fix(demo): the rug without the coffee table's ghost legs; option to hide the floor effects (7118068)
+- feat(card): drag a zone on the floor to clean it (2706899)
+- test(card): browser tests on the demo, in CI (231a050)
+- feat(card): what the robot is doing, where it got stuck, and start/pause/dock buttons (2e866fb)
+- feat(map): lighter live messages, faster while a card shows the map (2b4d848)
+- fix(map): until a first frame comes, ask the robot again in 30 s (5258cca)
+
 ## v0.1.7 - 2026-10-26
 
 - fix(card): the robot follows its path between poses, round the furniture (2106576)
