@@ -17,7 +17,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import voluptuous as vol
 
 from .coordinator import DreameDataUpdateCoordinator
-from .device.enums import DreameVacuumState, SuctionLevel, parse_enum
+from .device.enums import DreameVacuumState, SuctionLevel, TaskStatus, parse_enum
 from .entity import DreameEntity, command
 
 # Portions of service schemas derived from Tasshack/dreame-vacuum (MIT), see NOTICE.
@@ -244,7 +244,11 @@ class DreameVacuumEntity(DreameEntity, StateVacuumEntity):
 
     @command
     async def async_start(self) -> None:
-        await self.device.start()
+        # Paused on its way back to the dock, "start" would begin a new cleaning (Tasshack #1942): carry on home.
+        if parse_enum(TaskStatus, self.device.values.get("task_status")) is TaskStatus.DOCKING_PAUSED:
+            await self.device.return_to_base()
+        else:
+            await self.device.start()
         await self.coordinator.async_request_refresh()
 
     @command
