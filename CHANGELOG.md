@@ -2,6 +2,12 @@
 
 All notable releases of Dreame Vacuum 3D are listed here. The [Release workflow](.github/workflows/release.yml) prepends each tagged version.
 
+## v0.1.7 - 2026-10-26
+
+- fix(card): the robot follows its path between poses, round the furniture (2106576)
+- feat(demo): made-up houses and a landing page on GitHub Pages (adebf1f)
+- feat(card): routines, no drawing off screen, obstacle tags clear of room names (dec2b33)
+
 ## v0.1.6 - 2026-10-26
 
 - fix(card): the robot keeps moving between batches of poses (f7a87f2)
