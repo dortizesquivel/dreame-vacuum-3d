@@ -361,3 +361,18 @@ def room_at(grid: Grid, cells: Runs, info: dict[str, Any], x: int, y: int) -> in
             if runs[i + 1] == cy and runs[i] <= cx < runs[i] + runs[i + 2]:
                 return int(room)
     return None
+
+
+def cleaned_rooms(frame: Frame) -> list[int]:
+    """The rooms a cleaning's map shows it cleaned: the ones it was sent to, or else the ones its path went through."""
+    if active := active_rooms(frame):
+        return active
+    saved = saved_map(frame)
+    base = saved or frame
+    cells, info = rooms(base, saved=saved is not None)
+    seen: set[int] = set()
+    for stroke in path(frame):
+        for x, y in stroke["points"][::4]:  # a point every 20 cm or so is plenty
+            if (room := room_at(base.grid, cells, info, x, y)) is not None:
+                seen.add(room)
+    return sorted(seen)

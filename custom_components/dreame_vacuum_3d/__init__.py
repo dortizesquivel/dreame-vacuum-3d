@@ -33,6 +33,7 @@ from .const import CONF_AUTH, CONF_DID, DOMAIN
 from .coordinator import DreameDataUpdateCoordinator
 from .device.capabilities import load
 from .device.device import DreameDevice
+from .history import CleaningHistory, EventFetcher
 from .live_map import MAP_LISTENERS, MAP_VIEWERS, FileFetcher, HistoryFetcher, LiveMap
 from .notifications import DreameNotifier
 from .protocol.cloud import (
@@ -76,6 +77,7 @@ class RuntimeData:
     miio: MiioClient
     notifier: DreameNotifier
     map: LiveMap
+    history: CleaningHistory
 
 
 type DreameConfigEntry = ConfigEntry[RuntimeData]
@@ -149,7 +151,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bo
         _map_history(hass, entry, cloud, did),
         lambda: hass.data[MAP_VIEWERS].get(entry.entry_id, 0) > 0,
     )
-    entry.runtime_data = RuntimeData(coordinator=coordinator, cloud=cloud, miio=miio, notifier=notifier, map=live_map)
+    history = CleaningHistory(
+        hass,
+        device,
+        _history_events(hass, entry, cloud, did),
+        _history_file(hass, entry, cloud),
+        _history_store(hass, entry),
+    )
+    entry.runtime_data = RuntimeData(
+        coordinator=coordinator, cloud=cloud, miio=miio, notifier=notifier, map=live_map, history=history
+    )
     _async_register_device(hass, entry, info)
     _async_remove_dnd_numbers(hass, did)
 
@@ -157,16 +168,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bo
     # Listen after entities exist so events can resolve entity_id / device_id.
     await notifier.async_setup()
     entry.async_on_unload(live_map.start())
+    entry.async_on_unload(history.start(coordinator))
     return True
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> None:
-    """Forget what the lidar saw in this robot's house."""
+    """Forget what the lidar saw in this robot's house, and the rooms of its past cleanings."""
     await _obstacle_store(hass, entry).async_remove()
+    await _history_store(hass, entry).async_remove()
 
 
 def _obstacle_store(hass: HomeAssistant, entry: ConfigEntry) -> Store[dict[str, Any]]:
     return Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.obstacles")
+
+
+def _history_store(hass: HomeAssistant, entry: ConfigEntry) -> Store[dict[str, Any]]:
+    return Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.history")
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bool:
@@ -224,6 +241,31 @@ def _map_history(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud, di
 
     async def fetch(key: str, since: int) -> list[dict[str, Any]]:
         return await _with_relogin(hass, entry, cloud, lambda: cloud.device_data(did, key, since))
+
+    return fetch
+
+
+def _history_events(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud, did: str) -> EventFetcher:
+    """The robot's events in the cloud for a property: its cleanings, for the status."""
+
+    async def fetch(key: str, since: int) -> list[dict[str, Any]]:
+        return await _with_relogin(
+            hass, entry, cloud, lambda: cloud.device_data(did, key, since, limit=50, kind="event")
+        )
+
+    return fetch
+
+
+def _history_file(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud) -> FileFetcher:
+    """Download a past cleaning's log file (a whole map frame) from the cloud."""
+    model = entry.data[CONF_MODEL]
+
+    async def fetch(object_name: str) -> bytes | None:
+        async def download() -> bytes | None:
+            url = await cloud.file_url(object_name, model=model)
+            return await cloud.download(url) if url else None
+
+        return await _with_relogin(hass, entry, cloud, download)
 
     return fetch
 

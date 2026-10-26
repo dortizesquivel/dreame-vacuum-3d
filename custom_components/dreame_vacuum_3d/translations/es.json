@@ -561,6 +561,12 @@
       },
       "current_room": {
         "name": "Habitación actual"
+      },
+      "last_cleaning": {
+        "name": "Última limpieza"
+      },
+      "room_last_cleaned": {
+        "name": "Última limpieza de {room}"
       }
     },
     "binary_sensor": {

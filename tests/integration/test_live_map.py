@@ -28,6 +28,11 @@ DID = ENTRY_DATA["did"]
 IN_ROOM_1 = (-925, -425, 90)  # cell (1, 1)
 
 
+def _log_reads(miio) -> int:
+    """Reads of the cloud's log of map frames (not of its events, the cleaning history)."""
+    return sum(1 for c in miio.cloud.device_data.await_args_list if c.kwargs.get("kind", "prop") == "prop")
+
+
 def _map_requests(miio) -> int:
     return sum(1 for method, params in miio.calls if method == "action" and (params["siid"], params["aiid"]) == (6, 1))
 
@@ -129,7 +134,7 @@ async def test_frames_while_moving_then_one_more(hass: HomeAssistant, monkeypatc
     tick()
     await hass.async_block_till_done(wait_background_tasks=True)
     assert _map_requests(miio) == start
-    assert miio.cloud.device_data.await_count == 2  # its partial frames (6.1) and whole ones (6.3)
+    assert _log_reads(miio) == 2  # its partial frames (6.1) and whole ones (6.3)
     monkeypatch.setattr("custom_components.dreame_vacuum_3d.live_map.WHOLE_EVERY", 0)
     tick()
     await hass.async_block_till_done(wait_background_tasks=True)
@@ -151,15 +156,14 @@ async def test_each_tick_only_while_a_card_shows_the_map(hass: HomeAssistant, ha
     entry, miio = await setup(hass)
     device = entry.runtime_data.coordinator.device
     miio.overrides[(4, 1)] = device.values["status"] = Status.CLEANING.value
-    reads = miio.cloud.device_data  # two calls a read: the partial frames (6.1) and the whole ones (6.3)
 
-    async def ticks(n: int) -> int:
-        reads.reset_mock()
+    async def ticks(n: int) -> int:  # two calls a read: the partial frames (6.1) and the whole ones (6.3)
+        miio.cloud.device_data.reset_mock()
         for _ in range(n):
             freezer.tick(timedelta(seconds=2.5))
             async_fire_time_changed(hass)
             await hass.async_block_till_done(wait_background_tasks=True)
-        return reads.await_count // 2
+        return _log_reads(miio) // 2
 
     assert await ticks(4) == 2  # nobody looking: every other tick
     client = await hass_ws_client(hass)

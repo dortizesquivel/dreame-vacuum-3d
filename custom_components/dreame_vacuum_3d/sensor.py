@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from enum import IntEnum
 from typing import Any
 
@@ -23,6 +24,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
+from homeassistant.util import dt as dt_util
 
 from .coordinator import DreameDataUpdateCoordinator
 from .device.enums import (
@@ -41,6 +43,7 @@ from .device.enums import (
     parse_enum,
 )
 from .entity import DreameEntity
+from .history import CleaningHistory
 from .live_map import LiveMap
 
 
@@ -250,8 +253,29 @@ async def async_setup_entry(
         for description in SENSORS
         if description.always or description.key in available
     ]
-    entities.append(DreameRoomSensor(coordinator, entry.runtime_data.map))
+    live_map: LiveMap = entry.runtime_data.map
+    history: CleaningHistory = entry.runtime_data.history
+    entities.append(DreameRoomSensor(coordinator, live_map))
+    entities.append(DreameLastCleaningSensor(coordinator, history, live_map))
     async_add_entities(entities)
+
+    # When each room of the robot's map was last cleaned, added as the map arrives (like its "Clean" buttons).
+    seen: set[str] = set()
+
+    @callback
+    def add_rooms(_message: object = None) -> None:
+        message = live_map.message
+        if message is None:
+            return
+        new = [room for room in live_map.rooms if f"{message['map_id']}_{room}" not in seen]
+        seen.update(f"{message['map_id']}_{room}" for room in new)
+        if new:
+            async_add_entities(
+                DreameRoomLastCleanedSensor(coordinator, history, live_map, message["map_id"], room) for room in new
+            )
+
+    add_rooms()
+    entry.async_on_unload(live_map.listen(add_rooms))
 
 
 class DreameSensorEntity(DreameEntity, SensorEntity):
@@ -304,3 +328,75 @@ class DreameRoomSensor(DreameEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {"segment_id": (self._map.pose or {}).get("room")}
+
+
+class DreameLastCleaningSensor(DreameEntity, SensorEntity):
+    """When the robot last cleaned, with how long, how much and which rooms (from the cloud's history)."""
+
+    entity_description: SensorEntityDescription
+
+    def __init__(self, coordinator: DreameDataUpdateCoordinator, history: CleaningHistory, live_map: LiveMap) -> None:
+        super().__init__(
+            coordinator, SensorEntityDescription(key="last_cleaning", device_class=SensorDeviceClass.TIMESTAMP)
+        )
+        self._history, self._map = history, live_map
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._history.listen(self.async_write_ha_state))
+
+    @property
+    def native_value(self) -> datetime | None:
+        last = self._history.cleanings[0] if self._history.cleanings else None
+        return dt_util.utc_from_timestamp(last["start"]) if last else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        if not self._history.cleanings:
+            return {}
+        last = self._history.cleanings[0]
+        rooms = [self._map.rooms.get(str(r), {}).get("name") or f"#{r}" for r in last["rooms"]]
+        return {"duration": last["duration"], "area": last["area"], "completed": last["completed"], "rooms": rooms}
+
+
+class DreameRoomLastCleanedSensor(DreameEntity, SensorEntity):
+    """When the robot last cleaned one room of its map, and how often it did in the last week."""
+
+    entity_description: SensorEntityDescription
+
+    def __init__(
+        self,
+        coordinator: DreameDataUpdateCoordinator,
+        history: CleaningHistory,
+        live_map: LiveMap,
+        map_id: int,
+        room: str,
+    ) -> None:
+        description = SensorEntityDescription(
+            key=f"last_cleaned_{map_id}_{room}",
+            translation_key="room_last_cleaned",
+            device_class=SensorDeviceClass.TIMESTAMP,
+        )
+        super().__init__(coordinator, description)
+        self._history, self._map, self._map_id, self._room = history, live_map, map_id, int(room)
+        self._attr_translation_placeholders = {"room": live_map.rooms[room].get("name") or f"#{room}"}
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._history.listen(self.async_write_ha_state))
+
+    @property
+    def available(self) -> bool:
+        message = self._map.message
+        return super().available and message is not None and message["map_id"] == self._map_id
+
+    @property
+    def native_value(self) -> datetime | None:
+        last = self._history.last_cleaned(self._map_id, self._room)
+        return dt_util.utc_from_timestamp(last["start"]) if last else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        week = (dt_util.utcnow() - timedelta(days=7)).timestamp()
+        mine = [c for c in self._history.cleanings if c["map_id"] == self._map_id and self._room in c["rooms"]]
+        return {"cleanings_last_7_days": sum(c["start"] >= week for c in mine)}

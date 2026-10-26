@@ -199,3 +199,9 @@ def test_seen_cells_are_walls_on_open_floor_away_from_old_walls() -> None:
     framed = dmap.Frame(1, 1, "I", None, None, saved.grid, bytes([63 << 2] * 60), {"fsm": 1})
     assert len(dmap.seen_cells(framed, saved.grid, mask)) == 12  # the whole open floor
     assert dmap.runs({(5, 1), (3, 0), (4, 0), (7, 0)}) == [3, 0, 2, 7, 0, 1, 5, 1, 1]
+
+
+def test_the_rooms_a_cleaning_cleaned() -> None:
+    # The rooms it was sent to; with none (a whole-house cleaning), the rooms its path went through.
+    assert dmap.cleaned_rooms(dmap.decode(live())) == [2]
+    assert dmap.cleaned_rooms(dmap.decode(live({"sa": []}))) == [1]
