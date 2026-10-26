@@ -152,7 +152,8 @@ function livingRoom(dir) {
     [0.76, 3.64, 3.7, 4.64],   // sofa (6 cm legs: too low to go under)
     [1.47, 2.11, 2.95, 3.11],  // coffee table
     [5.41, 1.65, 5.69, 3.27],  // bookcase
-  ];   // the armchair stands on 16 cm legs: the robot cleans under it
+    [3.59, 1.44, 4.71, 2.56],  // armchair (its legs are tall enough to go under, but it reads as going through it)
+  ];
   const DOCK = { x: 4.5, z: 5.4, heading: 180 };   // against the back wall, facing into the room
   const toMap = (X, Z) => [1000 * X - 4500, 5400 - 1000 * Z];
   const grid = new Grid(116, 119, -4550, -500);    // one cell of wall around the room
@@ -210,19 +211,26 @@ function flat(dir) {
     const across = x1 - x0 < y1 - y0;
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) grid.v[y * W + x] = across ? grid.v[y * W + x1 + 1] : grid.v[(y1 + 1) * W + x];
   }
+  // The model's floors and walls; then the furniture, solid in the model, joins the map's walls: the robot goes round
+  // it, as the lidar maps it.
+  const floors = ROOMS.map(({ id }) => grid.rects(id)), wallRects = grid.rects(WALL);
+  for (const [, cx, cy, w, d] of FURNITURE) {
+    const hw = w / 2 / SIZE, hd = d / 2 / SIZE;
+    grid.fill([Math.round(cx - hw), Math.round(cy - hd), Math.round(cx + hw), Math.round(cy + hd)], WALL);
+  }
   const mm = (cx, cy) => [grid.left + cx * SIZE, grid.top + cy * SIZE];
   const rooms = ROOMS.map(({ id, name, rect: [x0, y0, x1, y1] }) => { const [x, y] = mm((x0 + x1) / 2, (y0 + y1) / 2); return { id, name, x, y }; });
   const furniture = FURNITURE.map(([type, cx, cy, w, d]) => { const [x, y] = mm(cx, cy); return { type, x, y, w, d }; });
   writeFileSync(new URL('map.json', dir), mapJson(grid, rooms, [...mm(DOCK[0], DOCK[1]), DOCK[2]], furniture));
 
   const m = SIZE / 1000, toModel = ([x0, y0, x1, y1]) => [x0 * m, (H - y1) * m, x1 * m, (H - y0) * m];
-  const parts = ROOMS.map(({ id, name }, i) => {
+  const parts = ROOMS.map(({ name }, i) => {
     const p = new Part(name, COLORS[i % COLORS.length]);
-    grid.rects(id).forEach((r) => p.floor(toModel(r)));
+    floors[i].forEach((r) => p.floor(toModel(r)));
     return p;
   });
   const walls = new Part('walls', [0.93, 0.93, 0.91]);
-  grid.rects(WALL).forEach((r) => walls.box(toModel(r), 1.0));   // 1 m: a doll's house the camera sees into
+  wallRects.forEach((r) => walls.box(toModel(r), 1.0));   // 1 m: a doll's house the camera sees into
   const things = new Part('furniture', [0.62, 0.6, 0.58]);
   for (const [, cx, cy, w, d, h] of FURNITURE) {
     const x = cx * m, z = (H - cy) * m;

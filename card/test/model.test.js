@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cellRects, normalizeModel, robotToModel, roomAt, routineRooms } from '../src/model.js';
+import { along, cellRects, normalizeModel, robotToModel, roomAt, routineRooms } from '../src/model.js';
 
 const close = (a, b) => a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1e-9, `${a} ≠ ${b}`));
 
@@ -52,4 +52,13 @@ test('routineRooms takes room names (any case, spaces) or numbers, null for what
   const rooms = { 3: { name: 'Kitchen' }, 7: { name: ' Living room ' }, 9: { name: null } };
   assert.deepEqual(routineRooms(rooms, ['kitchen', 'Living Room ', 9, 4, 'Garage']), [3, 7, 9, null, null]);
   assert.deepEqual(routineRooms(undefined, ['Kitchen', 3]), [null, null]);
+});
+
+test('along walks a polyline by its length, skipping repeated points', () => {
+  const pts = [[0, 0], [0, 2], [0, 2], [2, 2]];   // 2 m along +z, then 2 m along +x
+  assert.deepEqual(along(pts, 0.25), { x: 0, z: 1, dir: 0 });
+  assert.deepEqual(along(pts, 0.75), { x: 1, z: 2, dir: Math.PI / 2 });
+  assert.deepEqual(along(pts, 1), { x: 2, z: 2, dir: Math.PI / 2 });
+  assert.deepEqual(along(pts, 7), { x: 2, z: 2, dir: Math.PI / 2 });
+  assert.deepEqual(along([[1, 1], [1, 1]], 0.5), { x: 1, z: 1, dir: null });
 });

@@ -3,7 +3,7 @@
 
 const WALL = 255;
 const LANE = 6;            // cells between lanes (50 mm cells: 30 cm)
-const CLEARANCE = 3;       // cells kept from walls (15 cm, about the robot's radius)
+const CLEARANCE = 4;       // cells kept from walls and furniture (20 cm: the robot's radius and a little)
 const SPEED = 300;         // mm/s, about a real robot's
 const TRAIL_STEP = 80;     // mm between path points
 
@@ -37,6 +37,11 @@ export class Sim {
     for (const [id, runs] of Object.entries(map.cells)) {
       for (let i = 0; i + 2 < runs.length; i += 3) this.id.fill(Number(id), runs[i + 1] * width + runs[i], runs[i + 1] * width + runs[i] + runs[i + 2]);
     }
+    this.hidden = this.plantThings();   // things on the floor, reported once the robot comes close
+    // The new box stands on the floor like a wall: the robot goes round it (from the start: it is a simulation).
+    for (const t of this.hidden) for (let i = 0; t.cells && i + 2 < t.cells.length; i += 3) {
+      this.id.fill(WALL, t.cells[i + 1] * width + t.cells[i], t.cells[i + 1] * width + t.cells[i] + t.cells[i + 2]);
+    }
     // Cells the robot's centre may use: a room's floor at least CLEARANCE cells from a wall or the unknown.
     this.free = new Uint8Array(width * height);
     for (let y = 0; y < height; y++) {
@@ -58,7 +63,6 @@ export class Sim {
     this.path = [];
     this.found = [];
     this.newCells = [];
-    this.hidden = this.plantThings();   // things on the floor, reported once the robot comes close
     this.route = [];
     this.active = [];
     this.state = 'docked';

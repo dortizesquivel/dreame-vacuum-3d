@@ -128,3 +128,23 @@ export function routineRooms(rooms, wanted) {
     return hit ? Number(hit[0]) : null;
   });
 }
+
+/**
+ * The point a fraction s (0 to 1) of the way along a polyline [[x, z], …], and the way it goes there (radians around
+ * +Y, 0 = +z), or null on a polyline with no length.
+ */
+export function along(points, s) {
+  const lengths = points.slice(1).map(([x, z], i) => Math.hypot(x - points[i][0], z - points[i][1]));
+  let d = Math.min(1, Math.max(0, s)) * lengths.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < lengths.length; i++) {
+    if (!lengths[i]) continue;
+    const [ax, az] = points[i], [bx, bz] = points[i + 1];
+    if (d <= lengths[i] || i === lengths.length - 1) {
+      const k = Math.min(1, d / lengths[i]);
+      return { x: ax + (bx - ax) * k, z: az + (bz - az) * k, dir: Math.atan2(bx - ax, bz - az) };
+    }
+    d -= lengths[i];
+  }
+  const [x, z] = points.at(-1);
+  return { x, z, dir: null };
+}
