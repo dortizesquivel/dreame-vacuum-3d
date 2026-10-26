@@ -27,8 +27,10 @@ export function fromDump(d) {
 const SEES = 1200;   // mm: how close the robot gets before it reports something on the floor
 
 export class Sim {
-  constructor(map) {
+  /** house: the demo house's config, with the things on its floor (see houses/<name>/config.json). */
+  constructor(map, house = {}) {
     this.map = map;
+    this.house = house;
     const { width, height, left, top, size } = map.grid;
     this.g = { width, height, left, top, size };
     this.id = new Uint8Array(width * height);
@@ -54,29 +56,27 @@ export class Sim {
     }
     this.pose = [...map.dock];
     this.path = [];
-    this.hidden = this.plantThings();   // things on the floor, reported once the robot comes close
     this.found = [];
     this.newCells = [];
+    this.hidden = this.plantThings();   // things on the floor, reported once the robot comes close
     this.route = [];
     this.active = [];
     this.state = 'docked';
     this.frame = map.frame_id ?? 0;
   }
 
-  /** A few things on the floor of the demo house: by a room's centre, a little to the side. */
+  /** The house's things on the floor, placed from a room's centre; and a box nobody had put there when it was mapped. */
   plantThings() {
-    const at = (room, dx, dy) => {
+    const at = ({ room, at: [dx, dy] }) => {
       const r = this.map.rooms[room];
       return r ? [r.x + dx, r.y + dy] : null;
     };
-    const things = [
-      { type: 'shoes', at: at(8, 400, -300) },
-      { type: 'sock', at: at(9, -600, 500) },
-      { type: 'wire', at: at(9, 900, -400) },
-      { type: 'liquid_stain', at: at(13, -500, 200) },
-    ].filter((t) => t.at).map((t) => ({ x: t.at[0], y: t.at[1], type: t.type, confidence: 96, source: 'camera' }));
-    // And a box nobody had put there when the house was mapped: 30 by 20 cm, which the lidar outlines.
-    const box = at(13, 600, -600);
+    const things = (this.house.things ?? []).filter((t) => at(t)).map((t) => {
+      const [x, y] = at(t);
+      return { x, y, type: t.type, confidence: 96, source: 'camera' };
+    });
+    // 30 by 20 cm, which the lidar outlines.
+    const box = this.house.new && at(this.house.new);
     if (box) {
       const [cx, cy] = this.toCell(box);
       things.push({ cells: [cx, cy, 6, cx, cy + 1, 6, cx, cy + 2, 6, cx, cy + 3, 6], x: box[0], y: box[1] });
@@ -169,6 +169,9 @@ export class Sim {
     this.route.push({ mm: this.map.dock.slice(0, 2), mode, home: true });
     this.active = rooms;
     this.path = [];
+    this.found = [];
+    this.newCells = [];
+    this.hidden = this.plantThings();
     this.state = 'cleaning';
   }
 

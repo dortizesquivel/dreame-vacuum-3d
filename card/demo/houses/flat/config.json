@@ -1,0 +1,16 @@
+{
+  "name": "Flat",
+  "model": { "url": "flat.glb", "dock": { "position": [0.5, 0, 1.8], "heading": 90 } },
+  "clean": { "1": "both", "3": "vacuum", "2": "mop" },
+  "things": [
+    { "type": "shoes", "room": 3, "at": [1500, 100] },
+    { "type": "sock", "room": 4, "at": [900, 1300] },
+    { "type": "wire", "room": 1, "at": [900, -1200] },
+    { "type": "liquid_stain", "room": 2, "at": [-600, 900] }
+  ],
+  "new": { "room": 1, "at": [-1500, 1000] },
+  "routines": [
+    { "name": "After dinner", "rooms": ["Kitchen", "Living room"], "suction_level": 2 },
+    { "rooms": ["Bedroom", "Bathroom"] }
+  ]
+}

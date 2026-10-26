@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -21,52 +21,62 @@
   h1 { font-size: 18px; font-weight: 500; margin: 0; }
   .controls { display: flex; flex-wrap: wrap; gap: 8px; }
   .controls button { font: inherit; color: var(--primary-text-color); background: var(--card-background-color);
-    border: 1px solid var(--divider-color); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+    border: 1px solid var(--divider-color); border-radius: 8px; padding: 6px 12px; min-height: 36px; cursor: pointer; }
   .controls button[aria-pressed="true"] { background: var(--primary-color); color: var(--text-primary-color); border-color: transparent; }
   main { padding: 16px 20px; }
   ha-card { display: block; background: var(--card-background-color); border-radius: 12px; border: 1px solid var(--divider-color); }
-  p.note { margin: 0 20px 24px; color: var(--secondary-text-color); font-size: 13px; }
+  p.note { margin: 0 20px 24px; max-width: 72ch; color: var(--secondary-text-color); font-size: 13px; }
   body.capture header, body.capture p.note { display: none; }
-  body.capture main { padding: 12px; }
+  body.capture main { padding: 0; }
+  body.capture ha-card { border: 0; border-radius: 0; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Dreame Vacuum 3D · datos simulados</h1>
+  <h1>Dreame Vacuum 3D · simulated robot</h1>
   <div class="controls">
-    <button type="button" id="go">Salón (aspira y friega), comedor (aspira), cocina (friega)</button>
-    <button type="button" id="model" aria-pressed="true">Modelo 3D</button>
-    <button type="button" id="futuristic" aria-pressed="false">Futurista</button>
+    <button type="button" id="go">Clean</button>
+    <button type="button" id="house">Other house</button>
+    <button type="button" id="model" aria-pressed="true">3D model</button>
+    <button type="button" id="futuristic" aria-pressed="false">Futuristic</button>
     <button type="button" id="speed">×10</button>
-    <button type="button" id="theme">Tema</button>
+    <button type="button" id="theme">Theme</button>
   </div>
 </header>
 <main id="cards"></main>
-<p class="note">Toca una habitación para limpiarla. Aspirar quita el polvo de las habitaciones que limpia; fregar deja el suelo mojado, que se seca en un minuto en la demo (?dry=10 para diez). El robot y su recorrido son simulados; el mapa es el del robot.</p>
+<p class="note">Tap a room to clean it, or a routine under the map. Vacuuming clears the dust off the rooms it cleans; mopping leaves the floor wet, and here it dries in a minute (<code>?dry=10</code> for ten). The robot is simulated and both houses are made up: the living room is the <a href="https://github.com/dortizesquivel/mmwave-3d-card">mmWave 3D Card</a>'s example room, rebuilt from synthetic photos.</p>
 <script type="module">
   import '../../custom_components/dreame_vacuum_3d/frontend/dreame-vacuum-3d-card.js';
   import { fromDump, Sim } from './sim.js';
 
+  // ?house=flat, ?house=living-room (the default) or the path of a folder with map.json and config.json, such as a
+  // private one in house/ (git-ignored).
+  const HOUSES = { 'living-room': 'houses/living-room/', flat: 'houses/flat/' };
   const q = new URLSearchParams(location.search);
   if (q.has('capture')) document.body.classList.add('capture');
-  const house = q.get('house') ?? './house/';
+  const houseKey = q.get('house') ?? 'living-room';
+  const house = new URL(HOUSES[houseKey] ?? houseKey, location.href);
   const [dump, config] = await Promise.all([
-    fetch(`${house}map.json`).then((r) => r.json()),
-    fetch(`${house}config.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
+    fetch(new URL('map.json', house)).then((r) => r.json()),
+    fetch(new URL('config.json', house)).then((r) => (r.ok ? r.json() : {})).catch(() => ({})),
   ]);
   const map = fromDump(dump);
-  const sim = new Sim(map);
+  const sim = new Sim(map, config);
   const subs = new Set();
-  const STATES = { cleaning: 'Limpiando', returning: 'Volviendo a la base', docked: 'En la base' };
+  const lang = q.get('lang') ?? 'en';
+  const STATES = {
+    en: { cleaning: 'Cleaning', returning: 'Returning', docked: 'Docked' },
+    es: { cleaning: 'Limpiando', returning: 'Volviendo a la base', docked: 'En la base' },
+  };
   let dark = q.get('theme') === 'dark';
   let speed = Number(q.get('speed') ?? 10);
 
   const hass = () => ({
     states: { 'vacuum.demo': { entity_id: 'vacuum.demo', state: sim.state, attributes: { friendly_name: 'Robot (demo)', battery_level: 100 } } },
     themes: { darkMode: dark },
-    locale: { language: 'es' },
-    language: 'es',
-    formatEntityState: (st) => STATES[st.state] ?? st.state,
+    locale: { language: lang },
+    language: lang,
+    formatEntityState: (st) => (STATES[lang] ?? STATES.en)[st.state] ?? st.state,
     connection: {
       subscribeMessage(cb) {
         subs.add(cb);
@@ -76,16 +86,18 @@
     },
     async callService(domain, service, data) {
       if (service !== 'vacuum_clean_segment') throw new Error(`${domain}.${service} not in the demo`);
-      sim.clean(data.segments);
+      sim.clean([].concat(data.segments));
       send();
     },
   });
 
   const card = document.createElement('dreame-vacuum-3d-card');
-  let model = config.model ?? null, futuristic = q.get('style') === 'futuristic', withModel = !!model && q.get('model') !== '0';
+  const model = config.model ? { ...config.model, url: new URL(config.model.url, house).href } : null;
+  let futuristic = q.get('style') === 'futuristic', withModel = !!model && q.get('model') !== '0';
   const setConfig = () => card.setConfig({
     entity: 'vacuum.demo', height: Number(q.get('height') ?? 560), view: q.get('view') ?? '3d',
     dry_time: Number(q.get('dry') ?? 1),   // minutes: short, so the floor dries while you watch
+    routines: config.routines,
     model: withModel ? { ...model, style: futuristic ? 'futuristic' : 'textured' } : undefined,
   });
   setConfig();
@@ -94,15 +106,30 @@
 
   const send = () => { const m = sim.message(); subs.forEach((cb) => cb(m)); card.hass = hass(); };
   // Like the integration while the robot cleans: every 5 s, the frames the robot logged since (one every 2.5 s).
-  // ?batch=1 sends one a second instead.
+  // ?batch=1 sends one a second instead. ?loop cleans again a few seconds after the robot docks.
   const batch = Number(q.get('batch') ?? 5);
+  let dockedAt = null;
   setInterval(() => {
-    if (sim.state === 'docked') return;
+    if (sim.state === 'docked') {
+      dockedAt ??= Date.now();
+      if (q.has('loop') && Date.now() - dockedAt > 8000) go();
+      return;
+    }
+    dockedAt = null;
     for (let i = 0; i < Math.max(1, batch / 2.5); i++) { sim.step((speed * batch) / Math.max(1, batch / 2.5)); send(); }
   }, batch * 1000);
 
+  // The house's cleaning: its rooms, each vacuumed, mopped or both.
+  const clean = config.clean ?? Object.fromEntries(Object.keys(map.rooms).slice(0, 3).map((id) => [id, 'both']));
+  const MODES = { both: 'vacuum and mop', vacuum: 'vacuum', mop: 'mop' };
+  const go = () => { sim.clean(Object.keys(clean).map(Number), clean); send(); };
+  const goButton = document.getElementById('go');
+  goButton.textContent = `Clean: ${Object.entries(clean).map(([id, mode]) => `${map.rooms[id]?.name ?? id} (${MODES[mode]})`).join(' · ')}`;
+  goButton.onclick = go;
   const press = (id, on) => document.getElementById(id).setAttribute('aria-pressed', String(on));
-  document.getElementById('go').onclick = () => { sim.clean([9, 13, 8], { 9: 'both', 13: 'vacuum', 8: 'mop' }); send(); };
+  const other = houseKey === 'flat' ? 'living-room' : 'flat';
+  document.getElementById('house').textContent = other === 'flat' ? 'Flat' : 'Living room';
+  document.getElementById('house').onclick = () => { q.set('house', other); location.search = q; };
   document.getElementById('model').onclick = () => { withModel = !withModel && !!model; press('model', withModel); setConfig(); };
   document.getElementById('futuristic').onclick = () => { futuristic = !futuristic; press('futuristic', futuristic); setConfig(); };
   document.getElementById('speed').onclick = (e) => { speed = speed === 10 ? 30 : speed === 30 ? 1 : 10; e.target.textContent = `×${speed}`; };
@@ -115,8 +142,8 @@
   press('model', withModel);
   press('futuristic', futuristic);
   document.getElementById('speed').textContent = `×${speed}`;
-  if (q.has('start')) document.getElementById('go').click();
-  window.demo = { sim, card };
+  if (q.has('start')) go();
+  window.demo = { sim, card, send };   // for scripts: sim.step(seconds), then send()
 </script>
 </body>
 </html>
