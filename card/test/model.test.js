@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { along, cellRects, normalizeModel, robotToModel, roomAt, routineRooms } from '../src/model.js';
+import { along, appendPath, cellRects, normalizeModel, robotToModel, roomAt, routineRooms } from '../src/model.js';
 
 const close = (a, b) => a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1e-9, `${a} ≠ ${b}`));
 
@@ -61,4 +61,12 @@ test('along walks a polyline by its length, skipping repeated points', () => {
   assert.deepEqual(along(pts, 1), { x: 2, z: 2, dir: Math.PI / 2 });
   assert.deepEqual(along(pts, 7), { x: 2, z: 2, dir: Math.PI / 2 });
   assert.deepEqual(along([[1, 1], [1, 1]], 0.5), { x: 1, z: 1, dir: null });
+});
+
+test('appendPath continues the last stroke or starts a new one, without touching the old path', () => {
+  const path = [{ mode: 'both', points: [[0, 0], [10, 0]] }];
+  const out = appendPath(path, [{ mode: 'vacuum', points: [[10, 0], [20, 0]], joins: true }, { mode: 'mop', points: [[20, 0], [20, 5]] }]);
+  assert.deepEqual(out, [{ mode: 'both', points: [[0, 0], [10, 0], [10, 0], [20, 0]] }, { mode: 'mop', points: [[20, 0], [20, 5]] }]);
+  assert.deepEqual(path, [{ mode: 'both', points: [[0, 0], [10, 0]] }]);
+  assert.deepEqual(appendPath(undefined, [{ mode: 'mop', points: [[1, 1]], joins: true }]), [{ mode: 'mop', points: [[1, 1]] }]);
 });

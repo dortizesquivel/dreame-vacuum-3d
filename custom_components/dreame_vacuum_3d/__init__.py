@@ -33,7 +33,7 @@ from .const import CONF_AUTH, CONF_DID, DOMAIN
 from .coordinator import DreameDataUpdateCoordinator
 from .device.capabilities import load
 from .device.device import DreameDevice
-from .live_map import MAP_LISTENERS, FileFetcher, HistoryFetcher, LiveMap
+from .live_map import MAP_LISTENERS, MAP_VIEWERS, FileFetcher, HistoryFetcher, LiveMap
 from .notifications import DreameNotifier
 from .protocol.cloud import (
     CloudAuth,
@@ -84,6 +84,7 @@ type DreameConfigEntry = ConfigEntry[RuntimeData]
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Serve the 3D card and its WebSocket API, once per Home Assistant run."""
     hass.data[MAP_LISTENERS] = {}
+    hass.data[MAP_VIEWERS] = {}
     async_register_websocket(hass)
     await hass.http.async_register_static_paths([StaticPathConfig(CARD_URL, str(CARD), cache_headers=False)])
     # The content hash in the URL makes browsers fetch the card again after an update.
@@ -146,6 +147,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bo
         listeners,
         _obstacle_store(hass, entry),
         _map_history(hass, entry, cloud, did),
+        lambda: hass.data[MAP_VIEWERS].get(entry.entry_id, 0) > 0,
     )
     entry.runtime_data = RuntimeData(coordinator=coordinator, cloud=cloud, miio=miio, notifier=notifier, map=live_map)
     _async_register_device(hass, entry, info)

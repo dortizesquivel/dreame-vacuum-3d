@@ -148,3 +148,17 @@ export function along(points, s) {
   const [x, z] = points.at(-1);
   return { x, z, dir: null };
 }
+
+/**
+ * The path with a message's new strokes added (the integration sends only those while the robot cleans): a stroke
+ * with `joins` continues the last one. A new array; the strokes it doesn't touch are the old ones.
+ */
+export function appendPath(path, tail) {
+  const out = [...(path ?? [])];
+  for (const { joins, ...stroke } of tail) {
+    const last = out.at(-1);
+    if (joins && last) out[out.length - 1] = { ...last, points: [...last.points, ...stroke.points] };
+    else out.push(stroke);
+  }
+  return out;
+}

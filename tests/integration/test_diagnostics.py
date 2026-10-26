@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 from custom_components.dreame_vacuum_3d.diagnostics import async_get_config_entry_diagnostics
 from tests.integration.helpers import setup_fixture_entry
 from tests.integration.test_init import ENTRY_DATA, PASSWORD, USER
+from tests.map_frames import live
 
 
 async def test_diagnostics_redacts_secrets_and_omits_serial(hass: HomeAssistant) -> None:
@@ -42,6 +43,13 @@ async def test_diagnostics_redacts_secrets_and_omits_serial(hass: HomeAssistant)
     assert dump["channel"] in {"local", "cloud"}
     assert dump["entry"]["data"]["password"] == "**REDACTED**"
     assert dump["entry"]["unique_id"] == "**REDACTED**"
+
+
+async def test_diagnostics_has_the_map_frames_without_positions(hass: HomeAssistant) -> None:
+    entry, _miio = await setup_fixture_entry(hass, map_file=live(robot=(-925, -425, 90)))
+    frames = (await async_get_config_entry_diagnostics(hass, entry))["map_frames"]
+    assert set(frames) == {"I"} and frames["I"]["grid"]["width"] > 0 and "rism" in frames["I"]["keys"]
+    assert "-925" not in json.dumps(frames)
 
 
 async def test_diagnostics_hides_ids_inside_map_object_names(hass: HomeAssistant) -> None:

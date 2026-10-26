@@ -49,7 +49,7 @@ Security requirements for this phase:
 | miIO token | Config entry | LAN (key derivation only; not sent in clear) | Redacted |
 | `did`, MAC, host, username | Config entry | Cloud / LAN as needed for protocol | Redacted |
 | Serial number | Device property | Not by this integration | Omitted |
-| Floor plan (rooms, names, path) | In memory only (`LiveMap`) | Only to the card, over Home Assistant's WebSocket, for users who can read the vacuum entity | Not included |
+| Floor plan (rooms, names, path) | In memory only (`LiveMap`) | Only to the card, over Home Assistant's WebSocket, for users who can read the vacuum entity | Not included: only the last frames' grid size, commonest cell values and data keys, without positions or room names |
 
 ## Common weaknesses countered
 

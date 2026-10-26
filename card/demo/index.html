@@ -104,7 +104,7 @@
   document.getElementById('cards').append(card);
   card.hass = hass();
 
-  const send = () => { const m = sim.message(); subs.forEach((cb) => cb(m)); card.hass = hass(); };
+  const send = () => { const m = sim.message({ delta: true }); subs.forEach((cb) => cb(m)); card.hass = hass(); };
   // Like the integration while the robot cleans: every 5 s, the frames the robot logged since (one every 2.5 s).
   // ?batch=1 sends one a second instead. ?loop cleans again a few seconds after the robot docks.
   const batch = Number(q.get('batch') ?? 5);

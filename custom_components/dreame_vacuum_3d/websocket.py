@@ -13,7 +13,7 @@ from homeassistant.helpers import entity_registry as er
 import voluptuous as vol
 
 from .const import DOMAIN
-from .live_map import MAP_LISTENERS
+from .live_map import MAP_LISTENERS, MAP_VIEWERS
 
 
 @callback
@@ -50,7 +50,15 @@ def ws_subscribe_map(
     # The listener list outlives a reload of the entry, so the card keeps its subscription.
     listeners = hass.data[MAP_LISTENERS].setdefault(entry.entry_id, [])
     listeners.append(forward)
-    connection.subscriptions[msg["id"]] = lambda: listeners.remove(forward)
+    viewers = hass.data[MAP_VIEWERS]
+    viewers[entry.entry_id] = viewers.get(entry.entry_id, 0) + 1
+
+    @callback
+    def unsubscribe() -> None:
+        listeners.remove(forward)
+        viewers[entry.entry_id] -= 1
+
+    connection.subscriptions[msg["id"]] = unsubscribe
     connection.send_result(msg["id"])
     if entry.state is ConfigEntryState.LOADED and (first := entry.runtime_data.map.message) is not None:
         forward(first)

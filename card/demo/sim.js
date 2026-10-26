@@ -219,11 +219,15 @@ export class Sim {
     }
   }
 
-  message() {
+  /**
+   * The integration's message. With delta, the path comes as its new strokes since the last message (path_tail, a
+   * stroke with joins continuing the last one), as the integration sends them while the robot cleans.
+   */
+  message({ delta = false } = {}) {
     const [cx, cy] = this.toCell(this.pose);
     const id = this.id[cy * this.g.width + cx];
     this.frame += 1;
-    return {
+    const message = {
       ...this.map,
       frame_id: this.frame,
       robot: this.pose.map(Math.round),
@@ -233,5 +237,15 @@ export class Sim {
       obstacles: this.found.slice(),
       new_cells: this.newCells.slice(),
     };
+    const sent = this.sent;
+    this.sent = { path: this.path, strokes: this.path.length, points: this.path.at(-1)?.points.length ?? 0 };
+    if (!delta || sent?.path !== this.path) return message;
+    const last = this.path[sent.strokes - 1];
+    const tail = [
+      ...(last && last.points.length > sent.points ? [{ mode: last.mode, points: last.points.slice(sent.points), joins: true }] : []),
+      ...this.path.slice(sent.strokes).map((s) => ({ mode: s.mode, points: s.points.slice() })),
+    ];
+    delete message.path;
+    return tail.length ? { ...message, path_tail: tail } : message;
   }
 }

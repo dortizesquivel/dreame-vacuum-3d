@@ -106,6 +106,7 @@ async def test_websocket_subscription(hass: HomeAssistant, hass_ws_client) -> No
 
 
 async def test_frames_while_moving_then_one_more(hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("custom_components.dreame_vacuum_3d.live_map.UNWATCHED_EVERY", 0)  # a read each tick
     entry, miio = await setup(hass)
     device = entry.runtime_data.coordinator.device
     start = _map_requests(miio)
@@ -144,6 +145,32 @@ async def test_frames_while_moving_then_one_more(hass: HomeAssistant, monkeypatc
     await hass.async_block_till_done(wait_background_tasks=True)
     assert _map_requests(miio) == start + 3  # IDLE_EVERY later
     assert IDLE_EVERY >= 60
+
+
+async def test_each_tick_only_while_a_card_shows_the_map(hass: HomeAssistant, hass_ws_client, freezer) -> None:
+    entry, miio = await setup(hass)
+    device = entry.runtime_data.coordinator.device
+    miio.overrides[(4, 1)] = device.values["status"] = Status.CLEANING.value
+    reads = miio.cloud.device_data  # two calls a read: the partial frames (6.1) and the whole ones (6.3)
+
+    async def ticks(n: int) -> int:
+        reads.reset_mock()
+        for _ in range(n):
+            freezer.tick(timedelta(seconds=2.5))
+            async_fire_time_changed(hass)
+            await hass.async_block_till_done(wait_background_tasks=True)
+        return reads.await_count // 2
+
+    assert await ticks(4) == 2  # nobody looking: every other tick
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id({"type": f"{DOMAIN}/map/subscribe", "entity_id": "vacuum.x10"})
+    assert (await client.receive_json())["success"]
+    assert await ticks(4) == 4  # a card open: each tick
+    await client.send_json_auto_id({"type": "unsubscribe_events", "subscription": 1})
+    while (reply := await client.receive_json())["type"] == "event":
+        pass  # the map's messages until then
+    assert reply["success"]
+    assert await ticks(4) == 2
 
 
 async def test_errors_keep_the_last_map_and_warn_once(hass: HomeAssistant, caplog: pytest.LogCaptureFixture) -> None:
@@ -252,6 +279,12 @@ async def test_partial_frames_from_the_cloud_log_while_cleaning(hass: HomeAssist
     # The live frame's path was M-900,-450 L50,0 L0,50 then S…, M…; each P continues the last stroke.
     assert pose["path"][-1]["points"][-3:] == [[-800, -400], [-800, -400], [-800, -350]]
     assert len(sent) == 2 and "cells" not in sent[0]
+    # Listeners get what changed and the path's new strokes, not the whole path again.
+    assert "path" not in sent[0] and "furniture" not in sent[0] and "obstacles" not in sent[0]
+    assert sent[0]["path_tail"] == [{"mode": "vacuum", "points": [[-850, -400], [-800, -400]], "joins": True}]
+    assert sent[1]["obstacles"] == pose["obstacles"] and sent[1]["robot"] == [-700, -400, 45]
+    frames = live_map.last_frames  # for diagnostics: no positions
+    assert frames["P"]["frame_id"] == 3 and "ai_obstacle" in frames["P"]["keys"] and "robot" not in frames["P"]
     # The log is read from where it was left; frames already applied are skipped.
     miio.cloud.device_data.side_effect = lambda _did, key, _since: _logged(p2, p3, start=now) if key == "6.1" else []
     await live_map.refresh()

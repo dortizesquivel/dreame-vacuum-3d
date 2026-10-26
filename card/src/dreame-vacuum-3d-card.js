@@ -1,4 +1,4 @@
-import { normalizeModel, routineRooms } from './model.js';
+import { appendPath, normalizeModel, routineRooms } from './model.js';
 import { VacuumScene } from './scene.js';
 import { readTheme } from './theme.js';
 
@@ -299,10 +299,11 @@ class DreameVacuum3DCard extends HTMLElement {
     sub?.then((unsub) => unsub?.()).catch(() => {});
   }
 
-  /** The first message has everything; later ones carry the rooms only when they changed. */
-  _onMap(message) {
+  /** The first message has everything; later ones carry the rooms only when they changed, and the path's new strokes. */
+  _onMap({ path_tail: tail, ...message }) {
     const first = !this._map;
     this._map = { ...this._map, ...message };
+    if (tail) this._map.path = appendPath(this._map.path, tail);
     if (!this._noWebgl) this._status('');
     this._scene?.setMap(this._map);
     if (first || 'rooms' in message) this._labelRoutines();
