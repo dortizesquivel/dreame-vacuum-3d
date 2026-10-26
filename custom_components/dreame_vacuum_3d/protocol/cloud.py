@@ -343,6 +343,23 @@ class XiaomiCloud:
         """Return rpc bound to one device, for the miot helpers."""
         return partial(self.rpc, did)
 
+    async def device_data(self, did: str, key: str, since: int, *, limit: int = 20) -> list[dict[str, Any]]:
+        """What the cloud logged for one of a device's properties ("siid.piid") since a time (s), newest first.
+
+        A Dreame robot logs its map frames there while it cleans (6.1 the partial ones, 6.3 a whole one's file).
+        """
+        auth = self._require_auth()
+        params = {
+            "uid": auth.user_id,
+            "did": did,
+            "key": key,
+            "type": "prop",
+            "time_start": since,
+            "time_end": 9999999999,
+            "limit": limit,
+        }
+        return _dicts((await self._api("user/get_user_device_data", params)).get("result"))
+
     async def file_url(self, object_name: str, *, model: str = "") -> str | None:
         """Return a download URL for a stored file (a map), None if there's none."""
         return await self._file_url("home/getfileurl", "_v3", object_name, model)
