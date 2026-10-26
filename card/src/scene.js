@@ -328,6 +328,12 @@ export class VacuumScene {
     this.dirty = true;
   }
 
+  /** Where past cleanings went (their paths), shown on the floor; null hides it. */
+  setCoverage(paths) {
+    this.effects.setCoverage(paths);
+    this.dirty = true;
+  }
+
   /** Which floor effects show: { dust, wet }. */
   setEffects(shown) {
     this.effects.setShown(shown);

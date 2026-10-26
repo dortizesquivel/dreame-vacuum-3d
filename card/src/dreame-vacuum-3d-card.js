@@ -4,6 +4,8 @@ import { readTheme } from './theme.js';
 
 const DOMAIN = 'dreame_vacuum_3d';
 const ZOOM_STEP = 1.4;
+const REPLAY_SPEED = 20;     // a past cleaning plays this many times faster than the robot went
+const COVERAGE = 5;          // the coverage shows this many past cleanings
 // What the robot does that gets a tag over it, by its state sensor's value (the integration's DreameVacuumState).
 const BADGES = {
   charging: '⚡', smart_charging: '⚡',
@@ -16,6 +18,7 @@ const ICONS = {   // Material Design Icons
   pause: 'M14,19H18V5H14M6,19H10V5H6V19Z',
   dock: 'M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z',
   zone: 'M3,3H9V5H5V9H3V3M15,3H21V9H19V5H15V3M3,15H5V19H9V21H3V15M19,15H21V21H15V19H19V15M8,8H16V16H8V8Z',
+  history: 'M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3',
 };
 
 const STRINGS = {
@@ -31,6 +34,9 @@ const STRINGS = {
     start: 'Start', pause: 'Pause', dock: 'Back to the dock', commandFailed: 'The robot did not take it: {error}',
     zone: 'Draw a zone to clean', drawZone: 'Drag on the floor to draw the zone', zoneSize: 'Zone of {w} × {h} m',
     cleanZone: 'Clean the zone', theZone: 'the zone',
+    history: 'Past cleanings', noHistory: 'No cleanings yet', lastCleanings: 'Last cleanings: tap one to watch it again',
+    coverage: 'Coverage', live: 'Live', replaying: 'Replaying {when}, ×{speed}', replayed: 'Replayed {when}',
+    otherMap: 'That cleaning was on another map', noReplay: 'Could not get that cleaning: {error}', whole: 'the whole house',
   },
   es: {
     noEntity: 'Pon en "entity" una aspiradora de Dreame Vacuum 3D.',
@@ -44,6 +50,9 @@ const STRINGS = {
     start: 'Empezar', pause: 'Pausar', dock: 'Volver a la base', commandFailed: 'El robot no lo aceptó: {error}',
     zone: 'Dibujar una zona para limpiar', drawZone: 'Arrastra sobre el suelo para dibujar la zona', zoneSize: 'Zona de {w} × {h} m',
     cleanZone: 'Limpiar la zona', theZone: 'la zona',
+    history: 'Limpiezas anteriores', noHistory: 'Aún no hay limpiezas', lastCleanings: 'Últimas limpiezas: toca una para verla otra vez',
+    coverage: 'Cobertura', live: 'En directo', replaying: 'Repitiendo {when}, ×{speed}', replayed: 'Repetida {when}',
+    otherMap: 'Esa limpieza fue en otro mapa', noReplay: 'No se pudo traer esa limpieza: {error}', whole: 'toda la casa',
   },
 };
 
@@ -96,6 +105,12 @@ const STYLE = `
     border: 1px solid var(--divider-color); border-radius: 8px; padding: 8px 12px; min-height: 36px; cursor: pointer; }
   .panel button.primary { color: var(--text-primary-color, #fff); background: var(--primary-color); border-color: transparent; }
   .panel button[hidden] { display: none; }
+  .panel .list { flex: 1 1 100%; display: grid; gap: 4px; max-height: 168px; overflow-y: auto; }
+  .panel .list[hidden] { display: none; }
+  .panel .list button { text-align: left; font-weight: 400; border-color: transparent; padding: 6px 10px; min-height: 32px; }
+  .panel .list button:hover { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
+  .panel .list button:disabled { color: var(--secondary-text-color); cursor: default; background: none; }
+  .panel button[aria-pressed="true"] { color: var(--text-primary-color, #fff); background: var(--primary-color); border-color: transparent; }
   .routines { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 12px; border-top: 1px solid var(--divider-color); }
   .routines[hidden] { display: none; }
   .routines button { font: inherit; font-size: 13px; font-weight: 500; color: var(--primary-text-color); background: none;
@@ -188,9 +203,12 @@ class DreameVacuum3DCard extends HTMLElement {
             <button type="button" data-zoom="out">−</button>
             <button type="button" data-download>⤓</button>
             <button type="button" data-zone><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.zone}"></path></svg></button>
+            <button type="button" data-history><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.history}"></path></svg></button>
           </div>
           <div class="panel" hidden>
             <div class="msg" aria-live="polite"></div>
+            <div class="list" hidden></div>
+            <button type="button" class="coverage" hidden></button>
             <button type="button" class="cancel"></button>
             <button type="button" class="primary clean"></button>
           </div>
@@ -201,7 +219,8 @@ class DreameVacuum3DCard extends HTMLElement {
     this._root = root;
     const $ = (s) => root.querySelector(s);
     this._els = { title: $('.title'), chip: $('.chip'), viewport: $('.viewport'), status: $('.status'), panel: $('.panel'),
-      msg: $('.panel .msg'), clean: $('.panel .clean'), cancel: $('.panel .cancel'), routines: $('.routines') };
+      msg: $('.panel .msg'), clean: $('.panel .clean'), cancel: $('.panel .cancel'), routines: $('.routines'),
+      list: $('.panel .list'), coverage: $('.panel .coverage') };
     root.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
       this._view = b.dataset.view;
       this._follow = false;
@@ -217,6 +236,12 @@ class DreameVacuum3DCard extends HTMLElement {
     root.querySelectorAll('[data-zoom]').forEach((b) => b.addEventListener('click', () => this._scene?.zoom(b.dataset.zoom === 'in' ? ZOOM_STEP : 1 / ZOOM_STEP)));
     root.querySelector('[data-download]').addEventListener('click', () => this._download());
     root.querySelector('[data-zone]').addEventListener('click', () => this._setZoneMode(!this._zoneMode));
+    root.querySelector('[data-history]').addEventListener('click', () => this._showHistory());
+    this._els.list.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-start]');
+      if (b) this._replay(Number(b.dataset.start));
+    });
+    this._els.coverage.addEventListener('click', () => this._toggleCoverage());
     this._els.cancel.addEventListener('click', () => this._pick(null));
     this._els.clean.addEventListener('click', () => this._clean());
     root.querySelectorAll('[data-cmd]').forEach((b) => b.addEventListener('click', () => this._command(b.dataset.cmd)));
@@ -299,6 +324,8 @@ class DreameVacuum3DCard extends HTMLElement {
     r.querySelector('[data-zoom="out"]').setAttribute('aria-label', this._t('zoomOut'));
     r.querySelector('[data-download]').setAttribute('aria-label', this._t('download'));
     r.querySelector('[data-download]').title = this._t('download');
+    r.querySelector('[data-history]').setAttribute('aria-label', this._t('history'));
+    r.querySelector('[data-history]').title = this._t('history');
     r.querySelector('[data-zone]').setAttribute('aria-label', this._t('zone'));
     r.querySelector('[data-zone]').title = this._t('zone');
     r.querySelector('[data-zone]').setAttribute('aria-pressed', String(!!this._zoneMode));
@@ -393,7 +420,7 @@ class DreameVacuum3DCard extends HTMLElement {
     this._map = { ...this._map, ...message };
     if (tail) this._map.path = appendPath(this._map.path, tail);
     if (!this._noWebgl) this._status('');
-    this._scene?.setMap(this._map);
+    if (!this._replaying) this._scene?.setMap(this._map);   // a replay shows a past cleaning meanwhile
     if (first || 'rooms' in message) this._labelRoutines();
     if (this._hass) this._renderHead();
   }
@@ -476,8 +503,120 @@ class DreameVacuum3DCard extends HTMLElement {
     cancel.textContent = this._t('cancel');
   }
 
+  /** The last cleanings, to replay one, and the coverage of the last few. */
+  async _showHistory() {
+    this._pick(null);
+    const { panel, msg, list, coverage, clean, cancel } = this._els;
+    panel.hidden = false;
+    clean.hidden = true;
+    cancel.textContent = this._t('close');
+    let cleanings = [];
+    try {
+      ({ cleanings } = await this._hass.callWS({ type: `${DOMAIN}/history`, entity_id: this._config.entity }));
+    } catch (err) {
+      msg.dataset.error = 'true';
+      msg.textContent = this._t('noReplay', { error: err?.message ?? String(err) });
+      return;
+    }
+    this._cleanings = cleanings;
+    msg.textContent = this._t(cleanings.length ? 'lastCleanings' : 'noHistory');
+    const rooms = this._map?.rooms ?? {};
+    const when = (s) => new Date(s * 1000).toLocaleString(this._lang(), { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    list.replaceChildren(...cleanings.slice(0, 10).map((c) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.start = String(c.start);
+      b.disabled = !c.has_map;
+      const where = c.rooms.length ? c.rooms.map((r) => rooms[r]?.name ?? `#${r}`).join(', ') : this._t('whole');
+      b.textContent = [when(c.start), c.duration != null && `${c.duration} min`, c.area != null && `${c.area} m²`, where].filter(Boolean).join(' · ');
+      return b;
+    }));
+    list.hidden = !cleanings.length;
+    coverage.hidden = !cleanings.some((c) => c.has_map);
+    coverage.textContent = this._t('coverage');
+    coverage.setAttribute('aria-pressed', String(!!this._coverage));
+  }
+
+  async _path(start) {
+    return this._hass.callWS({ type: `${DOMAIN}/history/path`, entity_id: this._config.entity, start });
+  }
+
+  /** Play a past cleaning back on the map, REPLAY_SPEED times faster than the robot went. */
+  async _replay(start) {
+    const { msg, list, cancel } = this._els;
+    const when = new Date(start * 1000).toLocaleString(this._lang(), { weekday: 'long', hour: '2-digit', minute: '2-digit' });
+    let past;
+    try {
+      past = await this._path(start);
+    } catch (err) {
+      msg.dataset.error = 'true';
+      msg.textContent = this._t('noReplay', { error: err?.message ?? String(err) });
+      return;
+    }
+    if (this._map && past.map_id !== this._map.map_id) {
+      msg.dataset.error = 'true';
+      msg.textContent = this._t('otherMap');
+      return;
+    }
+    this._stopReplay();
+    list.hidden = true;
+    msg.dataset.error = 'false';
+    msg.textContent = this._t('replaying', { when, speed: REPLAY_SPEED });
+    cancel.textContent = this._t('live');
+    const points = past.path.flatMap((s) => s.points.map((p) => [...p, s.mode]));
+    const length = points.slice(1).reduce((d, p, i) => d + Math.hypot(p[0] - points[i][0], p[1] - points[i][1]), 0);
+    const dur = Math.min(90000, Math.max(8000, length / 0.3 / REPLAY_SPEED));   // the robot does about 0.3 m/s
+    const t0 = performance.now();
+    const frame = () => {
+      const s = Math.min(1, (performance.now() - t0) / dur), n = Math.max(2, Math.round(s * points.length));
+      // The path as far as it had gone, in its strokes.
+      const path = [];
+      for (const [x, y, mode] of points.slice(0, n)) {
+        if (path.at(-1)?.mode !== mode) path.push({ mode, points: path.length ? [path.at(-1).points.at(-1)] : [] });
+        path.at(-1).points.push([x, y]);
+      }
+      const [a, b] = [points[n - 2], points[n - 1]];
+      const angle = Math.round((Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI);
+      this._scene?.setMap({ ...this._map, path, robot: [b[0], b[1], angle], active: past.rooms, room: null, obstacles: [], new_cells: [] });
+      if (s >= 1) {
+        clearInterval(this._replaying);
+        this._replaying = -1;   // finished: the map stays on the end of the replay until Live
+        msg.textContent = this._t('replayed', { when });
+      }
+    };
+    this._replaying = setInterval(frame, 120);
+    frame();
+  }
+
+  _stopReplay() {
+    if (!this._replaying) return;
+    clearInterval(this._replaying);
+    this._replaying = null;
+    if (this._map) this._scene?.setMap(this._map);
+  }
+
+  async _toggleCoverage() {
+    const { coverage } = this._els;
+    if (this._coverage) {
+      this._coverage = null;
+      this._scene?.setCoverage(null);
+    } else {
+      const starts = (this._cleanings ?? []).filter((c) => c.has_map && c.map_id === this._map?.map_id).slice(0, COVERAGE);
+      const paths = [];
+      for (const c of starts) paths.push((await this._path(c.start).catch(() => null))?.path ?? []);
+      this._coverage = paths;
+      this._scene?.setCoverage(paths);
+    }
+    coverage.setAttribute('aria-pressed', String(!!this._coverage));
+  }
+
   /** A tap on a room offers to clean it; a tap elsewhere or Cancel closes the offer (and leaves zone mode). */
   _pick(id) {
+    this._stopReplay();
+    if (this._els) {
+      this._els.list.hidden = true;
+      this._els.coverage.hidden = true;
+    }
     if (id == null && this._zoneMode) {
       this._zoneMode = false;
       this._zone = null;
