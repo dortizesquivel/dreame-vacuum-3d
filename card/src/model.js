@@ -117,3 +117,14 @@ export function roomAt(map, x, y) {
   }
   return null;
 }
+
+/** A routine's rooms as segment ids, null where the map has no such room: numbers are ids, text is a room's name. */
+export function routineRooms(rooms, wanted) {
+  const all = Object.entries(rooms ?? {});
+  return wanted.map((x) => {
+    const hit = typeof x === 'number'
+      ? all.find(([id]) => Number(id) === x)
+      : all.find(([, room]) => room.name?.trim().toLowerCase() === x.trim().toLowerCase());
+    return hit ? Number(hit[0]) : null;
+  });
+}

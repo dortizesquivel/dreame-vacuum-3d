@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dreame Vacuum 3D for Home Assistant</title>
+<meta name="description" content="A Home Assistant integration for Dreame robot vacuums, with a card that draws the robot cleaning a 3D model of your house: its path, the floor it vacuums and mops, and what it finds on the way.">
+<meta property="og:title" content="Dreame Vacuum 3D for Home Assistant">
+<meta property="og:description" content="Watch your Dreame robot vacuum clean a 3D model of your house, live, in your Home Assistant dashboard.">
+<meta property="og:image" content="https://dortizesquivel.github.io/dreame-vacuum-3d/docs/images/living-room.png">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;600&family=Unbounded:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f3f6f5;
+    --ink: #1b2430;
+    --ink-soft: #4a5868;
+    --line: #c9d6d3;
+    --signal: #0d7c74;      /* the robot's path */
+    --signal-dark: #0a6660;
+    --wet: #2a78d6;         /* mopped floor */
+    --surface: #ffffff;
+    --measure: 64ch;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 400 1.0625rem/1.6 "Atkinson Hyperlegible Next", system-ui, sans-serif;
+  }
+  img { max-width: 100%; height: auto; display: block; }
+  a { color: var(--signal); text-underline-offset: 0.2em; }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--signal); outline-offset: 3px; border-radius: 4px; }
+  h1, h2, h3 { font-family: Unbounded, system-ui, sans-serif; font-weight: 600; line-height: 1.12; margin: 0; letter-spacing: -0.01em; }
+  h1 { font-size: clamp(2.2rem, 4.6vw, 3.6rem); }
+  h2 { font-size: clamp(1.5rem, 2.6vw, 2.1rem); }
+  h3 { font-size: 1.05rem; font-weight: 400; }
+  p { margin: 0; max-width: var(--measure); }
+  code { font-size: 0.92em; }
+  .wrap { width: min(1180px, 100% - 2.5rem); margin-inline: auto; }
+
+  /* Header */
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-block: 1.1rem; position: relative; z-index: 2; }
+  .brand { display: flex; align-items: center; gap: 0.6rem; color: var(--ink); text-decoration: none; font-family: Unbounded, sans-serif; font-weight: 600; }
+  .top nav { display: flex; gap: 1.4rem; font-weight: 600; }
+  .top nav a { color: var(--ink); text-decoration: none; }
+  .top nav a:hover { color: var(--signal); }
+
+  /* Hero: a robot's lanes run behind the headline */
+  .hero { position: relative; overflow: hidden; padding-block: 2.5rem 5rem; }
+  .lanes { position: absolute; left: 0; top: 0; width: max(1400px, 120vw); height: auto; pointer-events: none; z-index: 0; }
+  .lanes path { fill: none; stroke: var(--line); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; opacity: 0.45; }
+  .lanes .done { stroke: var(--signal); opacity: 0.2; }
+  .lanes circle { fill: var(--surface); stroke: var(--ink); stroke-width: 4; }
+  .hero-grid { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 3rem; align-items: center; }
+  .lede { margin-top: 1.4rem; font-size: 1.2rem; color: var(--ink-soft); }
+  .actions { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-top: 2rem; }
+  .button { display: inline-flex; align-items: center; min-height: 48px; padding: 0 1.3rem; border-radius: 999px; font-weight: 600; text-decoration: none; border: 2px solid var(--signal); }
+  .button.primary { background: var(--signal); color: #fff; }
+  .button.primary:hover { background: var(--signal-dark); border-color: var(--signal-dark); }
+  .button.secondary { color: var(--signal); background: transparent; }
+  .button.secondary:hover { background: rgba(13, 124, 116, 0.08); }
+  .demo { background: var(--surface); border-radius: 18px; box-shadow: 0 1px 2px rgba(27, 36, 48, 0.08), 0 18px 48px -18px rgba(27, 36, 48, 0.35); overflow: hidden; }
+  .demo iframe { display: block; width: 100%; height: 600px; border: 0; }   /* the card at height=480, its header and routines */
+  .demo-note { margin-top: 0.9rem; color: var(--ink-soft); font-size: 0.95rem; }
+
+  /* Sections */
+  section { padding-block: 4.5rem; }
+  section + section { border-top: 1px solid var(--line); }
+  .intro { margin-top: 0.9rem; color: var(--ink-soft); }
+  .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2rem; margin-top: 2.5rem; }
+  .pair figure { margin: 0; }
+  .pair img, .shot { border-radius: 12px; border: 1px solid var(--line); background: var(--surface); }
+  .pair figcaption { margin-top: 0.7rem; color: var(--ink-soft); font-size: 0.95rem; }
+  .copy { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 3rem; margin-top: 0.9rem; }
+  .copy p { color: var(--ink-soft); }
+
+  .features { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 3rem; margin-top: 2.5rem; align-items: start; }
+  .features ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 1.6rem; }
+  .features h3 { margin-bottom: 0.3rem; }
+  .features li p { color: var(--ink-soft); }
+  .features .mark { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 50%; margin-right: 0.55rem; vertical-align: 0.05em; background: var(--signal); }
+  .features .mark.wet { background: var(--wet); }
+  .features .mark.warn { background: #e8a33d; }
+  .features .mark.room { background: var(--ink); }
+
+  .local { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem; margin-top: 2.5rem; }
+  .local h3 { margin-bottom: 0.35rem; }
+  .local p { color: var(--ink-soft); }
+
+  .steps { counter-reset: step; list-style: none; padding: 0; margin: 2.5rem 0 0; display: grid; gap: 2rem; max-width: 760px; }
+  .steps li { counter-increment: step; display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: 1rem; }
+  .steps li::before { content: counter(step); font: 600 1.6rem/1 Unbounded, sans-serif; color: var(--signal); }
+  .steps h3 { margin-bottom: 0.4rem; }
+  pre { margin: 0.8rem 0 0; padding: 1rem 1.2rem; background: var(--ink); color: #e8eef5; border-radius: 10px; overflow-x: auto; font-size: 0.92rem; line-height: 1.5; }
+
+  .trust { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 3rem; align-items: start; }
+  .trust ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.6rem; }
+  .badges { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.4rem; }
+  .badges img { height: 20px; width: auto; }
+
+  footer { padding-block: 2.5rem 3rem; color: var(--ink-soft); border-top: 1px solid var(--line); }
+  footer p { max-width: none; }
+
+  @media (max-width: 900px) {
+    .hero-grid, .trust, .copy, .features, .pair, .local { grid-template-columns: minmax(0, 1fr); gap: 2rem; }
+    .copy { gap: 1rem; }
+    .demo iframe { height: 560px; }
+    .top nav { gap: 1rem; font-size: 0.95rem; }
+  }
+  @media (max-width: 520px) {
+    .top nav a.optional { display: none; }
+    section { padding-block: 3.2rem; }
+  }
+</style>
+</head>
+<body>
+<header class="wrap top">
+  <a class="brand" href="./">
+    <img src="favicon.svg" width="28" height="28" alt="">
+    Dreame Vacuum 3D
+  </a>
+  <nav aria-label="Main">
+    <a class="optional" href="card/demo/">Demo</a>
+    <a class="optional" href="#install">Install</a>
+    <a href="https://github.com/dortizesquivel/dreame-vacuum-3d#readme">Docs</a>
+    <a href="https://github.com/dortizesquivel/dreame-vacuum-3d">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <div class="hero">
+    <svg class="lanes" viewBox="0 0 1400 1000" aria-hidden="true">
+      <path class="done" d="M40 60 H1360 V120 H40 V180 H1360 V240 H40 V300 H640"/>
+      <path d="M640 300 H1360 V360 H40 V420 H1360 V480 H40 V540 H1360 V600 H40 V660 H1360 V720 H40"/>
+      <circle cx="640" cy="300" r="16"/>
+    </svg>
+
+    <div class="wrap hero-grid">
+      <div>
+        <h1>Watch your robot clean, in 3D.</h1>
+        <p class="lede">A Home Assistant integration for Dreame robot vacuums, with a card that draws the robot moving through a 3D model of your house: its path, the floor it vacuums and mops, and what it finds on the way.</p>
+        <div class="actions">
+          <a class="button primary" href="https://my.home-assistant.io/redirect/hacs_repository/?owner=dortizesquivel&amp;repository=dreame-vacuum-3d&amp;category=integration">Add to Home Assistant</a>
+          <a class="button secondary" href="https://github.com/dortizesquivel/dreame-vacuum-3d#readme">Read the docs</a>
+        </div>
+      </div>
+      <figure style="margin:0">
+        <div class="demo">
+          <iframe src="card/demo/?capture&amp;start&amp;loop&amp;speed=4&amp;batch=1&amp;height=480" title="Live demo of the card: a simulated robot cleaning an example living room" loading="eager"></iframe>
+        </div>
+        <figcaption class="demo-note">The card itself, running here with a simulated robot. Drag to turn the room, use + and − to zoom, switch to Plan or Follow, or tap the floor to clean the room. <a href="card/demo/?house=flat">Open the full demo</a>, with a six-room flat and routines.</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <section id="house" class="wrap">
+    <h2>Your own house, in 3D</h2>
+    <div class="copy">
+      <p>Load a model of your house and say where the dock is: the card puts the robot, its path and the rooms from the robot's map on it. Draw it as it is, with its textures, or as a hologram that keeps the shapes.</p>
+      <p>No model yet? The card draws the robot's own map, and the repository has <a href="https://github.com/dortizesquivel/dreame-vacuum-3d/blob/main/docs/house-model.md">the prompt an AI agent follows</a> to build one from phone photos, on the floor plan the robot made.</p>
+    </div>
+    <div class="pair">
+      <figure>
+        <img src="docs/images/living-room.png" width="960" height="638" alt="The robot cleaning a textured living room, with the path it took and a sock and shoes it found on the floor" loading="lazy">
+        <figcaption>The example living room, textured from photos.</figcaption>
+      </figure>
+      <figure>
+        <img src="docs/images/futuristic.png" width="960" height="638" alt="The same living room as a glowing hologram in a dark theme, with the robot between the sofa and the coffee table" loading="lazy">
+        <figcaption>The futuristic style, in a dark theme.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="features" class="wrap">
+    <h2>What the card shows</h2>
+    <p class="intro">Everything comes from the robot's own map frames, live while it cleans.</p>
+    <div class="features">
+      <ul>
+        <li>
+          <h3><span class="mark"></span>The robot and its path</h3>
+          <p>Where it is, which way it faces, the path it took and the rooms it is cleaning, with the room it is in on the card and as a sensor.</p>
+        </li>
+        <li>
+          <h3><span class="mark wet"></span>Vacuumed and mopped floor</h3>
+          <p>Where it vacuums, the dust clears and the floor glints; where it mops, the floor turns dark and glossy and dries out over the next minutes.</p>
+        </li>
+        <li>
+          <h3><span class="mark warn"></span>What it finds on the floor</h3>
+          <p>Shoes, socks, cables, pet waste or spills, where its camera saw them, and anything the lidar sees on floor that used to be open.</p>
+        </li>
+        <li>
+          <h3><span class="mark room"></span>Rooms you can tap</h3>
+          <p>Tap a room to clean it, or save routines on the card: rooms, suction, water and passes in one button.</p>
+        </li>
+      </ul>
+      <img class="shot" src="docs/images/flat.png" width="960" height="638" alt="A six-room flat drawn from the robot's map: the living room vacuumed and mopped, the hall vacuumed, the kitchen being mopped, and the things found on the floor" loading="lazy">
+    </div>
+  </section>
+
+  <section id="local" class="wrap">
+    <h2>Local control, the cloud only for the map</h2>
+    <div class="local">
+      <div>
+        <h3>Commands stay on your network</h3>
+        <p>Start, stop, rooms, suction and every setting go straight to the robot over miIO. The Xiaomi cloud is only a fallback.</p>
+      </div>
+      <div>
+        <h3>The map from Xiaomi's cloud</h3>
+        <p>The robot uploads its map frames there, so the live map needs your Xiaomi Home account. Two-factor sign-in is supported.</p>
+      </div>
+      <div>
+        <h3>Your automations keep working</h3>
+        <p>Its cleaning services take the same names and fields as Tasshack's integration: moving an automation over is a find and replace.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="install" class="wrap">
+    <h2>Install it</h2>
+    <ol class="steps">
+      <li>
+        <div>
+          <h3>Add the integration with HACS</h3>
+          <p><a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=dortizesquivel&amp;repository=dreame-vacuum-3d&amp;category=integration">Open it in HACS</a>, choose Download and restart Home Assistant. Without HACS, copy it from the <a href="https://github.com/dortizesquivel/dreame-vacuum-3d/releases/latest">latest release</a>.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>Sign in and pick your robot</h3>
+          <p>In Settings → Devices &amp; services, add Dreame Vacuum 3D and sign in with your Xiaomi Home account. It is tested on the Xiaomi X10+; other Dreame robots get the entities for what they report, untested so far (<a href="https://github.com/dortizesquivel/dreame-vacuum-3d#models">models</a>).</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>Add the card to a dashboard</h3>
+          <p>The integration serves the card itself. Search for Dreame Vacuum 3D Card in Add card, or paste this:</p>
+          <pre><code>type: custom:dreame-vacuum-3d-card
+entity: vacuum.my_robot
+routines:
+  - name: After dinner
+    rooms: [Kitchen, Living room]</code></pre>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section id="trust" class="wrap trust">
+    <div>
+      <h2>Open and checked</h2>
+      <p class="intro">MIT licensed. The card runs in your browser and sends nothing anywhere; the integration talks only to your robot and to Xiaomi.</p>
+      <div class="badges">
+        <a href="https://github.com/dortizesquivel/dreame-vacuum-3d/actions/workflows/ci.yml"><img src="https://github.com/dortizesquivel/dreame-vacuum-3d/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+        <a href="https://github.com/dortizesquivel/dreame-vacuum-3d/actions/workflows/validate.yml"><img src="https://github.com/dortizesquivel/dreame-vacuum-3d/actions/workflows/validate.yml/badge.svg" alt="Validate (HACS and hassfest)"></a>
+      </div>
+    </div>
+    <ul>
+      <li>Every change runs ruff, mypy and the tests, with a 95 % coverage floor, plus the card's tests, HACS and hassfest, before it can merge.</li>
+      <li>The protocol and map knowledge comes from <a href="https://github.com/Tasshack/dreame-vacuum">Tasshack/dreame-vacuum</a> (MIT), credited in the code it shaped.</li>
+      <li>What it keeps, where it sends it and how diagnostics hide it: <a href="https://github.com/dortizesquivel/dreame-vacuum-3d/blob/main/docs/ASSURANCE.md">the assurance notes</a>. Found a security problem? <a href="https://github.com/dortizesquivel/dreame-vacuum-3d/security/advisories/new">Report it privately</a>.</li>
+    </ul>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Dreame Vacuum 3D, MIT licence. Built with three.js. Not affiliated with Dreame or Xiaomi. The demo's robot is simulated and its houses are made up: the living room is the <a href="https://github.com/dortizesquivel/mmwave-3d-card">mmWave 3D Card</a>'s example room, rebuilt from synthetic photos with CC0 materials. <a href="https://github.com/dortizesquivel/dreame-vacuum-3d">Source on GitHub</a>.</p>
+  </div>
+</footer>
+</body>
+</html>

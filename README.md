@@ -9,6 +9,10 @@
 
 A Home Assistant integration for Dreame robot vacuums: local miIO control, Xiaomi cloud login for maps and fallback, Tasshack-compatible cleaning services, a capability table per model, and a 3D card that draws the robot moving through a 3D model of your house.
 
+[![The card: a robot cleaning a textured 3D living room, with its path and the sock and shoes it found](docs/images/living-room.png)](https://dortizesquivel.github.io/dreame-vacuum-3d/)
+
+**[Try the live demo](https://dortizesquivel.github.io/dreame-vacuum-3d/card/demo/)**: the card with a simulated robot, in an example living room or a six-room flat.
+
 **Contents:** [Requirements](#requirements) · [Installation](#installation) · [Configuration](#configuration) · [The 3D card](#the-3d-card) · [Models](#models) · [Services](#services) · [Events](#events) · [Options](#options) · [Development](#development) · [Credits](#credits) · [License](#license)
 
 ## Requirements
@@ -66,12 +70,26 @@ The robot moves on the card as it cleans, with its path, the rooms it is cleanin
 - **The house.** Without `model`, the card draws the robot's own map: rooms in colours, walls and the dock. With `model`, it draws your 3D model (glTF/GLB) and puts the robot on it: `model.dock.position` is the point of the model's floor under the docked robot (metres, y up) and `model.dock.heading` the way the docked robot faces (degrees: 0 = the model's +z, 90 = +x). `style: futuristic` draws the model as a hologram; `units` (`m`, `cm`, `mm`, `in`, `ft`), `up` (`y` or `z`) and `opacity` are as in the [mmWave 3D Card](https://github.com/dortizesquivel/mmwave-3d-card#a-3d-model-of-your-room).
 - **What the robot finds.** Obstacles its camera or lidar reports (shoes, socks, cables, pet waste, spills…) appear where it found them, named in Home Assistant's language. What the lidar sees on floor that was open when the house was mapped shows as low blocks with its outline: the robot gives the outline, not the height. Furniture the robot recognised is drawn as boxes when there is no model.
 - **Make a model from photos.** [docs/house-model.md](docs/house-model.md) is a prompt for an AI coding agent that turns phone photos of each room into a model of the house, built on the robot's floor plan (**⤓** on the card downloads it), with the `model:` config ready.
-- **Other options.** `title`, `height` (pixels, default 420), `view` (`3d` or `plan`), `labels` (room names, default on) and `dry_time` (minutes the mopped floor takes to dry, default 10).
-- **Where the map comes from.** While the robot moves, the integration asks it for a map frame every 5 seconds (every 15 minutes while it is docked) and sends the card the robot's pose, the dock, the rooms and the path. The robot uploads each frame to the Xiaomi cloud, so the map needs the cloud; commands don't.
+- **Routines.** Buttons under the map that clean several rooms in one go, by the names the robot gives them or by number, with optional `suction_level` (0–3), `water_volume` (1–3) and `repeats`, as in `vacuum_clean_segment`:
+
+  ```yaml
+  routines:
+    - name: After dinner
+      rooms: [Kitchen, Living room]
+      suction_level: 2
+    - rooms: [Bedroom, Bathroom]     # without a name, the button shows the rooms
+  ```
+
+- **Other options.** `title`, `height` (pixels, default 420), `view` (`3d` or `plan`), `labels` (room names, default on) and `dry_time` (minutes the mopped floor takes to dry, default 10). The card stops drawing while it is off screen and lets go of its WebGL context when it leaves the page.
+- **Where the map comes from.** While the robot cleans it logs a map frame in the Xiaomi cloud every 2–3 seconds; the integration reads the new ones every 5 seconds and sends the card the robot's pose, the path, the rooms being cleaned and what the robot found. While the robot is docked it asks for a whole frame every 15 minutes. So the map needs the cloud; commands don't.
 
 Two entities come from the map too: **Current room** (a sensor) and a **Clean *room*** button per room.
 
-To try the card without a robot: `cd card && npm install && npm run build && npm run demo`, then open <http://127.0.0.1:8792/card/demo/?house=URL> with a folder that has a `map.json` (a map from Tasshack's integration) and, optionally, a `config.json` with the `model:` block.
+Without a model, the card draws the robot's own map:
+
+![A six-room flat drawn from the robot's map: the living room vacuumed and mopped, the hall vacuumed, the kitchen being mopped](docs/images/flat.png)
+
+To run the demo locally: `cd card && npm install && npm run build && npm run demo`, then open <http://127.0.0.1:8792/card/demo/> (`?house=flat` for the flat). Its houses are in `card/demo/houses/`, made by `node demo/make-houses.mjs`; `?house=PATH/` loads another folder with a `map.json` (a map from Tasshack's integration) and a `config.json` like theirs.
 
 ## Models
 

@@ -1,0 +1,13 @@
+{
+  "name": "Living room",
+  "model": { "url": "living-room.glb", "dock": { "position": [4.5, 0, 5.4], "heading": 180 } },
+  "clean": { "1": "both" },
+  "things": [
+    { "type": "sock", "room": 1, "at": [-1650, -400] },
+    { "type": "shoes", "room": 1, "at": [2350, -2100] },
+    { "type": "wire", "room": 1, "at": [2250, 1000] },
+    { "type": "liquid_stain", "room": 1, "at": [-2150, 700] }
+  ],
+  "new": { "room": 1, "at": [450, -3000] },
+  "routines": [{ "name": "Quick vacuum", "rooms": ["Living room"], "suction_level": 1, "water_volume": 1 }]
+}

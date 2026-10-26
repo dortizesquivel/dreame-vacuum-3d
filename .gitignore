@@ -11,3 +11,4 @@ dumps/
 .ruff_cache/
 .hypothesis/
 __pycache__/
+.playwright-mcp/
