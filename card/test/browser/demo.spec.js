@@ -1,0 +1,124 @@
+// The card in the demo, with its simulated robot: what a person would see, checked through the card's own state.
+import { expect, test } from '@playwright/test';
+
+/** Open the demo and wait for the card to have a map; collects the page's errors. */
+async function open(page, query = '') {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error' && !m.text().includes('favicon')) errors.push(m.text()); });
+  await page.goto(`/card/demo/?height=480${query}`);
+  await page.waitForFunction(() => window.demo?.card?._map?.rooms && window.demo.card._scene?.robot.visible);
+  return errors;
+}
+
+/** Run the simulated robot for `seconds` of its time, sending each step to the card as the integration would. */
+const run = (page, seconds, step = 0.5) => page.evaluate(async ([seconds, step]) => {
+  const { sim, send } = window.demo;
+  for (let t = 0; t < seconds; t += step) {
+    sim.step(step);
+    send();
+    if (Math.round(t / step) % 20 === 0) await new Promise((r) => setTimeout(r, 5));
+  }
+}, [seconds, step]);
+
+for (const house of ['living-room', 'flat']) {
+  test(`the ${house} loads, with its rooms and no errors`, async ({ page }) => {
+    const errors = await open(page, `&house=${house}`);
+    const rooms = await page.evaluate(() => Object.values(window.demo.card._map.rooms).map((r) => r.name));
+    expect(rooms.length).toBeGreaterThan(0);
+    await expect(page.locator('dreame-vacuum-3d-card canvas')).toHaveCount(1);
+    expect(errors).toEqual([]);
+  });
+}
+
+test('the robot goes round the furniture, not through it', async ({ page }) => {
+  await open(page, '&start');
+  // The living room's furniture (model metres) and how close the robot's centre may come (its radius is 0.175).
+  const hits = await page.evaluate(async () => {
+    const blocked = { hearth: [1.17, 0, 3.81, 0.82], sofa: [0.76, 3.64, 3.7, 4.64], table: [1.47, 2.11, 2.95, 3.11],
+      bookcase: [5.41, 1.65, 5.69, 3.27], armchair: [3.59, 1.44, 4.71, 2.56] };
+    const { sim, card, send } = window.demo, m = 0.1, hits = {};
+    for (let i = 0; i < 150; i++) {
+      sim.step(1.5);
+      send();
+      for (let k = 0; k < 4; k++) {   // let it glide there, looking at it on the way
+        await new Promise((r) => setTimeout(r, 40));
+        const p = card._scene.robot.position;
+        for (const [name, [x0, z0, x1, z1]] of Object.entries(blocked)) {
+          if (p.x > x0 - m && p.x < x1 + m && p.z > z0 - m && p.z < z1 + m) hits[name] = (hits[name] ?? 0) + 1;
+        }
+      }
+    }
+    return hits;
+  });
+  expect(hits).toEqual({});
+});
+
+test('the path sent in pieces is the path the robot drew', async ({ page }) => {
+  await open(page, '&house=flat');
+  await page.evaluate(() => { const { sim, send } = window.demo; sim.clean([1, 3, 2], { 1: 'both', 3: 'vacuum', 2: 'mop' }); send(); });
+  await run(page, 900);
+  const { same, strokes } = await page.evaluate(() => {
+    const { sim, card } = window.demo, flat = (p) => JSON.stringify(p.map((s) => [s.mode, s.points]));
+    return { same: flat(card._map.path) === flat(sim.path), strokes: sim.path.length };
+  });
+  expect(strokes).toBeGreaterThan(1);
+  expect(same).toBe(true);
+});
+
+test('it says what the robot does: washing its mops, stuck, paused, going home', async ({ page }) => {
+  await open(page, '&house=flat&lang=es');
+  const card = page.locator('dreame-vacuum-3d-card');
+  const chip = card.locator('.chip');
+  const toggle = card.locator('[data-cmd="toggle"]');
+  const look = () => page.evaluate(() => {
+    const s = window.demo.card._scene;
+    return { badge: s.badge.visible ? s.badge.element.textContent : null, stuck: s.stuckGroup.children.length };
+  });
+  await expect(chip).toContainText('En la base');
+  await toggle.click();   // start: every room
+  await expect(chip).toContainText('Limpiando');
+  await page.evaluate(async () => {
+    const { sim, send } = window.demo;
+    for (let i = 0; i < 8000 && sim.robotState !== 'washing'; i++) { sim.step(0.5); send(); if (i % 50 === 0) await new Promise((r) => setTimeout(r, 5)); }
+  });
+  await expect(chip).toContainText('Lavando las mopas');
+  expect((await look()).badge).toBe('🫧 Lavando las mopas');
+  await run(page, 60);
+  await page.evaluate(() => { window.demo.sim.stuck(); window.demo.send(); });
+  await expect(chip).toContainText('Robot atascado');
+  expect(await look()).toEqual({ badge: '⚠️ Robot atascado', stuck: 2 });
+  await toggle.click();   // start again
+  await expect(chip).toContainText('Limpiando');
+  expect((await look()).stuck).toBe(2);   // where it got stuck stays marked
+  await toggle.click();   // pause
+  await expect(chip).toContainText('En pausa');
+  await card.locator('[data-cmd="return_to_base"]').click();
+  await expect(chip).toContainText('Volviendo a la base');
+});
+
+test('a routine cleans its rooms', async ({ page }) => {
+  await open(page, '&house=flat');
+  await page.locator('dreame-vacuum-3d-card .routines button', { hasText: 'After dinner' }).click();
+  await expect(page.locator('dreame-vacuum-3d-card .panel .msg')).toHaveText('Cleaning After dinner');
+  expect(await page.evaluate(() => window.demo.sim.active)).toEqual([2, 1]);
+});
+
+test('it lets go of WebGL when it leaves the page, and draws only while it shows', async ({ page }) => {
+  await open(page);
+  const result = await page.evaluate(async () => {
+    const card = window.demo.card, parent = card.parentNode;
+    card.remove();
+    const away = { scene: !!card._scene, canvases: card.shadowRoot.querySelectorAll('canvas').length };
+    parent.append(card);
+    await new Promise((r) => setTimeout(r, 300));
+    const back = { scene: !!card._scene, canvases: card.shadowRoot.querySelectorAll('canvas').length };
+    document.body.style.paddingTop = '4000px';
+    await new Promise((r) => setTimeout(r, 400));
+    const below = card._scene.running;
+    document.body.style.paddingTop = '';
+    await new Promise((r) => setTimeout(r, 400));
+    return { away, back, below, shown: card._scene.running };
+  });
+  expect(result).toEqual({ away: { scene: false, canvases: 0 }, back: { scene: true, canvases: 1 }, below: false, shown: true });
+});

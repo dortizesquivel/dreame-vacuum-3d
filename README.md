@@ -156,6 +156,7 @@ mypy
 python scripts/check_translations.py
 pytest
 cd card && npm ci && npm test && npm run build   # the card; commit the rebuilt bundle with its source
+npx playwright install chromium && npm run test:browser   # the card in the demo, in a browser
 ```
 
 `main` is protected: changes go in through a pull request. Required checks are **Python tests** (ruff, formatting, mypy, translations, pytest with a 95 % coverage floor), **DCO** (every commit signed off with `git commit -s`) and **Validate** (HACS + hassfest); see [CONTRIBUTING.md](CONTRIBUTING.md).
