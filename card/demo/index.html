@@ -93,8 +93,13 @@
   card.hass = hass();
 
   const send = () => { const m = sim.message(); subs.forEach((cb) => cb(m)); card.hass = hass(); };
-  // A message a second, like the integration while the robot cleans (it sends one per map frame).
-  setInterval(() => { if (sim.state !== 'docked') { sim.step(speed); send(); } }, 1000);
+  // Like the integration while the robot cleans: every 5 s, the frames the robot logged since (one every 2.5 s).
+  // ?batch=1 sends one a second instead.
+  const batch = Number(q.get('batch') ?? 5);
+  setInterval(() => {
+    if (sim.state === 'docked') return;
+    for (let i = 0; i < Math.max(1, batch / 2.5); i++) { sim.step((speed * batch) / Math.max(1, batch / 2.5)); send(); }
+  }, batch * 1000);
 
   const press = (id, on) => document.getElementById(id).setAttribute('aria-pressed', String(on));
   document.getElementById('go').onclick = () => { sim.clean([9, 13, 8], { 9: 'both', 13: 'vacuum', 8: 'mop' }); send(); };

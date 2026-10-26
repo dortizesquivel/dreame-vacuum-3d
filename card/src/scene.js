@@ -20,7 +20,10 @@ const FOV = 40;
 const ROBOT_R = 0.175;
 const MAP_WALL = 0.25;          // wall height drawn from the map when there is no model
 const LIFT = 0.012;             // overlays float this far above the floor so they don't flicker into it
-const MAX_GLIDE = 12000;        // ms: the robot glides between two poses over the time between them, up to this
+const MAX_GLIDE = 12000;        // ms: the longest glide between two poses
+const MIN_GLIDE = 250;
+const BATCH_MS = 500;           // poses less than this apart came in the same batch
+const MAX_QUEUE = 8;
 // Room tints without a model: categorical, mixed into the card's background so they work on light and dark themes.
 const ROOM_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#c84fb4', '#d6a72a', '#4fb6c8', '#7a5fd6', '#d65f5f', '#5f9e3a', '#8a8a8a'];
 const ease = (s) => (s < 0.5 ? 4 * s * s * s : 1 - Math.pow(-2 * s + 2, 3) / 2);
@@ -143,7 +146,11 @@ export class VacuumScene {
     this.follow = false;
     this.framed = false;
     this.glide = null;
-    this.lastPose = 0;
+    this.queue = [];          // poses still to glide to
+    this.batchGap = 0;        // ms between batches of poses, smoothed
+    this.perBatch = 1;        // poses per batch, smoothed
+    this.inBatch = 0;
+    this.lastBatch = 0;
     this.selected = null;
     this.onRoomTap = null;     // (room id) => void
     this.onModelError = null;  // (error) => void
@@ -442,19 +449,37 @@ export class VacuumScene {
     const r = this.robot;
     if (!r.visible) {
       r.visible = true;
-      Object.assign(r.userData, { pose: to });
-    } else {
-      const from = r.userData.pose;
-      if (from.x === to.x && from.z === to.z && from.h === to.h) return;
-      // Glide over the time since the last pose: the robot keeps moving until the next one arrives.
-      const dur = Math.min(MAX_GLIDE, Math.max(300, now - this.lastPose));
-      let dh = (to.h - from.h) % (2 * Math.PI);
-      if (dh > Math.PI) dh -= 2 * Math.PI;
-      if (dh < -Math.PI) dh += 2 * Math.PI;
-      this.glide = { t0: now, dur, from: { ...from }, to: { ...to, h: from.h + dh } };
+      this._placeRobot(to);
+      this.lastBatch = now;
+      return;
     }
-    this.lastPose = now;
-    this._placeRobot(r.userData.pose);
+    const last = this.queue.at(-1) ?? this.glide?.to ?? r.userData.pose;
+    if (last.x === to.x && last.z === to.z && last.h === to.h) return;
+    // Poses come in batches, one per tick of the integration with the frames the robot logged since. Learn how far
+    // apart the batches are and how many poses they bring, and play the poses back over that time, so the robot
+    // keeps moving instead of jumping and waiting.
+    if (now - this.lastBatch > BATCH_MS) {
+      const gap = Math.min(MAX_GLIDE, now - this.lastBatch);
+      this.batchGap = this.batchGap ? this.batchGap * 0.7 + gap * 0.3 : gap;
+      this.perBatch = this.perBatch * 0.7 + Math.max(1, this.inBatch) * 0.3;
+      this.inBatch = 0;
+      this.lastBatch = now;
+    }
+    this.inBatch += 1;
+    this.queue.push(to);
+    if (this.queue.length > MAX_QUEUE) this.queue.splice(0, this.queue.length - MAX_QUEUE);   // far behind: catch up
+  }
+
+  /** Start gliding to the next queued pose; quicker when more are waiting. */
+  _nextGlide(now) {
+    const to = this.queue.shift();
+    const from = this.robot.userData.pose;
+    let dh = (to.h - from.h) % (2 * Math.PI);
+    if (dh > Math.PI) dh -= 2 * Math.PI;
+    if (dh < -Math.PI) dh += 2 * Math.PI;
+    const each = (this.batchGap || 1000) / Math.max(1, this.perBatch);
+    const dur = Math.min(MAX_GLIDE, Math.max(MIN_GLIDE, each / Math.max(1, this.queue.length)));
+    this.glide = { t0: now, dur, from: { ...from }, to: { ...to, h: from.h + dh } };
   }
 
   _placeRobot(p) {
@@ -610,6 +635,7 @@ export class VacuumScene {
   _frame() {
     const now = performance.now();
     let moving = false;
+    if (!this.glide && this.queue.length) this._nextGlide(now);
     if (this.glide) {
       const g = this.glide, s = Math.min(1, (now - g.t0) / g.dur);
       this._placeRobot({ x: g.from.x + (g.to.x - g.from.x) * s, z: g.from.z + (g.to.z - g.from.z) * s, h: g.from.h + (g.to.h - g.from.h) * s });
