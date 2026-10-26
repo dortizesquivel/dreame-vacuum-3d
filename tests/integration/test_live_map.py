@@ -17,7 +17,7 @@ from pytest_homeassistant_custom_component.common import async_fire_time_changed
 from custom_components.dreame_vacuum_3d.const import DOMAIN
 from custom_components.dreame_vacuum_3d.device.capabilities import load
 from custom_components.dreame_vacuum_3d.device.enums import Status
-from custom_components.dreame_vacuum_3d.live_map import IDLE_EVERY
+from custom_components.dreame_vacuum_3d.live_map import FIRST_RETRY, IDLE_EVERY
 from custom_components.dreame_vacuum_3d.protocol.cloud import CloudAuthError, CloudConnectionError
 from custom_components.dreame_vacuum_3d.protocol.miio import MiioTimeoutError
 from tests.integration.helpers import setup_fixture_entry
@@ -68,6 +68,18 @@ async def test_without_a_map_the_room_sensor_is_unknown(hass: HomeAssistant) -> 
     entry, _miio = await setup_fixture_entry(hass)
     assert entry.runtime_data.map.message is None
     assert hass.states.get(_entity(hass, "sensor", "current_room")).state == "unknown"
+
+
+async def test_until_a_first_map_comes_it_asks_again_soon(hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Right after Home Assistant starts, a sleeping robot may send no map: don't wait IDLE_EVERY for the next try.
+    _entry, miio = await setup_fixture_entry(hass)
+    start = _map_requests(miio)
+    later = time.monotonic() + FIRST_RETRY + 1
+    monkeypatch.setattr("custom_components.dreame_vacuum_3d.live_map.monotonic", lambda: later)
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=5), fire_all=True)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert _map_requests(miio) == start + 1
+    assert FIRST_RETRY < IDLE_EVERY
 
 
 async def test_websocket_subscription(hass: HomeAssistant, hass_ws_client) -> None:

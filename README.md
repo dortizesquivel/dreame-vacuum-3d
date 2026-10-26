@@ -81,7 +81,7 @@ The robot moves on the card as it cleans, with its path, the rooms it is cleanin
   ```
 
 - **Other options.** `title`, `height` (pixels, default 420), `view` (`3d` or `plan`), `labels` (room names, default on) and `dry_time` (minutes the mopped floor takes to dry, default 10). The card stops drawing while it is off screen and lets go of its WebGL context when it leaves the page.
-- **Where the map comes from.** While the robot cleans it logs a map frame in the Xiaomi cloud every 2–3 seconds; the integration reads the new ones every 5 seconds and sends the card the robot's pose, the path, the rooms being cleaned and what the robot found. While the robot is docked it asks for a whole frame every 15 minutes. So the map needs the cloud; commands don't.
+- **Where the map comes from.** While the robot cleans it logs a map frame in the Xiaomi cloud every 2–3 seconds; the integration reads the new ones every 5 seconds and sends the card the robot's pose, the path, the rooms being cleaned and what the robot found. While the robot is docked it asks for a whole frame every 15 minutes (every 30 seconds until the first one comes). So the map needs the cloud; commands don't.
 
 Two entities come from the map too: **Current room** (a sensor) and a **Clean *room*** button per room.
 
