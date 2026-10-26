@@ -328,6 +328,12 @@ export class VacuumScene {
     this.dirty = true;
   }
 
+  /** Which floor effects show: { dust, wet }. */
+  setEffects(shown) {
+    this.effects.setShown(shown);
+    this.dirty = true;
+  }
+
   /** Minutes the mopped floor takes to dry. */
   setDryTime(minutes) {
     this.effects.setDryTime(minutes);

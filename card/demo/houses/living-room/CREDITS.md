@@ -1,6 +1,6 @@
 # Example living room: credits
 
-`living-room.glb` is the example room of the [mmWave 3D Card](https://github.com/dortizesquivel/mmwave-3d-card/tree/main/demo/models/living-room), by the same author (MIT). It was rebuilt from four synthetic photos, made by the author for that example, with the method in its `prompt.md`; [`make-houses.mjs`](../../make-houses.mjs) adds the robot's dock station.
+`living-room.glb` is the example room of the [mmWave 3D Card](https://github.com/dortizesquivel/mmwave-3d-card/tree/main/demo/models/living-room), by the same author (MIT). It was rebuilt from four synthetic photos, made by the author for that example, with the method in its `prompt.md`; [`make-houses.mjs`](../../make-houses.mjs) adds the robot's dock station. The rug's texture was repainted from a clean patch of its own weave: the photos had left the coffee table's legs baked into it.
 
 CC0 materials fill the faces no photo sees:
 

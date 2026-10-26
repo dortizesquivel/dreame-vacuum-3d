@@ -36,6 +36,19 @@ export class FloorEffects {
     this.specks = makeSpecks();
     this.specks.visible = false;
     robot.add(this.specks);
+    this.shown = { dust: true, wet: true };
+  }
+
+  /** Which effects show: the vacuumed floor (dust cleared, glint, specks) and the mopped one (wet, drying). */
+  setShown({ dust = true, wet = true }) {
+    this.shown = { dust, wet };
+    this._applyShown();
+  }
+
+  _applyShown() {
+    if (!this.layers) return;
+    this.layers.dust.mesh.visible = this.layers.glint.mesh.visible = this.shown.dust;
+    this.layers.wet.mesh.visible = this.shown.wet;
   }
 
   setTheme(theme) {
@@ -121,6 +134,7 @@ export class FloorEffects {
     };
     this.dustPattern = dustPattern(this.layers.dust.ctx, this.theme.dark);
     this.dustSig = '';
+    this._applyShown();
   }
 
   _px([x, y]) {
@@ -204,7 +218,7 @@ export class FloorEffects {
       this.drawnAt = this.busy ? now : Infinity;   // nothing wet or glinting: wait for the next map
       changed = true;
     }
-    const sucking = this.cleaning && vacuums(this.mode);
+    const sucking = this.cleaning && vacuums(this.mode) && this.shown.dust;
     this.specks.visible = sucking;
     if (sucking) {
       moveSpecks(this.specks, now);

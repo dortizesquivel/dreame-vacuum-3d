@@ -117,13 +117,18 @@ class DreameVacuum3DCard extends HTMLElement {
     if (config.view && !['3d', 'plan'].includes(config.view)) throw new Error('"view" must be 3d or plan');
     const dryTime = Number(config.dry_time ?? 10);
     if (!Number.isFinite(dryTime) || dryTime <= 0) throw new Error('"dry_time" must be the minutes the mopped floor takes to dry');
+    const fx = config.effects ?? true;
+    if (typeof fx !== 'boolean' && (typeof fx !== 'object' || fx === null || Array.isArray(fx))) {
+      throw new Error('"effects" must be true, false, or which to show: { dust: false } or { wet: false }');
+    }
+    const effects = typeof fx === 'boolean' ? { dust: fx, wet: fx } : { dust: fx.dust !== false, wet: fx.wet !== false };
     const routines = config.routines ?? [];
     if (!Array.isArray(routines) || !routines.every((r) => Array.isArray(r?.rooms) && r.rooms.length
       && r.rooms.every((x) => typeof x === 'number' || (typeof x === 'string' && x.trim())))) {
       throw new Error('"routines" must be a list, each with the "rooms" to clean: names or numbers');
     }
     this._config = {
-      ...config, height, dryTime, routines, view: config.view ?? '3d', labels: config.labels !== false, model: normalizeModel(config.model),
+      ...config, height, dryTime, routines, effects, view: config.view ?? '3d', labels: config.labels !== false, model: normalizeModel(config.model),
     };
     if (this._sub && this._subEntity !== config.entity) this._unsubscribe();
     if (this._root) this._applyConfig();
@@ -273,6 +278,7 @@ class DreameVacuum3DCard extends HTMLElement {
     s.setLabels(c.labels);
     s.setLanguage(this._lang());
     s.setDryTime(c.dryTime);
+    s.setEffects(c.effects);
     s.setModel(c.model);
     s.setView(this._view, true);
   }

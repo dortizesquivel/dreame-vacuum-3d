@@ -40,6 +40,7 @@
     <button type="button" id="stuck">Get stuck</button>
     <button type="button" id="model" aria-pressed="true">3D model</button>
     <button type="button" id="futuristic" aria-pressed="false">Futuristic</button>
+    <button type="button" id="effects" aria-pressed="true">Dust and wet floor</button>
     <button type="button" id="speed">×10</button>
     <button type="button" id="theme">Theme</button>
   </div>
@@ -107,11 +108,12 @@
 
   const card = document.createElement('dreame-vacuum-3d-card');
   const model = config.model ? { ...config.model, url: new URL(config.model.url, house).href } : null;
-  let futuristic = q.get('style') === 'futuristic', withModel = !!model && q.get('model') !== '0';
+  let futuristic = q.get('style') === 'futuristic', withModel = !!model && q.get('model') !== '0', effects = q.get('effects') !== '0';
   const setConfig = () => card.setConfig({
     entity: 'vacuum.demo', height: Number(q.get('height') ?? 560), view: q.get('view') ?? '3d',
     dry_time: Number(q.get('dry') ?? 1),   // minutes: short, so the floor dries while you watch
     routines: config.routines,
+    effects,
     model: withModel ? { ...model, style: futuristic ? 'futuristic' : 'textured' } : undefined,
   });
   setConfig();
@@ -147,6 +149,7 @@
   document.getElementById('stuck').onclick = () => { sim.stuck(); send(); };
   document.getElementById('model').onclick = () => { withModel = !withModel && !!model; press('model', withModel); setConfig(); };
   document.getElementById('futuristic').onclick = () => { futuristic = !futuristic; press('futuristic', futuristic); setConfig(); };
+  document.getElementById('effects').onclick = () => { effects = !effects; press('effects', effects); setConfig(); };
   document.getElementById('speed').onclick = (e) => { speed = speed === 10 ? 30 : speed === 30 ? 1 : 10; e.target.textContent = `×${speed}`; };
   document.getElementById('theme').onclick = () => {
     dark = !dark;
@@ -156,6 +159,7 @@
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
   press('model', withModel);
   press('futuristic', futuristic);
+  press('effects', effects);
   document.getElementById('speed').textContent = `×${speed}`;
   if (q.has('start')) go();
   window.demo = { sim, card, send };   // for scripts: sim.step(seconds), then send()
