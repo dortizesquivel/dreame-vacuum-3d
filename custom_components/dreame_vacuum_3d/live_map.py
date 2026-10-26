@@ -32,6 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 
 TICK = timedelta(seconds=5)  # how often to check; while the robot moves, its new frames each tick
 IDLE_EVERY = 900  # s between frames while it stays put: the map rarely changes then
+FIRST_RETRY = 30  # s: until a first frame comes (a robot just woken may send none), ask again this soon
 WHOLE_EVERY = 60  # s: while it moves, ask it for a whole frame this often (it mostly refuses then)
 _ERRORS = (MiioError, MiotError, CloudError, dmap.MapError)
 
@@ -133,6 +134,8 @@ class LiveMap:
             self._fetching = False
             self._next = monotonic() + IDLE_EVERY
         if not frames:
+            if self.pose is None:
+                self._next = monotonic() + FIRST_RETRY
             if error is not None:
                 (_LOGGER.debug if self._warned else _LOGGER.warning)("Couldn't fetch the map: %s", error)
                 self._warned = True
