@@ -6,7 +6,8 @@ async function open(page, query = '') {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error' && !m.text().includes('favicon')) errors.push(m.text()); });
-  await page.goto(`/card/demo/?height=480${query}`);
+  // speed=0: the demo's own timer leaves the robot still; the tests move it.
+  await page.goto(`/card/demo/?height=480&speed=0${query}`);
   await page.waitForFunction(() => window.demo?.card?._map?.rooms && window.demo.card._scene?.robot.visible);
   return errors;
 }
@@ -142,4 +143,16 @@ test('a zone drawn on the floor gets cleaned', async ({ page }) => {
   expect(state).toBe('cleaning');
   expect(active).toEqual([]);
   expect(lanes).toBeGreaterThan(2);
+});
+
+test('the dust and wet floor can be hidden, together or one of them', async ({ page }) => {
+  await open(page, '&effects=0');
+  await run(page, 20);
+  const shown = () => page.evaluate(() => {
+    const { layers, specks } = window.demo.card._scene.effects;
+    return { dust: layers.dust.mesh.visible, glint: layers.glint.mesh.visible, wet: layers.wet.mesh.visible, specks: specks.visible };
+  });
+  expect(await shown()).toEqual({ dust: false, glint: false, wet: false, specks: false });
+  await page.evaluate(() => { const { card } = window.demo; card.setConfig({ ...card._config, model: undefined, effects: { wet: false } }); });
+  expect(await shown()).toMatchObject({ dust: true, glint: true, wet: false });
 });
