@@ -1,5 +1,5 @@
 import {
-  AdditiveBlending, Box3, BoxGeometry, BufferGeometry, CircleGeometry, Color, CylinderGeometry, DirectionalLight, EdgesGeometry, Float32BufferAttribute,
+  AdditiveBlending, Box3, BoxGeometry, BufferGeometry, CircleGeometry, Color, CylinderGeometry, DirectionalLight, DoubleSide, EdgesGeometry, Float32BufferAttribute,
   FrontSide, GreaterDepth, Group, HemisphereLight, InstancedMesh, LineBasicMaterial, LineSegments, Mesh, MeshBasicMaterial, MeshStandardMaterial, NormalBlending,
   Object3D, PerspectiveCamera, Plane, Raycaster, RingGeometry, Scene, ShaderMaterial, TOUCH, Vector2, Vector3, WebGLRenderer,
 } from 'three';
@@ -24,6 +24,7 @@ const MAX_GLIDE = 12000;        // ms: the longest glide between two poses
 const MIN_GLIDE = 250;
 const BATCH_MS = 500;           // poses less than this apart came in the same batch
 const MAX_QUEUE = 8;
+const MIN_ZONE = 300;           // mm: a zone narrower than this on a side was a tap, not a drag
 const TURN = 0.2;               // of the way to its new heading the robot turns each frame, when it follows its path
 const BRUSH_SPIN = 14;          // rad/s of the side brushes while the robot vacuums
 const MOP_SPIN = 6;             // rad/s of the mop pads while it mops
@@ -163,14 +164,37 @@ export class VacuumScene {
     this.inBatch = 0;
     this.lastBatch = 0;
     this.selected = null;
+    this.zoneMode = false;
+    this.zoneGroup = new Group();      // the zone being drawn or offered, a rectangle in the map's axes
+    this.scene.add(this.zoneGroup);
     this.onRoomTap = null;     // (room id) => void
+    this.onZone = null;        // ([x0, y0, x1, y1] in map mm) => void, when a zone has been drawn
     this.onModelError = null;  // (error) => void
 
     this.raycaster = new Raycaster();
     this._down = null;
-    this._onDown = (e) => { this._down = [e.clientX, e.clientY]; };
-    this._onUp = (e) => this._tap(e);
+    this._onDown = (e) => {
+      this._down = [e.clientX, e.clientY];
+      if (!this.zoneMode) return;
+      this._zoneFrom = this._floorAt(e);
+      if (this._zoneFrom) this.renderer.domElement.setPointerCapture(e.pointerId);
+    };
+    this._onMove = (e) => {
+      if (!this.zoneMode || !this._zoneFrom) return;
+      const to = this._floorAt(e);
+      if (to) this.showZone(zoneRect(this._zoneFrom, to));
+    };
+    this._onUp = (e) => {
+      if (!this.zoneMode) { this._tap(e); return; }
+      const from = this._zoneFrom, to = this._floorAt(e);
+      this._zoneFrom = null;
+      if (!from || !to) return;
+      const rect = zoneRect(from, to);
+      if (rect[2] - rect[0] >= MIN_ZONE && rect[3] - rect[1] >= MIN_ZONE) this.onZone?.(rect);
+      else this.showZone(null);
+    };
     this.renderer.domElement.addEventListener('pointerdown', this._onDown);
+    this.renderer.domElement.addEventListener('pointermove', this._onMove);
     this.renderer.domElement.addEventListener('pointerup', this._onUp);
 
     this.dirty = true;
@@ -627,14 +651,43 @@ export class VacuumScene {
   _tap(e) {
     const down = this._down;
     this._down = null;
-    if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6 || !this.xf || !this.map?.grid) return;
+    if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6 || !this.map?.grid) return;
+    const at = this._floorAt(e);
+    if (at) this.onRoomTap?.(roomAt(this.map, ...at));
+  }
+
+  /** The map point (mm) on the floor under a pointer, or null. */
+  _floorAt(e) {
+    if (!this.xf) return null;
     const r = this.renderer.domElement.getBoundingClientRect();
     const ndc = new Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
     const hit = this.raycaster.ray.intersectPlane(new Plane(V(0, 1, 0), -this.xf.floor), V(0, 0, 0));
-    if (!hit) return;
-    const [x, y] = this.xf.toMap(hit.x, hit.z);
-    this.onRoomTap?.(roomAt(this.map, x, y));
+    return hit ? this.xf.toMap(hit.x, hit.z) : null;
+  }
+
+  /** While on, dragging on the floor draws a zone instead of turning the view. */
+  setZoneMode(on) {
+    this.zoneMode = on;
+    this.controls.enableRotate = !on;
+    this.renderer.domElement.style.touchAction = on ? 'none' : 'pan-y';
+    this.renderer.domElement.style.cursor = on ? 'crosshair' : '';
+    if (!on) this.showZone(null);
+  }
+
+  /** Draw a zone [x0, y0, x1, y1] (map mm) on the floor, or none. */
+  showZone(rect) {
+    clearGroup(this.zoneGroup);
+    if (rect && this.xf && this.theme) {
+      const [x0, y0, x1, y1] = rect, y = this.xf.floor + LIFT * 2.5;
+      const c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, yy]) => { const [X, Z] = this.xf.point(x, yy); return V(X, y, Z); });
+      const fill = new Mesh(new BufferGeometry().setFromPoints([c[0], c[1], c[2], c[0], c[2], c[3]]),
+        new MeshBasicMaterial({ color: this.theme.accent, transparent: true, opacity: 0.25, depthWrite: false, side: DoubleSide }));
+      const edge = new LineSegments(new BufferGeometry().setFromPoints([c[0], c[1], c[1], c[2], c[2], c[3], c[3], c[0]]),
+        new LineBasicMaterial({ color: this.theme.accent }));
+      this.zoneGroup.add(fill, edge);
+    }
+    this.dirty = true;
   }
 
   // ---------- lifecycle ----------
@@ -663,6 +716,7 @@ export class VacuumScene {
     this.container.removeEventListener('wheel', this._onWheel, { capture: true });
     this.container.removeEventListener('pointerdown', this._onTouch, { capture: true });
     this.renderer.domElement.removeEventListener('pointerdown', this._onDown);
+    this.renderer.domElement.removeEventListener('pointermove', this._onMove);
     this.renderer.domElement.removeEventListener('pointerup', this._onUp);
     this.controls.dispose();
     this.effects.dispose();
@@ -781,6 +835,11 @@ export class VacuumScene {
       placed.push(new DOMRect(r.x, r.y - dy, r.width, r.height));
     }
   }
+}
+
+/** The rectangle two map points span, as [x0, y0, x1, y1] with x0 < x1 and y0 < y1, whole mm. */
+function zoneRect([ax, ay], [bx, by]) {
+  return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)].map(Math.round);
 }
 
 /** A robot vacuum about the size of an X10+: a 35 cm disc, a lidar turret, a mark at the front and a pulse ring. */
