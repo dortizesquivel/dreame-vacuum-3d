@@ -7,7 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { FloorEffects } from './effects.js';
-import { cellRects, robotToModel, roomAt } from './model.js';
+import { along, cellRects, robotToModel, roomAt } from './model.js';
 import { cssColor, mix } from './theme.js';
 import { FURNITURE_HEIGHT, NEW_HEIGHT, OBSTACLES, thingLabel, turnOf } from './things.js';
 
@@ -24,6 +24,7 @@ const MAX_GLIDE = 12000;        // ms: the longest glide between two poses
 const MIN_GLIDE = 250;
 const BATCH_MS = 500;           // poses less than this apart came in the same batch
 const MAX_QUEUE = 8;
+const TURN = 0.2;               // of the way to its new heading the robot turns each frame, when it follows its path
 // Room tints without a model: categorical, mixed into the card's background so they work on light and dark themes.
 const ROOM_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#c84fb4', '#d6a72a', '#4fb6c8', '#7a5fd6', '#d65f5f', '#5f9e3a', '#8a8a8a'];
 const ease = (s) => (s < 0.5 ? 4 * s * s * s : 1 - Math.pow(-2 * s + 2, 3) / 2);
@@ -146,7 +147,9 @@ export class VacuumScene {
     this.follow = false;
     this.framed = false;
     this.glide = null;
-    this.queue = [];          // poses still to glide to
+    this.queue = [];          // poses still to glide to, each with the path's points on the way: { x, z, h, via }
+    this.pathFirst = null;    // the path's first point and its length so far: to tell where it grew
+    this.pathCount = 0;
     this.batchGap = 0;        // ms between batches of poses, smoothed
     this.perBatch = 1;        // poses per batch, smoothed
     this.inBatch = 0;
@@ -253,7 +256,7 @@ export class VacuumScene {
     }
     this._setPath(map.path);
     this.effects.setMap(map, this.xf);
-    this._setPose(map.robot ?? map.dock);
+    this._setPose(map.robot ?? map.dock, this._pathSince(map.path));
     for (const l of this.labelGroup.children) l.element.dataset.current = String(l.userData.id === map.room);
     if (!this.framed) this.setView(this.view, true);
     this.dirty = true;
@@ -442,9 +445,20 @@ export class VacuumScene {
     this.scene.add(this.path);
   }
 
-  _setPose([x, y, a]) {
+  /** The path's points since the last message, if it grew (a new task starts over): where the robot went meanwhile. */
+  _pathSince(path) {
+    const points = (path ?? []).flatMap((s) => s.points ?? []);
+    const first = points[0]?.join() ?? null;
+    const grew = first !== null && first === this.pathFirst && points.length >= this.pathCount;
+    const since = grew ? points.slice(this.pathCount) : [];
+    this.pathFirst = first;
+    this.pathCount = points.length;
+    return since;
+  }
+
+  _setPose([x, y, a], via = []) {
     const [X, Z] = this.xf.point(x, y);
-    const to = { x: X, z: Z, h: this.xf.heading(a) };
+    const to = { x: X, z: Z, h: this.xf.heading(a), via: via.map(([vx, vy]) => this.xf.point(vx, vy)) };
     const now = performance.now();
     const r = this.robot;
     if (!r.visible) {
@@ -467,7 +481,10 @@ export class VacuumScene {
     }
     this.inBatch += 1;
     this.queue.push(to);
-    if (this.queue.length > MAX_QUEUE) this.queue.splice(0, this.queue.length - MAX_QUEUE);   // far behind: catch up
+    if (this.queue.length > MAX_QUEUE) {   // far behind: catch up, still along the path
+      const skipped = this.queue.splice(0, this.queue.length - MAX_QUEUE);
+      this.queue[0].via = [...skipped.flatMap((p) => [...p.via, [p.x, p.z]]), ...this.queue[0].via];
+    }
   }
 
   /** Start gliding to the next queued pose; quicker when more are waiting. */
@@ -479,7 +496,8 @@ export class VacuumScene {
     if (dh < -Math.PI) dh += 2 * Math.PI;
     const each = (this.batchGap || 1000) / Math.max(1, this.perBatch);
     const dur = Math.min(MAX_GLIDE, Math.max(MIN_GLIDE, each / Math.max(1, this.queue.length)));
-    this.glide = { t0: now, dur, from: { ...from }, to: { ...to, h: from.h + dh } };
+    // Along the path it drew since the last pose, so it goes round furniture instead of straight through.
+    this.glide = { t0: now, dur, from: { ...from }, to: { ...to, h: from.h + dh }, points: [[from.x, from.z], ...to.via, [to.x, to.z]] };
   }
 
   _placeRobot(p) {
@@ -639,8 +657,19 @@ export class VacuumScene {
     if (!this.glide && this.queue.length) this._nextGlide(now);
     if (this.glide) {
       const g = this.glide, s = Math.min(1, (now - g.t0) / g.dur);
-      this._placeRobot({ x: g.from.x + (g.to.x - g.from.x) * s, z: g.from.z + (g.to.z - g.from.z) * s, h: g.from.h + (g.to.h - g.from.h) * s });
-      if (s >= 1) this.glide = null;
+      if (s >= 1) {
+        this._placeRobot(g.to);
+        this.glide = null;
+      } else if (g.points.length > 2) {
+        // Facing the way it goes, turning smoothly at the path's corners.
+        const p = along(g.points, s), h = this.robot.userData.pose.h;
+        let dh = ((p.dir ?? g.to.h) - h) % (2 * Math.PI);
+        if (dh > Math.PI) dh -= 2 * Math.PI;
+        if (dh < -Math.PI) dh += 2 * Math.PI;
+        this._placeRobot({ x: p.x, z: p.z, h: h + dh * TURN });
+      } else {
+        this._placeRobot({ x: g.from.x + (g.to.x - g.from.x) * s, z: g.from.z + (g.to.z - g.from.z) * s, h: g.from.h + (g.to.h - g.from.h) * s });
+      }
       moving = true;
     }
     if (this.tween) {
