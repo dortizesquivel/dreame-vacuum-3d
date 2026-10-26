@@ -58,7 +58,7 @@ test('the robot goes round the furniture, not through it', async ({ page }) => {
 test('the path sent in pieces is the path the robot drew', async ({ page }) => {
   await open(page, '&house=flat');
   await page.evaluate(() => { const { sim, send } = window.demo; sim.clean([1, 3, 2], { 1: 'both', 3: 'vacuum', 2: 'mop' }); send(); });
-  await run(page, 900);
+  await run(page, 900, 3);   // big steps: each message redraws the whole path on the card, slow on software WebGL
   const { same, strokes } = await page.evaluate(() => {
     const { sim, card } = window.demo, flat = (p) => JSON.stringify(p.map((s) => [s.mode, s.points]));
     return { same: flat(card._map.path) === flat(sim.path), strokes: sim.path.length };

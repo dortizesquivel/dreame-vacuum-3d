@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
 // WebGL runs on SwiftShader (software), so machines without a GPU run them too.
 export default defineConfig({
   testDir: 'test/browser',
-  timeout: 90_000,
+  timeout: 150_000,   // software WebGL on a CI runner is slow
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   expect: { timeout: 20_000 },
   use: {
