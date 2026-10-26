@@ -126,6 +126,7 @@ async def test_it_looks_after_setup_and_after_each_cleaning(hass: HomeAssistant)
     for status in (Status.CLEANING, Status.CHARGING):  # a cleaning, then back on the dock
         device.values["status"] = status.value
         coordinator.async_update_listeners()
-    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=FIRST_AFTER + AFTER_TASK + 2))
-    await hass.async_block_till_done(wait_background_tasks=True)
-    assert events() == 2
+    for after in AFTER_TASK:  # a minute after, and again later in case the cloud was slow
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=FIRST_AFTER + after + 2))
+        await hass.async_block_till_done(wait_background_tasks=True)
+    assert events() == 1 + len(AFTER_TASK)
