@@ -340,8 +340,10 @@ class DreameVacuum3DCard extends HTMLElement {
     // The robot's own state says more than the vacuum's (washing its mops, not just cleaning); an error says why.
     const detail = this._related('state'), error = this._related('error');
     const format = (s) => h.formatEntityState?.(s) ?? s.state;
-    const badge = BADGES[detail?.state] ?? (st?.state === 'error' ? BADGES.error : null);
-    const why = st?.state === 'error' && error && error.state !== 'no_error' ? format(error) : null;
+    // An error shows whatever the vacuum says: stuck on its way home, the X10+ reports "paused", not "error".
+    const failing = !!error && !['no_error', 'unknown', 'unavailable'].includes(error.state);
+    const badge = failing || st?.state === 'error' ? BADGES.error : BADGES[detail?.state] ?? null;
+    const why = failing ? format(error) : null;
     const doing = why ?? (badge && detail ? format(detail) : null);
     const parts = [];
     if (st) parts.push(doing ?? format(st));
@@ -351,9 +353,11 @@ class DreameVacuum3DCard extends HTMLElement {
     this._els.chip.textContent = parts.join(' · ');
     this._els.chip.dataset.active = String(['cleaning', 'returning'].includes(st?.state));
     this._scene?.setCleaning(st?.state === 'cleaning');
-    this._scene?.setBadge(badge && doing ? `${badge} ${doing}` : null, st?.state === 'error');
-    if (st?.state === 'error' && this._lastState !== 'error') this._scene?.markStuck(why ?? format(st));
-    this._lastState = st?.state;
+    this._scene?.setBadge(badge && doing ? `${badge} ${doing}` : null, failing || st?.state === 'error');
+    // Where it stopped for an error (a warning while it goes on cleaning isn't where it got stuck).
+    const stuck = st?.state === 'error' || (failing && !['cleaning', 'returning', 'docked'].includes(st?.state));
+    if (stuck && !this._stuck) this._scene?.markStuck(why ?? format(st));
+    this._stuck = stuck;
     // Start, or pause while it cleans or heads home; back to the dock unless it is there.
     const busy = ['cleaning', 'returning'].includes(st?.state);
     const toggle = this._root.querySelector('[data-cmd="toggle"]');

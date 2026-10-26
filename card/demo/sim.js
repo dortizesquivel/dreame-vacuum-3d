@@ -224,11 +224,12 @@ export class Sim {
     this.error = this.held = null;
   }
 
-  /** Stuck where it is, as when a wheel catches on something: it waits for start. */
+  /** Stuck where it is, as when a wheel catches on something: it waits for start. Like the X10+, the vacuum then
+   * says "paused" and only the error sensor says why. */
   stuck() {
     if (!['cleaning', 'returning'].includes(this.state)) return;
     this.held = this.state;
-    this.state = 'error';
+    this.state = 'paused';
     this.error = 'robot_stuck';
   }
 
@@ -238,13 +239,13 @@ export class Sim {
     if (this.state === 'cleaning' && next?.wash === 'at') return 'washing';
     if (this.state === 'returning' && next?.wash === 'to') return 'returning_to_wash';
     const mode = this.path.at(-1)?.mode;
-    return { docked: 'charging_completed', paused: 'paused', error: 'error', returning: 'returning' }[this.state]
+    return { docked: 'charging_completed', paused: 'paused', returning: 'returning' }[this.state]
       ?? { vacuum: 'sweeping', mop: 'mopping' }[mode] ?? 'sweeping_and_mopping';
   }
 
   /** Advance `seconds` of robot time. */
   step(seconds) {
-    if (this.state === 'paused' || this.state === 'error') return;
+    if (this.state === 'paused') return;
     let budget = SPEED * seconds;
     while (budget > 0 && this.route.length) {
       const next = this.route[0];
