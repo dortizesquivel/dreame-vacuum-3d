@@ -37,6 +37,7 @@
   <div class="controls">
     <button type="button" id="go">Clean</button>
     <button type="button" id="house">Other house</button>
+    <button type="button" id="stuck">Get stuck</button>
     <button type="button" id="model" aria-pressed="true">3D model</button>
     <button type="button" id="futuristic" aria-pressed="false">Futuristic</button>
     <button type="button" id="speed">×10</button>
@@ -64,15 +65,24 @@
   const sim = new Sim(map, config);
   const subs = new Set();
   const lang = q.get('lang') ?? 'en';
+  // How Home Assistant shows the vacuum's state and the integration's state and error sensors, for what the demo uses.
   const STATES = {
-    en: { cleaning: 'Cleaning', returning: 'Returning', docked: 'Docked' },
-    es: { cleaning: 'Limpiando', returning: 'Volviendo a la base', docked: 'En la base' },
+    en: { cleaning: 'Cleaning', returning: 'Returning', docked: 'Docked', paused: 'Paused', error: 'Error',
+      washing: 'Washing the mops', returning_to_wash: 'Returning To Wash', robot_stuck: 'Robot stuck' },
+    es: { cleaning: 'Limpiando', returning: 'Volviendo a la base', docked: 'En la base', paused: 'En pausa', error: 'Error',
+      washing: 'Lavando las mopas', returning_to_wash: 'Volviendo a lavar las mopas', robot_stuck: 'Robot atascado' },
   };
+  const entity = (entity_id, translation_key) => ({ entity_id, device_id: 'demo', platform: 'dreame_vacuum_3d', translation_key });
   let dark = q.get('theme') === 'dark';
   let speed = Number(q.get('speed') ?? 10);
 
   const hass = () => ({
-    states: { 'vacuum.demo': { entity_id: 'vacuum.demo', state: sim.state, attributes: { friendly_name: 'Robot (demo)', battery_level: 100 } } },
+    states: {
+      'vacuum.demo': { entity_id: 'vacuum.demo', state: sim.state, attributes: { friendly_name: 'Robot (demo)', battery_level: 100 } },
+      'sensor.demo_state': { entity_id: 'sensor.demo_state', state: sim.robotState, attributes: {} },
+      'sensor.demo_error': { entity_id: 'sensor.demo_error', state: sim.error ?? 'no_error', attributes: {} },
+    },
+    entities: { 'vacuum.demo': entity('vacuum.demo'), 'sensor.demo_state': entity('sensor.demo_state', 'state'), 'sensor.demo_error': entity('sensor.demo_error', 'error') },
     themes: { darkMode: dark },
     locale: { language: lang },
     language: lang,
@@ -85,8 +95,11 @@
       },
     },
     async callService(domain, service, data) {
-      if (service !== 'vacuum_clean_segment') throw new Error(`${domain}.${service} not in the demo`);
-      sim.clean([].concat(data.segments));
+      if (service === 'vacuum_clean_segment') sim.clean([].concat(data.segments));
+      else if (domain === 'vacuum' && service === 'start') sim.start(() => sim.clean(Object.keys(map.rooms).map(Number)));
+      else if (domain === 'vacuum' && service === 'pause') sim.pause();
+      else if (domain === 'vacuum' && service === 'return_to_base') sim.goHome();
+      else throw new Error(`${domain}.${service} not in the demo`);
       send();
     },
   });
@@ -130,6 +143,7 @@
   const other = houseKey === 'flat' ? 'living-room' : 'flat';
   document.getElementById('house').textContent = other === 'flat' ? 'Flat' : 'Living room';
   document.getElementById('house').onclick = () => { q.set('house', other); location.search = q; };
+  document.getElementById('stuck').onclick = () => { sim.stuck(); send(); };
   document.getElementById('model').onclick = () => { withModel = !withModel && !!model; press('model', withModel); setConfig(); };
   document.getElementById('futuristic').onclick = () => { futuristic = !futuristic; press('futuristic', futuristic); setConfig(); };
   document.getElementById('speed').onclick = (e) => { speed = speed === 10 ? 30 : speed === 30 ? 1 : 10; e.target.textContent = `×${speed}`; };

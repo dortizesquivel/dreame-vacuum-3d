@@ -4,6 +4,18 @@ import { readTheme } from './theme.js';
 
 const DOMAIN = 'dreame_vacuum_3d';
 const ZOOM_STEP = 1.4;
+// What the robot does that gets a tag over it, by its state sensor's value (the integration's DreameVacuumState).
+const BADGES = {
+  charging: '⚡', smart_charging: '⚡',
+  washing: '🫧', washing_paused: '🫧', clean_add_water: '🫧', returning_to_wash: '🫧',
+  drying: '💨', auto_emptying: '🗑️', emptying: '🗑️', returning_auto_empty: '🗑️',
+  paused: '⏸️', error: '⚠️',
+};
+const ICONS = {   // Material Design Icons
+  start: 'M8,5.14V19.14L19,12.14L8,5.14Z',
+  pause: 'M14,19H18V5H14M6,19H10V5H6V19Z',
+  dock: 'M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z',
+};
 
 const STRINGS = {
   en: {
@@ -15,6 +27,7 @@ const STRINGS = {
     view3d: '3D', plan: 'Plan', follow: 'Follow', download: "Download the robot's floor plan (JSON)",
     clean: 'Clean {room}', cancel: 'Cancel', close: 'Close', started: 'Cleaning {room}', failed: 'Could not start: {error}',
     zoomIn: 'Zoom in', zoomOut: 'Zoom out', missing: 'Not on the map: {rooms}',
+    start: 'Start', pause: 'Pause', dock: 'Back to the dock', commandFailed: 'The robot did not take it: {error}',
   },
   es: {
     noEntity: 'Pon en "entity" una aspiradora de Dreame Vacuum 3D.',
@@ -25,6 +38,7 @@ const STRINGS = {
     view3d: '3D', plan: 'Plano', follow: 'Seguir', download: 'Descargar el plano del robot (JSON)',
     clean: 'Limpiar {room}', cancel: 'Cancelar', close: 'Cerrar', started: 'Limpiando {room}', failed: 'No se pudo empezar: {error}',
     zoomIn: 'Acercar', zoomOut: 'Alejar', missing: 'No están en el mapa: {rooms}',
+    start: 'Empezar', pause: 'Pausar', dock: 'Volver a la base', commandFailed: 'El robot no lo aceptó: {error}',
   },
 };
 
@@ -46,6 +60,14 @@ const STYLE = `
   .thing { font-size: 11px; font-weight: 500; padding: 2px 6px; border-radius: 6px; white-space: nowrap; color: #1a1a1a;
     background: color-mix(in srgb, var(--warning-color, #ffa600) 85%, white); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
   .thing[data-warn="true"] { color: #fff; background: var(--error-color, #db4437); }
+  .badge[data-warn="false"] { color: var(--primary-text-color); background: color-mix(in srgb, var(--card-background-color, #fff) 92%, transparent); }
+  .ctl { display: flex; gap: 2px; flex: none; }
+  .ctl button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+    color: var(--primary-text-color); background: none; }
+  .ctl button:hover { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
+  .ctl button:disabled { color: var(--disabled-text-color, #bdbdbd); cursor: default; background: none; }
+  .ctl svg { width: 22px; height: 22px; fill: currentColor; }
+  .head .right { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .status[hidden] { display: none; }
   .status { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; padding: 24px; text-align: center;
     color: var(--secondary-text-color); background: color-mix(in srgb, var(--card-background-color, #fff) 82%, transparent); }
@@ -142,7 +164,9 @@ class DreameVacuum3DCard extends HTMLElement {
     root.innerHTML = `
       <style>${STYLE}</style>
       <ha-card>
-        <div class="head"><div class="title"></div><div class="chip" role="status"></div></div>
+        <div class="head"><div class="title"></div><div class="right"><div class="chip" role="status"></div>
+          <div class="ctl"><button type="button" data-cmd="toggle"><svg viewBox="0 0 24 24"><path></path></svg></button>
+          <button type="button" data-cmd="return_to_base"><svg viewBox="0 0 24 24"><path d="${ICONS.dock}"></path></svg></button></div></div></div>
         <div class="viewport">
           <div class="seg views">
             <button type="button" data-view="3d"></button>
@@ -183,6 +207,7 @@ class DreameVacuum3DCard extends HTMLElement {
     root.querySelector('[data-download]').addEventListener('click', () => this._download());
     this._els.cancel.addEventListener('click', () => this._pick(null));
     this._els.clean.addEventListener('click', () => this._clean());
+    root.querySelectorAll('[data-cmd]').forEach((b) => b.addEventListener('click', () => this._command(b.dataset.cmd)));
     this._els.routines.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-routine]');
       if (b) this._runRoutine(Number(b.dataset.routine));
@@ -260,20 +285,66 @@ class DreameVacuum3DCard extends HTMLElement {
     r.querySelector('[data-zoom="out"]').setAttribute('aria-label', this._t('zoomOut'));
     r.querySelector('[data-download]').setAttribute('aria-label', this._t('download'));
     r.querySelector('[data-download]').title = this._t('download');
+    r.querySelector('[data-cmd="return_to_base"]').setAttribute('aria-label', this._t('dock'));
+    r.querySelector('[data-cmd="return_to_base"]').title = this._t('dock');
     this._els.cancel.textContent = this._t('cancel');
   }
 
   _renderHead() {
-    const st = this._hass.states[this._config.entity];
+    const h = this._hass, st = h.states[this._config.entity];
     this._els.title.textContent = this._config.title || st?.attributes.friendly_name || 'Dreame Vacuum 3D';
+    // The robot's own state says more than the vacuum's (washing its mops, not just cleaning); an error says why.
+    const detail = this._related('state'), error = this._related('error');
+    const format = (s) => h.formatEntityState?.(s) ?? s.state;
+    const badge = BADGES[detail?.state] ?? (st?.state === 'error' ? BADGES.error : null);
+    const why = st?.state === 'error' && error && error.state !== 'no_error' ? format(error) : null;
+    const doing = why ?? (badge && detail ? format(detail) : null);
     const parts = [];
-    if (st) parts.push(this._hass.formatEntityState?.(st) ?? st.state);
+    if (st) parts.push(doing ?? format(st));
     const room = this._map?.rooms?.[this._map.room]?.name;
     if (room) parts.push(room);
     if (st?.attributes.battery_level != null) parts.push(`${st.attributes.battery_level} %`);
     this._els.chip.textContent = parts.join(' · ');
     this._els.chip.dataset.active = String(['cleaning', 'returning'].includes(st?.state));
     this._scene?.setCleaning(st?.state === 'cleaning');
+    this._scene?.setBadge(badge && doing ? `${badge} ${doing}` : null, st?.state === 'error');
+    if (st?.state === 'error' && this._lastState !== 'error') this._scene?.markStuck(why ?? format(st));
+    this._lastState = st?.state;
+    // Start, or pause while it cleans or heads home; back to the dock unless it is there.
+    const busy = ['cleaning', 'returning'].includes(st?.state);
+    const toggle = this._root.querySelector('[data-cmd="toggle"]');
+    toggle.querySelector('path').setAttribute('d', busy ? ICONS.pause : ICONS.start);
+    toggle.setAttribute('aria-label', this._t(busy ? 'pause' : 'start'));
+    toggle.title = this._t(busy ? 'pause' : 'start');
+    toggle.disabled = !st;
+    this._root.querySelector('[data-cmd="return_to_base"]').disabled = !st || st.state === 'docked' || st.state === 'returning';
+  }
+
+  /** Another entity of the same robot by its translation key, such as the integration's state or error sensor. */
+  _related(key) {
+    const h = this._hass, all = h.entities ?? {};
+    const device = all[this._config.entity]?.device_id;
+    if (!device) return null;
+    if (this._relatedOf !== all) { this._relatedOf = all; this._relatedIds = {}; }
+    const id = this._relatedIds[key] ??= Object.keys(all).find((e) => all[e].device_id === device && all[e].platform === DOMAIN
+      && all[e].translation_key === key) ?? null;
+    return id ? h.states[id] ?? null : null;
+  }
+
+  async _command(cmd) {
+    const st = this._hass.states[this._config.entity];
+    const service = cmd === 'toggle' ? (['cleaning', 'returning'].includes(st?.state) ? 'pause' : 'start') : cmd;
+    try {
+      await this._hass.callService('vacuum', service, {}, { entity_id: this._config.entity });
+    } catch (err) {
+      this._pick(null);
+      const { panel, msg, clean, cancel } = this._els;
+      panel.hidden = false;
+      clean.hidden = true;
+      cancel.textContent = this._t('close');
+      msg.dataset.error = 'true';
+      msg.textContent = this._t('commandFailed', { error: err?.message ?? String(err) });
+    }
   }
 
   _status(text) {
