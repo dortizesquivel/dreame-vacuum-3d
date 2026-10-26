@@ -1,4 +1,4 @@
-import { normalizeModel } from './model.js';
+import { normalizeModel, routineRooms } from './model.js';
 import { VacuumScene } from './scene.js';
 import { readTheme } from './theme.js';
 
@@ -13,8 +13,8 @@ const STRINGS = {
     noWebgl: 'This browser cannot draw 3D (WebGL).',
     modelError: 'Could not load the model: {error}',
     view3d: '3D', plan: 'Plan', follow: 'Follow', download: "Download the robot's floor plan (JSON)",
-    clean: 'Clean {room}', cancel: 'Cancel', started: 'Cleaning {room}', failed: 'Could not start: {error}',
-    zoomIn: 'Zoom in', zoomOut: 'Zoom out',
+    clean: 'Clean {room}', cancel: 'Cancel', close: 'Close', started: 'Cleaning {room}', failed: 'Could not start: {error}',
+    zoomIn: 'Zoom in', zoomOut: 'Zoom out', missing: 'Not on the map: {rooms}',
   },
   es: {
     noEntity: 'Pon en "entity" una aspiradora de Dreame Vacuum 3D.',
@@ -23,8 +23,8 @@ const STRINGS = {
     noWebgl: 'Este navegador no puede dibujar en 3D (WebGL).',
     modelError: 'No se pudo cargar el modelo: {error}',
     view3d: '3D', plan: 'Plano', follow: 'Seguir', download: 'Descargar el plano del robot (JSON)',
-    clean: 'Limpiar {room}', cancel: 'Cancelar', started: 'Limpiando {room}', failed: 'No se pudo empezar: {error}',
-    zoomIn: 'Acercar', zoomOut: 'Alejar',
+    clean: 'Limpiar {room}', cancel: 'Cancelar', close: 'Cerrar', started: 'Limpiando {room}', failed: 'No se pudo empezar: {error}',
+    zoomIn: 'Acercar', zoomOut: 'Alejar', missing: 'No están en el mapa: {rooms}',
   },
 };
 
@@ -69,6 +69,12 @@ const STYLE = `
     border: 1px solid var(--divider-color); border-radius: 8px; padding: 8px 12px; min-height: 36px; cursor: pointer; }
   .panel button.primary { color: var(--text-primary-color, #fff); background: var(--primary-color); border-color: transparent; }
   .panel button[hidden] { display: none; }
+  .routines { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 12px; border-top: 1px solid var(--divider-color); }
+  .routines[hidden] { display: none; }
+  .routines button { font: inherit; font-size: 13px; font-weight: 500; color: var(--primary-text-color); background: none;
+    border: 1px solid var(--divider-color); border-radius: 999px; padding: 8px 14px; min-height: 36px; cursor: pointer; }
+  .routines button:hover { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
+  .routines button:disabled { color: var(--disabled-text-color, #bdbdbd); cursor: default; background: none; }
 `;
 
 class DreameVacuum3DCard extends HTMLElement {
@@ -84,8 +90,13 @@ class DreameVacuum3DCard extends HTMLElement {
     if (config.view && !['3d', 'plan'].includes(config.view)) throw new Error('"view" must be 3d or plan');
     const dryTime = Number(config.dry_time ?? 10);
     if (!Number.isFinite(dryTime) || dryTime <= 0) throw new Error('"dry_time" must be the minutes the mopped floor takes to dry');
+    const routines = config.routines ?? [];
+    if (!Array.isArray(routines) || !routines.every((r) => Array.isArray(r?.rooms) && r.rooms.length
+      && r.rooms.every((x) => typeof x === 'number' || (typeof x === 'string' && x.trim())))) {
+      throw new Error('"routines" must be a list, each with the "rooms" to clean: names or numbers');
+    }
     this._config = {
-      ...config, height, dryTime, view: config.view ?? '3d', labels: config.labels !== false, model: normalizeModel(config.model),
+      ...config, height, dryTime, routines, view: config.view ?? '3d', labels: config.labels !== false, model: normalizeModel(config.model),
     };
     if (this._sub && this._subEntity !== config.entity) this._unsubscribe();
     if (this._root) this._applyConfig();
@@ -107,12 +118,12 @@ class DreameVacuum3DCard extends HTMLElement {
   getCardSize() { return Math.ceil((this._config?.height ?? 420) / 50) + 1; }
 
   connectedCallback() {
-    this._scene?.start();
+    this._mountScene();
     if (this._hass) this._subscribe();
   }
 
   disconnectedCallback() {
-    this._scene?.stop();
+    this._unmountScene();
     this._unsubscribe();
   }
 
@@ -150,37 +161,66 @@ class DreameVacuum3DCard extends HTMLElement {
           </div>
           <div class="status"></div>
         </div>
+        <div class="routines" hidden></div>
       </ha-card>`;
     this._root = root;
     const $ = (s) => root.querySelector(s);
     this._els = { title: $('.title'), chip: $('.chip'), viewport: $('.viewport'), status: $('.status'), panel: $('.panel'),
-      msg: $('.panel .msg'), clean: $('.panel .clean'), cancel: $('.panel .cancel') };
-    try {
-      this._scene = new VacuumScene(this._els.viewport);
-    } catch {
-      this._status(this._t('noWebgl'));
-      return;
-    }
-    this._scene.onRoomTap = (id) => this._pick(id);
-    this._scene.onModelError = (err) => this._status(this._t('modelError', { error: err.message }));
+      msg: $('.panel .msg'), clean: $('.panel .clean'), cancel: $('.panel .cancel'), routines: $('.routines') };
     root.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
       this._view = b.dataset.view;
       this._follow = false;
-      this._scene.setFollow(false);
-      this._scene.setView(this._view);
+      this._scene?.setFollow(false);
+      this._scene?.setView(this._view);
       this._renderButtons();
     }));
     root.querySelector('[data-follow]').addEventListener('click', () => {
       this._follow = !this._follow;
-      this._scene.setFollow(this._follow);
+      this._scene?.setFollow(this._follow);
       this._renderButtons();
     });
-    root.querySelectorAll('[data-zoom]').forEach((b) => b.addEventListener('click', () => this._scene.zoom(b.dataset.zoom === 'in' ? ZOOM_STEP : 1 / ZOOM_STEP)));
+    root.querySelectorAll('[data-zoom]').forEach((b) => b.addEventListener('click', () => this._scene?.zoom(b.dataset.zoom === 'in' ? ZOOM_STEP : 1 / ZOOM_STEP)));
     root.querySelector('[data-download]').addEventListener('click', () => this._download());
     this._els.cancel.addEventListener('click', () => this._pick(null));
     this._els.clean.addEventListener('click', () => this._clean());
+    this._els.routines.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-routine]');
+      if (b) this._runRoutine(Number(b.dataset.routine));
+    });
     this._applyConfig();
-    this._scene.start();
+    this._mountScene();
+  }
+
+  /** WebGL contexts are few per page: the scene lives only while the card is on the page, and draws only while it shows. */
+  _mountScene() {
+    if (this._scene || !this._root || !this.isConnected || this._noWebgl) return;
+    try {
+      this._scene = new VacuumScene(this._els.viewport);
+    } catch {
+      this._noWebgl = true;
+      this._status(this._t('noWebgl'));
+      return;
+    }
+    const s = this._scene;
+    s.onRoomTap = (id) => this._pick(id);
+    s.onModelError = (err) => this._status(this._t('modelError', { error: err.message }));
+    this._configureScene();
+    s.setFollow(!!this._follow);
+    if (this._hass) {
+      this._applyTheme();
+      this._renderHead();
+    }
+    if (this._map) s.setMap(this._map);
+    this._io = new IntersectionObserver(([e]) => (e.isIntersecting ? this._scene?.start() : this._scene?.stop()));
+    this._io.observe(this._els.viewport);
+  }
+
+  _unmountScene() {
+    this._io?.disconnect();
+    this._io = null;
+    this._scene?.dispose();
+    this._scene = null;
+    if (this._els) this._pick(null);
   }
 
   _applyConfig() {
@@ -188,14 +228,20 @@ class DreameVacuum3DCard extends HTMLElement {
     this._els.viewport.style.height = `${c.height}px`;
     this._view = c.view;
     this._els.title.hidden = c.title === false || c.title === '';
-    if (!this._scene) return;
-    this._scene.setLabels(c.labels);
-    this._scene.setLanguage(this._lang());
-    this._scene.setDryTime(c.dryTime);
-    this._scene.setModel(c.model);
-    this._scene.setView(this._view, true);
     this._renderButtons();
-    this._status(c.entity ? (this._map ? '' : this._t('waiting')) : this._t('noEntity'));
+    this._renderRoutines();
+    this._status(this._noWebgl ? this._t('noWebgl') : !c.entity ? this._t('noEntity') : this._map ? '' : this._t('waiting'));
+    this._configureScene();
+  }
+
+  _configureScene() {
+    const s = this._scene, c = this._config;
+    if (!s) return;
+    s.setLabels(c.labels);
+    s.setLanguage(this._lang());
+    s.setDryTime(c.dryTime);
+    s.setModel(c.model);
+    s.setView(this._view, true);
   }
 
   _applyTheme() {
@@ -255,10 +301,51 @@ class DreameVacuum3DCard extends HTMLElement {
 
   /** The first message has everything; later ones carry the rooms only when they changed. */
   _onMap(message) {
+    const first = !this._map;
     this._map = { ...this._map, ...message };
-    this._status('');
+    if (!this._noWebgl) this._status('');
     this._scene?.setMap(this._map);
+    if (first || 'rooms' in message) this._labelRoutines();
     if (this._hass) this._renderHead();
+  }
+
+  _renderRoutines() {
+    const box = this._els.routines;
+    box.replaceChildren(...this._config.routines.map((_, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.routine = String(i);
+      return b;
+    }));
+    box.hidden = !this._config.routines.length;
+    this._labelRoutines();
+  }
+
+  /** A routine's button shows its name, or its rooms; it is off until the map has every room it names. */
+  _labelRoutines() {
+    const rooms = this._map?.rooms ?? {};
+    this._els.routines.querySelectorAll('button').forEach((b) => {
+      const r = this._config.routines[b.dataset.routine];
+      const ids = routineRooms(this._map?.rooms, r.rooms);
+      b.textContent = r.name || r.rooms.map((x, i) => rooms[ids[i]]?.name ?? x).join(' + ');
+      b.disabled = !this._map || ids.includes(null);
+      b.title = b.disabled && this._map ? this._t('missing', { rooms: r.rooms.filter((_, i) => ids[i] == null).join(', ') }) : '';
+    });
+  }
+
+  async _runRoutine(i) {
+    const r = this._config.routines[i];
+    const segments = routineRooms(this._map?.rooms, r.rooms);
+    if (!this._map || segments.includes(null)) return;
+    const data = { segments };
+    for (const k of ['repeats', 'suction_level', 'water_volume']) if (r[k] != null) data[k] = r[k];
+    const name = this._els.routines.querySelector(`[data-routine="${i}"]`).textContent;
+    this._pick(null);
+    const { panel, clean, cancel } = this._els;
+    panel.hidden = false;
+    clean.hidden = true;
+    cancel.textContent = this._t('close');
+    await this._start(data, name);
   }
 
   /** The robot's floor plan as JSON, to build a 3D model of the house on it (see docs/house-model.md). */
@@ -277,31 +364,43 @@ class DreameVacuum3DCard extends HTMLElement {
   _pick(id) {
     const room = id != null ? this._map?.rooms?.[id] : null;
     this._picked = room ? id : null;
-    this._scene.select(this._picked);
-    const { panel, msg, clean } = this._els;
+    this._scene?.select(this._picked);
+    const { panel, msg, clean, cancel } = this._els;
     panel.hidden = !room;
-    if (!room) return;
     msg.dataset.error = 'false';
     msg.textContent = '';
+    if (!room) return;
     clean.hidden = false;
     clean.textContent = this._t('clean', { room: room.name ?? `#${id}` });
+    cancel.textContent = this._t('cancel');
   }
 
   async _clean() {
     const id = this._picked;
     if (id == null) return;
     const name = this._map.rooms[id]?.name ?? `#${id}`;
-    const { msg, clean } = this._els;
+    const { clean } = this._els;
     clean.disabled = true;
     try {
-      await this._hass.callService(DOMAIN, 'vacuum_clean_segment', { segments: [Number(id)] }, { entity_id: this._config.entity });
+      if (await this._start({ segments: [Number(id)] }, name)) clean.hidden = true;
+    } finally {
+      clean.disabled = false;
+    }
+  }
+
+  /** Start cleaning rooms and say so on the panel; true if the robot took it. */
+  async _start(data, name) {
+    const { msg, cancel } = this._els;
+    try {
+      await this._hass.callService(DOMAIN, 'vacuum_clean_segment', data, { entity_id: this._config.entity });
+      msg.dataset.error = 'false';
       msg.textContent = this._t('started', { room: name });
-      clean.hidden = true;
+      cancel.textContent = this._t('close');
+      return true;
     } catch (err) {
       msg.dataset.error = 'true';
       msg.textContent = this._t('failed', { error: err?.message ?? String(err) });
-    } finally {
-      clean.disabled = false;
+      return false;
     }
   }
 }

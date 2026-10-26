@@ -588,6 +588,7 @@ export class VacuumScene {
   start() {
     if (this.running) return;
     this.running = true;
+    this.dirty = true;
     const loop = () => {
       if (!this.running) return;
       this.raf = requestAnimationFrame(loop);
@@ -679,6 +680,33 @@ export class VacuumScene {
     this.dirty = false;
     this.renderer.render(this.scene, this.camera);
     this.labels.render(this.scene, this.camera);
+    this._declutter();
+  }
+
+  /** An obstacle's tag that would cover a room's name, or another tag, moves up above it. */
+  _declutter() {
+    const shown = (el) => el.style.display !== 'none';
+    const placed = this.labelGroup.children.map((l) => l.element).filter(shown).map((el) => el.getBoundingClientRect());
+    for (const o of this.thingGroup.children) {
+      if (!o.isCSS2DObject) continue;
+      const el = o.element;
+      el.style.translate = '';
+      if (!shown(el)) continue;
+      const r = el.getBoundingClientRect();
+      // Each push leaves the tag above that rect, and pushes only grow, so this ends.
+      let dy = 0;
+      for (let moved = true; moved;) {
+        moved = false;
+        for (const p of placed) {
+          if (r.left < p.right && r.right > p.left && r.top - dy < p.bottom && r.bottom - dy > p.top) {
+            dy = r.bottom - p.top + 2;
+            moved = true;
+          }
+        }
+      }
+      if (dy) el.style.translate = `0 ${-dy}px`;
+      placed.push(new DOMRect(r.x, r.y - dy, r.width, r.height));
+    }
   }
 }
 

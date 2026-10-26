@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cellRects, normalizeModel, robotToModel, roomAt } from '../src/model.js';
+import { cellRects, normalizeModel, robotToModel, roomAt, routineRooms } from '../src/model.js';
 
 const close = (a, b) => a.forEach((v, i) => assert.ok(Math.abs(v - b[i]) < 1e-9, `${a} ≠ ${b}`));
 
@@ -46,4 +46,10 @@ test('roomAt finds the room under a point', () => {
 test('normalizeModel rejects a model without a dock', () => {
   assert.throws(() => normalizeModel({ url: 'x.glb' }), /model.dock.position/);
   assert.throws(() => normalizeModel({ url: 'x.glb', dock: { position: [0, 0, 0] }, style: 'neon' }), /model.style/);
+});
+
+test('routineRooms takes room names (any case, spaces) or numbers, null for what the map lacks', () => {
+  const rooms = { 3: { name: 'Kitchen' }, 7: { name: ' Living room ' }, 9: { name: null } };
+  assert.deepEqual(routineRooms(rooms, ['kitchen', 'Living Room ', 9, 4, 'Garage']), [3, 7, 9, null, null]);
+  assert.deepEqual(routineRooms(undefined, ['Kitchen', 3]), [null, null]);
 });
