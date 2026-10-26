@@ -205,3 +205,18 @@ def test_the_rooms_a_cleaning_cleaned() -> None:
     # The rooms it was sent to; with none (a whole-house cleaning), the rooms its path went through.
     assert dmap.cleaned_rooms(dmap.decode(live())) == [2]
     assert dmap.cleaned_rooms(dmap.decode(live({"sa": []}))) == [1]
+
+
+def test_partial_frames_add_their_cells_as_differences() -> None:
+    whole = dmap.decode(frame([[3, 3, 3], [3, 3, 3]]))
+    cells = bytearray(whole.cells)
+    # A 2-by-1 partial frame one cell right of the whole one: +255 turns floor (3) into wall (2), mod 256.
+    partial = dmap.decode(frame([[0, 255]]))
+    shifted = dmap.Frame(**{**partial.__dict__, "grid": dmap.Grid(LEFT + SIZE, TOP, SIZE, 2, 1)})
+    assert dmap.merge(whole.grid, cells, shifted)
+    assert list(cells) == [3, 3, 2, 3, 3, 3]
+    # Nothing to add, a different cell size, or cells outside the whole frame: no change.
+    assert not dmap.merge(whole.grid, cells, dmap.decode(frame([[0, 0, 0]])))
+    assert not dmap.merge(whole.grid, cells, dmap.Frame(**{**partial.__dict__, "grid": dmap.Grid(LEFT, TOP, 25, 2, 1)}))
+    outside = dmap.Frame(**{**partial.__dict__, "grid": dmap.Grid(LEFT + 3 * SIZE, TOP + 5 * SIZE, SIZE, 2, 1)})
+    assert not dmap.merge(whole.grid, cells, outside)

@@ -22,7 +22,7 @@ from custom_components.dreame_vacuum_3d.protocol.cloud import CloudAuthError, Cl
 from custom_components.dreame_vacuum_3d.protocol.miio import MiioTimeoutError
 from tests.integration.helpers import setup_fixture_entry
 from tests.integration.test_init import ENTRY_DATA
-from tests.map_frames import SAVED_ROWS, SEG_INF, encrypt, frame, live
+from tests.map_frames import SAVED_ROWS, SEG_INF, encrypt, frame, live, saved
 
 DID = ENTRY_DATA["did"]
 IN_ROOM_1 = (-925, -425, 90)  # cell (1, 1)
@@ -294,6 +294,46 @@ async def test_partial_frames_from_the_cloud_log_while_cleaning(hass: HomeAssist
     await live_map.refresh()
     assert miio.cloud.device_data.await_args.args[2] == now + 4
     assert len(sent) == 2
+
+
+async def test_partial_frames_show_what_the_lidar_sees_while_cleaning(
+    hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entry, miio = await setup(hass)  # a whole frame of map 7, frame 1: open floor, nothing on it
+    live_map = entry.runtime_data.map
+    entry.runtime_data.coordinator.device.values["status"] = Status.CLEANING.value
+    sent: list[dict] = []
+    live_map.listen(sent.append)
+    rows = [[0] * 8 for _ in SAVED_ROWS]
+    rows[0][5] = 255  # floor (3) + 255 = wall (2): a box on open floor
+    box = frame(rows, {}, kind="P", frame_id=2)
+    now = int(time.time())
+    miio.cloud.device_data.side_effect = lambda _did, key, _since, **_kw: (
+        _logged(box, start=now) if key == "6.1" else []
+    )
+    await live_map.refresh()
+    assert live_map.pose["new_cells"] == [5, 0, 1] and sent[-1]["new_cells"] == [5, 0, 1]
+
+    # The whole frame that follows matches what the partial frames built (diagnostics say so).
+    whole_rows = [[3 if v else 0 for v in row] for row in SAVED_ROWS]
+    whole_rows[0][5] = 2
+    entry.runtime_data.coordinator.device.request_map = AsyncMock(
+        return_value=(frame(whole_rows, {"rism": saved()}, frame_id=3), None)
+    )
+    miio.cloud.device_data.side_effect = lambda *_args, **_kw: []
+    monkeypatch.setattr("custom_components.dreame_vacuum_3d.live_map.WHOLE_EVERY", 0)  # ask for it now
+    await live_map.refresh()
+    monkeypatch.setattr("custom_components.dreame_vacuum_3d.live_map.WHOLE_EVERY", 60)
+    assert live_map.last_frames["merge"] == {"partials": 1, "cells": 32, "different": 0}
+
+    # A partial frame missing (5 after 3): the ones after it can't be added, until the next whole frame.
+    rows[0][5], rows[1][6] = 0, 255
+    late = frame(rows, {}, kind="P", frame_id=5)
+    miio.cloud.device_data.side_effect = lambda _did, key, _since, **_kw: (
+        _logged(late, start=now) if key == "6.1" else []
+    )
+    await live_map.refresh()
+    assert live_map.pose["frame_id"] == 5 and live_map.pose["new_cells"] == [5, 0, 1]
 
 
 async def test_a_whole_frame_from_the_cloud_log(hass: HomeAssistant) -> None:

@@ -317,6 +317,31 @@ def floor_mask(saved: Frame, margin: int = 2) -> bytearray:
     return mask
 
 
+def merge(whole: Grid, cells: bytearray, partial: Frame) -> bool:
+    """Apply a partial frame's cells to a whole frame's (in place); whether any changed.
+
+    A partial frame covers a rectangle around the robot. Its non-zero cells are differences to add (mod 256), as
+    Tasshack applies them on maps before "version 3" (the X10+'s); cells outside the whole frame's grid are dropped.
+    """
+    size = whole.size
+    if partial.grid.size != size:
+        return False
+    dx, dy = (partial.grid.left - whole.left) // size, (partial.grid.top - whole.top) // size
+    w = partial.grid.width
+    changed = False
+    for y in range(partial.grid.height):
+        row = partial.cells[y * w : (y + 1) * w]
+        wy = y + dy
+        if not any(row) or not 0 <= wy < whole.height:
+            continue
+        for x, value in enumerate(row):
+            if value and 0 <= x + dx < whole.width:
+                i = wy * whole.width + x + dx
+                cells[i] = (cells[i] + value) & 0xFF
+                changed = True
+    return changed
+
+
 def seen_cells(live: Frame, saved: Grid, mask: bytearray) -> set[tuple[int, int]]:
     """Cells where the live map sees a wall or an obstacle on what the saved map has as open floor (furniture legs,
     chairs, a box…), as (x, y) in the saved map's grid. The saved map keeps only the rooms and their edges."""

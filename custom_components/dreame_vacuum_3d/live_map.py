@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Awaitable, Callable
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 import json
 import logging
@@ -87,6 +87,10 @@ class LiveMap:
         self._watched = watched  # whether a card shows the map now
         self._read_at = datetime.min.replace(tzinfo=UTC)  # the last read while the robot moved
         self.last_frames: dict[str, dict[str, Any]] = {}  # what the last whole and partial frames held, for diagnostics
+        # The last whole frame and its cells with the partial frames since applied (what the lidar sees now), and
+        # how many were applied; None once one is missing, until the next whole frame.
+        self._live: tuple[dmap.Frame, bytearray] | None = None
+        self._merged = 0
         self.pose: dict[str, Any] | None = None  # robot, dock, path, room, active of the latest frame
 
     @property
@@ -209,6 +213,8 @@ class LiveMap:
         self._at = (frame.map_id, frame.frame_id)
         self._whole_at = monotonic()
         self.last_frames["I"] = _summary(frame)
+        self._check_merge(frame)
+        self._live, self._merged = (frame, bytearray(frame.cells)), 0
         rism = frame.data.get("rism")
         source = rism if isinstance(rism, str) and rism else f"live:{frame.map_id}:{frame.frame_id}"
         if self._rooms is None or self._rooms[0] != source:
@@ -254,9 +260,18 @@ class LiveMap:
         """
         if self.pose is None or self._at is None or frame.map_id != self._at[0] or frame.frame_id <= self._at[1]:
             return  # nothing to build on yet, another map, or already applied
+        if frame.frame_id != self._at[1] + 1:
+            self._live = None  # one is missing: what it changed is lost until the next whole frame
         self._at = (frame.map_id, frame.frame_id)
         self.last_frames["P"] = _summary(frame)
         update: dict[str, Any] = {"frame_id": frame.frame_id}
+        if self._live is not None and dmap.merge(self._live[0].grid, self._live[1], frame):
+            self._merged += 1
+            if self._saved and self._rooms:
+                live = replace(self._live[0], cells=bytes(self._live[1]))
+                seen = dmap.seen_cells(live, *self._saved[:2])
+                if (new := dmap.runs(self._new(self._rooms[1]["map_id"], seen))) != self.pose.get("new_cells"):
+                    update["new_cells"] = new
         if frame.robot:
             update["robot"] = list(frame.robot)
             rooms = self.message or {}
@@ -279,6 +294,15 @@ class LiveMap:
         message = {**update, "path_tail": tail} if tail else update
         for cb in list(self._listeners):
             cb(message)
+
+    def _check_merge(self, frame: dmap.Frame) -> None:
+        """How well the partial frames rebuilt the map, against the whole frame that follows them, for diagnostics."""
+        if self._live is None or not self._merged:
+            return
+        base, cells = self._live
+        if base.map_id == frame.map_id and base.grid == frame.grid:
+            different = sum(a != b for a, b in zip(cells, frame.cells, strict=True))
+            self.last_frames["merge"] = {"partials": self._merged, "cells": len(cells), "different": different}
 
     def _new(self, map_id: int, seen: set[tuple[int, int]]) -> set[tuple[int, int]]:
         """What the lidar sees on open floor that it didn't in the cleaning before this one.
