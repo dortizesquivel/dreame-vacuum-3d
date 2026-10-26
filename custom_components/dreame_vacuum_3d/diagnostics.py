@@ -60,4 +60,6 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: ConfigE
         "tested": device.caps.tested,
         "available": sorted(k for k in device.available if k != "serial_number"),
         "properties": properties,
+        # Map frames' grids, commonest cell values and data keys, without positions: to support a model's frames.
+        "map_frames": entry.runtime_data.map.last_frames,
     }

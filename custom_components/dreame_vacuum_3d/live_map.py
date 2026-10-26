@@ -6,9 +6,10 @@ The house the card draws is the user's own model.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 import json
 import logging
 from time import monotonic, time
@@ -17,6 +18,7 @@ from typing import Any
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 from homeassistant.util.hass_dict import HassKey
 
 from .const import DOMAIN
@@ -30,7 +32,8 @@ from .protocol.miot import MiotError
 
 _LOGGER = logging.getLogger(__name__)
 
-TICK = timedelta(seconds=5)  # how often to check; while the robot moves, its new frames each tick
+TICK = timedelta(seconds=2.5)  # how often to check; while the robot moves and a card shows it, its new frames each tick
+UNWATCHED_EVERY = 5  # s between reads while it moves and no card shows the map: half the calls to the cloud
 IDLE_EVERY = 900  # s between frames while it stays put: the map rarely changes then
 FIRST_RETRY = 30  # s: until a first frame comes (a robot just woken may send none), ask again this soon
 WHOLE_EVERY = 60  # s: while it moves, ask it for a whole frame this often (it mostly refuses then)
@@ -42,6 +45,8 @@ type Listener = Callable[[dict[str, Any]], None]
 
 # The card's map subscriptions, per config entry: kept across reloads of the entry.
 MAP_LISTENERS: HassKey[dict[str, list[Listener]]] = HassKey(f"{DOMAIN}_map_listeners")
+# How many cards show each entry's map now (the listeners also hold entities that follow it).
+MAP_VIEWERS: HassKey[dict[str, int]] = HassKey(f"{DOMAIN}_map_viewers")
 
 
 class LiveMap:
@@ -55,6 +60,7 @@ class LiveMap:
         listeners: list[Listener],
         store: Store[dict[str, Any]] | None = None,
         fetch_history: HistoryFetcher | None = None,
+        watched: Callable[[], bool] = lambda: True,
     ) -> None:
         self._hass = hass
         self._device = device
@@ -78,6 +84,9 @@ class LiveMap:
         self._since = 0  # cloud time (s) of the next log entries to read
         self._at: tuple[int, int] | None = None  # (map id, frame id) the pose is at
         self._whole_at = -float(WHOLE_EVERY)  # monotonic time of the last whole frame
+        self._watched = watched  # whether a card shows the map now
+        self._read_at = datetime.min.replace(tzinfo=UTC)  # the last read while the robot moved
+        self.last_frames: dict[str, dict[str, Any]] = {}  # what the last whole and partial frames held, for diagnostics
         self.pose: dict[str, Any] | None = None  # robot, dock, path, room, active of the latest frame
 
     @property
@@ -104,13 +113,18 @@ class LiveMap:
         return async_track_time_interval(self._hass, self._schedule, TICK)
 
     @callback
-    def _schedule(self, _now: object = None) -> None:
+    def _schedule(self, now: datetime | None = None) -> None:
         status = parse_enum(Status, self._device.values.get("status"))
         active = status in ACTIVE_STATUSES
-        # A frame when the robot moves, and one more when it stops, for the whole path.
-        due = active or self._was_active or monotonic() >= self._next
+        now = now or dt_util.utcnow()
+        # Frames while the robot moves (each tick while a card shows them), and one more when it stops, for the whole
+        # path. The second's slack keeps reads on every other tick despite the timer's jitter.
+        moving = active and (self._watched() or (now - self._read_at).total_seconds() >= UNWATCHED_EVERY - 1)
+        due = moving or (self._was_active and not active) or monotonic() >= self._next
         self._was_active = active
         if due and not self._fetching:
+            if active:
+                self._read_at = now
             self._fetching = True
             self._hass.async_create_background_task(self.refresh(), "dreame_vacuum_3d map")
 
@@ -194,6 +208,7 @@ class LiveMap:
             return
         self._at = (frame.map_id, frame.frame_id)
         self._whole_at = monotonic()
+        self.last_frames["I"] = _summary(frame)
         rism = frame.data.get("rism")
         source = rism if isinstance(rism, str) and rism else f"live:{frame.map_id}:{frame.frame_id}"
         if self._rooms is None or self._rooms[0] != source:
@@ -232,32 +247,38 @@ class LiveMap:
 
     @callback
     def _apply_partial(self, frame: dmap.Frame) -> None:
-        """A partial frame on top of the last whole one: where the robot is now and the path since that frame."""
+        """A partial frame on top of the last whole one: where the robot is now and the path since that frame.
+
+        Listeners get only what changed, and the path's new strokes as `path_tail` (a stroke with `joins` continues
+        the last one): the whole path grows with every frame, to thousands of points in a long cleaning.
+        """
         if self.pose is None or self._at is None or frame.map_id != self._at[0] or frame.frame_id <= self._at[1]:
             return  # nothing to build on yet, another map, or already applied
         self._at = (frame.map_id, frame.frame_id)
-        pose = {**self.pose, "frame_id": frame.frame_id}
+        self.last_frames["P"] = _summary(frame)
+        update: dict[str, Any] = {"frame_id": frame.frame_id}
         if frame.robot:
-            pose["robot"] = list(frame.robot)
+            update["robot"] = list(frame.robot)
             rooms = self.message or {}
             grid = dmap.Grid(**rooms["grid"]) if rooms.get("grid") else None
-            pose["room"] = dmap.room_at(grid, rooms["cells"], rooms["rooms"], *frame.robot[:2]) if grid else None
+            update["room"] = dmap.room_at(grid, rooms["cells"], rooms["rooms"], *frame.robot[:2]) if grid else None
         if frame.dock:
-            pose["dock"] = list(frame.dock)
-        path = [{**s, "points": list(s["points"])} for s in pose.get("path", [])]
-        for stroke in dmap.path(frame):
-            if stroke.pop("joins", False) and path:
+            update["dock"] = list(frame.dock)
+        if active := dmap.active_rooms(frame):
+            update["active"] = active
+        if "ai_obstacle" in frame.data or "laser_obstacle" in frame.data:
+            update["obstacles"] = dmap.obstacles(frame)
+        tail = dmap.path(frame)
+        path = [{**s, "points": list(s["points"])} for s in self.pose.get("path", [])]  # earlier messages keep theirs
+        for stroke in tail:
+            if stroke.get("joins") and path:
                 path[-1]["points"].extend(stroke["points"])
             else:
-                path.append(stroke)
-        pose["path"] = path
-        if active := dmap.active_rooms(frame):
-            pose["active"] = active
-        if "ai_obstacle" in frame.data or "laser_obstacle" in frame.data:
-            pose["obstacles"] = dmap.obstacles(frame)
-        self.pose = pose
+                path.append({k: v for k, v in stroke.items() if k != "joins"})
+        self.pose = {**self.pose, **update, "path": path}
+        message = {**update, "path_tail": tail} if tail else update
         for cb in list(self._listeners):
-            cb(pose)
+            cb(message)
 
     def _new(self, map_id: int, seen: set[tuple[int, int]]) -> set[tuple[int, int]]:
         """What the lidar sees on open floor that it didn't in the cleaning before this one.
@@ -288,6 +309,17 @@ class LiveMap:
     def _save(self) -> None:
         if self._store is not None:
             self._store.async_delay_save(lambda: self._known or {}, 5)
+
+
+def _summary(frame: dmap.Frame) -> dict[str, Any]:
+    """What a frame holds, without where anything is: its grid, its commonest cell values and its data's keys."""
+    return {
+        "frame_id": frame.frame_id,
+        "grid": asdict(frame.grid),
+        "cells": len(frame.cells),
+        "values": dict(Counter(frame.cells).most_common(8)),
+        "keys": sorted(frame.data),
+    }
 
 
 def _logged_value(record: dict[str, Any]) -> str | None:
