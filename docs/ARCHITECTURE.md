@@ -27,7 +27,7 @@ Dreame Vacuum 3D is a Home Assistant custom integration: Xiaomi cloud login, loc
 |---|---|
 | `__init__.py` | Entry setup: cloud session (`CookieJar(quote_cookie=False)`), login, persist renewed auth, miIO client, load capabilities, device, coordinator, platforms, notifier. |
 | `config_flow.py` | User / captcha / 2FA / device pick, reauth, reconfigure host, options. |
-| `coordinator.py` | Polls the device; `MiioError` → `UpdateFailed`; `CloudAuthError` → `ConfigEntryAuthFailed`. Intervals: cleaning/returning ~2 s, docked 30 s (60 s if coexist), sleeping/off 120 s. |
+| `coordinator.py` | Polls the device; `MiioError` → `UpdateFailed`; `CloudAuthError` → `ConfigEntryAuthFailed`. Intervals: cleaning/returning ~2 s, docked 30 s (60 s if coexist), sleeping/off 120 s. A robot that charges on its dock but still says it's returning for 3 minutes is sent home once more, which ends the task (a firmware quirk). |
 | `device/capabilities.py` + `device/models/*.yaml` | Property/action siid·piid tables with inheritance; `tested` flag; unknown models get the untested base. |
 | `device/device.py` | Reads/writes properties, runs actions; tracks `available` keys and active channel (local / cloud). |
 | `protocol/miio*.py`, `miot.py` | Local UDP codec and MIoT get/set/action. |

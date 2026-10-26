@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 from typing import Any
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -17,9 +17,10 @@ from custom_components.dreame_vacuum_3d.coordinator import (
     INTERVAL_DOCKED,
     INTERVAL_DOCKED_COEXIST,
     INTERVAL_SLEEP,
+    STUCK_RETURN,
     DreameDataUpdateCoordinator,
 )
-from custom_components.dreame_vacuum_3d.device.enums import Status
+from custom_components.dreame_vacuum_3d.device.enums import ChargingStatus, Status
 from custom_components.dreame_vacuum_3d.protocol.cloud import CloudAuthError, CloudConnectionError
 from custom_components.dreame_vacuum_3d.protocol.miio_codec import MiioError
 
@@ -142,3 +143,37 @@ async def test_no_notify_when_nothing_changes(hass) -> None:
     await coordinator.async_refresh()
     listener.assert_not_called()
     assert coordinator.changed_keys == frozenset()
+
+
+async def test_a_return_stuck_on_the_dock_is_ended_once(hass, monkeypatch: pytest.MonkeyPatch) -> None:
+    # On its dock and charging, but still "returning": after STUCK_RETURN it is sent home once, which ends it.
+    clock = [1000.0]
+    monkeypatch.setattr("custom_components.dreame_vacuum_3d.coordinator.monotonic", lambda: clock[0])
+    device = FakeDevice(Status.BACK_HOME)
+    device.values["charging_status"] = ChargingStatus.CHARGING.value
+    device.return_to_base = AsyncMock(side_effect=[None, MiioError("no answer")])
+    coordinator = await _make(hass, device)
+
+    async def poll(after: float) -> None:
+        clock[0] += after
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+
+    await poll(STUCK_RETURN - 1)
+    assert device.return_to_base.await_count == 0
+    await poll(2)
+    await poll(STUCK_RETURN)
+    assert device.return_to_base.await_count == 1
+
+    # It ends; the next time it happens it is sent home again (and a robot that doesn't answer is only logged).
+    device.values["status"] = Status.CHARGING.value
+    await poll(1)
+    device.values["status"] = Status.BACK_HOME.value
+    await poll(1)
+    await poll(STUCK_RETURN)
+    assert device.return_to_base.await_count == 2
+
+    # Still away from the dock: just returning.
+    device.values["charging_status"] = ChargingStatus.NOT_CHARGING.value
+    await poll(2 * STUCK_RETURN)
+    assert device.return_to_base.await_count == 2

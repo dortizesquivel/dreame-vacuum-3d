@@ -12,7 +12,7 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.dreame_vacuum_3d.const import DOMAIN
-from custom_components.dreame_vacuum_3d.device.enums import DreameVacuumState, SuctionLevel
+from custom_components.dreame_vacuum_3d.device.enums import DreameVacuumState, SuctionLevel, TaskStatus
 from tests.integration.helpers import FixtureMiio, setup_fixture_entry
 from tests.integration.test_init import ENTRY_DATA, _mock_cloud
 
@@ -121,6 +121,16 @@ async def test_commands_send_miot(hass: HomeAssistant) -> None:
 
     await call("start")
     assert ("action", {"did": "call", "siid": 2, "aiid": 1, "in": []}) in miio.calls
+
+    # Paused on its way to the dock, start carries on home instead of starting a new cleaning.
+    device = _entry.runtime_data.coordinator.device
+    task = device.caps.properties["task_status"]
+    device.values["task_status"] = miio.overrides[task] = TaskStatus.DOCKING_PAUSED.value
+    await call("start")
+    assert ("action", {"did": "call", "siid": 3, "aiid": 1, "in": []}) in miio.calls
+    assert ("action", {"did": "call", "siid": 2, "aiid": 1, "in": []}) not in miio.calls
+    del miio.overrides[task]
+    device.values["task_status"] = TaskStatus.COMPLETED.value
 
     await call("pause")
     assert ("action", {"did": "call", "siid": 2, "aiid": 2, "in": []}) in miio.calls
