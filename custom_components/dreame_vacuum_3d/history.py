@@ -22,7 +22,7 @@ _LOGGER = logging.getLogger(__name__)
 
 KEEP = 30  # cleanings kept, newest first
 FIRST_AFTER = 20  # s after setup before the first look
-AFTER_TASK = 60  # s after a cleaning ends: the cloud gets its event a moment later
+AFTER_TASK = (60, 600, 1800)  # s after a cleaning ends: the cloud gets its event later, sometimes much later
 PATHS = 5  # cleanings' maps kept in memory, for replays and the coverage
 _ERRORS = (CloudError, dmap.MapError)
 
@@ -66,7 +66,7 @@ class CleaningHistory:
         def on_update() -> None:
             active = parse_enum(Status, self._device.values.get("status")) in ACTIVE_STATUSES
             if self._was_active and not active:
-                cancels.append(async_call_later(self._hass, AFTER_TASK, self._later))
+                cancels.extend(async_call_later(self._hass, delay, self._later) for delay in AFTER_TASK)
             self._was_active = active
 
         remove = coordinator.async_add_listener(on_update)
