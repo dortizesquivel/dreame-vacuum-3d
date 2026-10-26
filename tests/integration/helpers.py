@@ -111,6 +111,7 @@ async def setup_fixture_entry(
     cloud.interim_file_url = AsyncMock(return_value="https://example.com/map")
     cloud.download = AsyncMock(return_value=map_file.encode() if map_file else None)
     cloud.device_data = AsyncMock(return_value=[])
+    cloud.file_url = AsyncMock(return_value="https://example.com/history")
 
     with (
         patch("custom_components.dreame_vacuum_3d.XiaomiCloud", return_value=cloud),

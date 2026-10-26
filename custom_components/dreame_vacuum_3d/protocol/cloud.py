@@ -343,17 +343,20 @@ class XiaomiCloud:
         """Return rpc bound to one device, for the miot helpers."""
         return partial(self.rpc, did)
 
-    async def device_data(self, did: str, key: str, since: int, *, limit: int = 20) -> list[dict[str, Any]]:
+    async def device_data(
+        self, did: str, key: str, since: int, *, limit: int = 20, kind: str = "prop"
+    ) -> list[dict[str, Any]]:
         """What the cloud logged for one of a device's properties ("siid.piid") since a time (s), newest first.
 
-        A Dreame robot logs its map frames there while it cleans (6.1 the partial ones, 6.3 a whole one's file).
+        A Dreame robot logs its map frames there while it cleans (6.1 the partial ones, 6.3 a whole one's file);
+        with kind "event", what it sent when its status changed: each cleaning, with its log file (the history).
         """
         auth = self._require_auth()
         params = {
             "uid": auth.user_id,
             "did": did,
             "key": key,
-            "type": "prop",
+            "type": kind,
             "time_start": since,
             "time_end": 9999999999,
             "limit": limit,

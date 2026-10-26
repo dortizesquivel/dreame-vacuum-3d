@@ -156,3 +156,28 @@ test('the dust and wet floor can be hidden, together or one of them', async ({ p
   await page.evaluate(() => { const { card } = window.demo; card.setConfig({ ...card._config, model: undefined, effects: { wet: false } }); });
   expect(await shown()).toMatchObject({ dust: true, glint: true, wet: false });
 });
+
+test('past cleanings: replay one, and show the coverage of the last ones', async ({ page }) => {
+  await open(page, '&house=flat');
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-history]').click();
+  const items = card.locator('.panel .list button');
+  await expect(items).toHaveCount(3);
+  await expect(card.locator('.panel .clean')).toBeHidden();
+  await expect(items.first()).toContainText('min');
+  await items.first().click();
+  await expect(card.locator('.panel .msg')).toContainText('Replaying');
+  await page.waitForFunction(() => window.demo.card._scene.map.path.flatMap((s) => s.points).length > 50);
+  expect(await page.evaluate(() => window.demo.sim.path.length)).toBe(0);   // the live robot hasn't moved
+  await card.locator('.panel .cancel').click();   // Live
+  expect(await page.evaluate(() => [window.demo.card._replaying, window.demo.card._scene.map.path.length])).toEqual([null, 0]);
+
+  await card.locator('[data-history]').click();
+  await card.locator('.panel .coverage').click();
+  await expect(card.locator('.panel .coverage')).toHaveAttribute('aria-pressed', 'true');
+  const coverage = await page.evaluate(() => {
+    const fx = window.demo.card._scene.effects;
+    return { paths: fx.coverage.length, shown: fx.layers.coverage.mesh.visible };
+  });
+  expect(coverage).toEqual({ paths: 3, shown: true });
+});

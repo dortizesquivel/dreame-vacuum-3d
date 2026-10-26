@@ -37,6 +37,32 @@ export class FloorEffects {
     this.specks.visible = false;
     robot.add(this.specks);
     this.shown = { dust: true, wet: true };
+    this.coverage = null;      // past cleanings' paths to show the coverage of, or null
+  }
+
+  /**
+   * Where past cleanings went: each one's path drawn at the brushes' width, faint, so the floor more of them covered
+   * shows stronger. paths: [[{ mode, points }, …], …] in map mm, or null to hide it.
+   */
+  setCoverage(paths) {
+    this.coverage = paths;
+    this._drawCoverage();
+  }
+
+  _drawCoverage() {
+    if (!this.layers) return;
+    const { ctx, canvas, tex, mesh } = this.layers.coverage;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    mesh.visible = !!this.coverage?.length;
+    if (mesh.visible) {
+      ctx.globalAlpha = 0.22;
+      ctx.strokeStyle = this.theme.accent;
+      for (const path of this.coverage) {
+        this._stroke(ctx, path.flatMap(({ points = [] }) => points.slice(1).map((b, i) => ({ a: points[i], b }))), VACUUM_WIDTH);
+      }
+      ctx.globalAlpha = 1;
+    }
+    tex.needsUpdate = true;
   }
 
   /** Which effects show: the vacuumed floor (dust cleared, glint, specks) and the mopped one (wet, drying). */
@@ -57,6 +83,7 @@ export class FloorEffects {
     if (this.layers) this.dustPattern = dustPattern(this.layers.dust.ctx, theme.dark);
     this.dustSig = '';
     this.drawnAt = 0;
+    this._drawCoverage();
   }
 
   setDryTime(minutes) {
@@ -127,6 +154,7 @@ export class FloorEffects {
     this.env ??= new PMREMGenerator(this.renderer).fromScene(new RoomEnvironment(), 0.04).texture;
     const flat = { transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 };
     this.layers = {
+      coverage: layer(0.002, new MeshBasicMaterial({ ...flat })),
       // Glossier than water on a floor really is, so the sheen also shows when seen from above.
       wet: layer(0.004, new MeshStandardMaterial({ ...flat, roughness: 0.1, metalness: 0.35, envMap: this.env, envMapIntensity: 1.6 })),
       dust: layer(0.006, new MeshBasicMaterial({ ...flat, opacity: 0 })),
@@ -135,6 +163,7 @@ export class FloorEffects {
     this.dustPattern = dustPattern(this.layers.dust.ctx, this.theme.dark);
     this.dustSig = '';
     this._applyShown();
+    this._drawCoverage();
   }
 
   _px([x, y]) {

@@ -77,6 +77,18 @@
   let dark = q.get('theme') === 'dark';
   let speed = Number(q.get('speed') ?? 10);
 
+  // Past cleanings, for the card's history: simulated runs of the house's cleaning (and of its first room), from the dock.
+  let past = null;
+  const pastCleanings = () => past ??= [3600, 86400 + 1800, 3 * 86400].map((ago, i) => {
+    const robot = new Sim(map, {}), rooms = i === 1 ? [Number(Object.keys(map.rooms)[0])] : Object.keys(clean).map(Number);
+    robot.clean(rooms, clean);
+    for (let k = 0; k < 50000 && robot.state !== 'docked'; k++) robot.step(2);
+    const points = robot.path.flatMap((st) => st.points);
+    const length = points.slice(1).reduce((d, p, k) => d + Math.hypot(p[0] - points[k][0], p[1] - points[k][1]), 0);
+    return { start: Math.floor(Date.now() / 1000) - ago, duration: Math.round(length / 300 / 60), area: Math.round((length * 280) / 1e6),
+      completed: true, rooms, map_id: map.map_id, has_map: true, path: robot.path };
+  });
+
   const hass = () => ({
     states: {
       'vacuum.demo': { entity_id: 'vacuum.demo', state: sim.state, attributes: { friendly_name: 'Robot (demo)', battery_level: 100 } },
@@ -94,6 +106,12 @@
         cb(sim.message());
         return Promise.resolve(() => subs.delete(cb));
       },
+    },
+    async callWS(msg) {
+      if (msg.type === 'dreame_vacuum_3d/history') return { cleanings: pastCleanings().map(({ path, ...c }) => c) };
+      const found = msg.type === 'dreame_vacuum_3d/history/path' && pastCleanings().find((c) => c.start === msg.start);
+      if (!found) throw { code: 'not_found', message: 'No map for that cleaning' };
+      return { start: found.start, map_id: found.map_id, path: found.path, rooms: found.rooms };
     },
     async callService(domain, service, data) {
       if (service === 'vacuum_clean_segment') sim.clean([].concat(data.segments));
