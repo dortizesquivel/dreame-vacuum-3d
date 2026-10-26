@@ -2,6 +2,12 @@
 
 All notable releases of Dreame Vacuum 3D are listed here. The [Release workflow](.github/workflows/release.yml) prepends each tagged version.
 
+## v0.1.9 - 2026-10-26
+
+- feat(map): what the lidar newly sees, updated while the robot cleans (158c50e)
+- test(card): lighter path test, more time for browser tests on CI (d74380f)
+- docs(readme): an animated demo at the top, and the live demo link to the project's page (bd4a85e)
+
 ## v0.1.8 - 2026-10-26
 
 - feat(card): past cleanings: replay one, and the coverage of the last five (d2f3122)
