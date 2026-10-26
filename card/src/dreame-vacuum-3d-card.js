@@ -15,6 +15,7 @@ const ICONS = {   // Material Design Icons
   start: 'M8,5.14V19.14L19,12.14L8,5.14Z',
   pause: 'M14,19H18V5H14M6,19H10V5H6V19Z',
   dock: 'M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z',
+  zone: 'M3,3H9V5H5V9H3V3M15,3H21V9H19V5H15V3M3,15H5V19H9V21H3V15M19,15H21V21H15V19H19V15M8,8H16V16H8V8Z',
 };
 
 const STRINGS = {
@@ -28,6 +29,8 @@ const STRINGS = {
     clean: 'Clean {room}', cancel: 'Cancel', close: 'Close', started: 'Cleaning {room}', failed: 'Could not start: {error}',
     zoomIn: 'Zoom in', zoomOut: 'Zoom out', missing: 'Not on the map: {rooms}',
     start: 'Start', pause: 'Pause', dock: 'Back to the dock', commandFailed: 'The robot did not take it: {error}',
+    zone: 'Draw a zone to clean', drawZone: 'Drag on the floor to draw the zone', zoneSize: 'Zone of {w} × {h} m',
+    cleanZone: 'Clean the zone', theZone: 'the zone',
   },
   es: {
     noEntity: 'Pon en "entity" una aspiradora de Dreame Vacuum 3D.',
@@ -39,6 +42,8 @@ const STRINGS = {
     clean: 'Limpiar {room}', cancel: 'Cancelar', close: 'Cerrar', started: 'Limpiando {room}', failed: 'No se pudo empezar: {error}',
     zoomIn: 'Acercar', zoomOut: 'Alejar', missing: 'No están en el mapa: {rooms}',
     start: 'Empezar', pause: 'Pausar', dock: 'Volver a la base', commandFailed: 'El robot no lo aceptó: {error}',
+    zone: 'Dibujar una zona para limpiar', drawZone: 'Arrastra sobre el suelo para dibujar la zona', zoneSize: 'Zona de {w} × {h} m',
+    cleanZone: 'Limpiar la zona', theZone: 'la zona',
   },
 };
 
@@ -177,6 +182,7 @@ class DreameVacuum3DCard extends HTMLElement {
             <button type="button" data-zoom="in">+</button>
             <button type="button" data-zoom="out">−</button>
             <button type="button" data-download>⤓</button>
+            <button type="button" data-zone><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.zone}"></path></svg></button>
           </div>
           <div class="panel" hidden>
             <div class="msg" aria-live="polite"></div>
@@ -205,6 +211,7 @@ class DreameVacuum3DCard extends HTMLElement {
     });
     root.querySelectorAll('[data-zoom]').forEach((b) => b.addEventListener('click', () => this._scene?.zoom(b.dataset.zoom === 'in' ? ZOOM_STEP : 1 / ZOOM_STEP)));
     root.querySelector('[data-download]').addEventListener('click', () => this._download());
+    root.querySelector('[data-zone]').addEventListener('click', () => this._setZoneMode(!this._zoneMode));
     this._els.cancel.addEventListener('click', () => this._pick(null));
     this._els.clean.addEventListener('click', () => this._clean());
     root.querySelectorAll('[data-cmd]').forEach((b) => b.addEventListener('click', () => this._command(b.dataset.cmd)));
@@ -228,6 +235,7 @@ class DreameVacuum3DCard extends HTMLElement {
     }
     const s = this._scene;
     s.onRoomTap = (id) => this._pick(id);
+    s.onZone = (rect) => this._offerZone(rect);
     s.onModelError = (err) => this._status(this._t('modelError', { error: err.message }));
     this._configureScene();
     s.setFollow(!!this._follow);
@@ -285,6 +293,9 @@ class DreameVacuum3DCard extends HTMLElement {
     r.querySelector('[data-zoom="out"]').setAttribute('aria-label', this._t('zoomOut'));
     r.querySelector('[data-download]').setAttribute('aria-label', this._t('download'));
     r.querySelector('[data-download]').title = this._t('download');
+    r.querySelector('[data-zone]').setAttribute('aria-label', this._t('zone'));
+    r.querySelector('[data-zone]').title = this._t('zone');
+    r.querySelector('[data-zone]').setAttribute('aria-pressed', String(!!this._zoneMode));
     r.querySelector('[data-cmd="return_to_base"]').setAttribute('aria-label', this._t('dock'));
     r.querySelector('[data-cmd="return_to_base"]').title = this._t('dock');
     this._els.cancel.textContent = this._t('cancel');
@@ -432,8 +443,41 @@ class DreameVacuum3DCard extends HTMLElement {
     setTimeout(() => URL.revokeObjectURL(a.href), 0);
   }
 
-  /** A tap on a room offers to clean it; a tap elsewhere or Cancel closes the offer. */
+  /** In zone mode a drag on the floor draws a zone to clean, instead of turning the view; Cancel leaves it. */
+  _setZoneMode(on) {
+    this._pick(null);
+    this._zoneMode = on;
+    this._scene?.setZoneMode(on);
+    this._renderButtons();
+    if (!on) return;
+    const { panel, msg, clean, cancel } = this._els;
+    panel.hidden = false;
+    clean.hidden = true;
+    msg.textContent = this._t('drawZone');
+    cancel.textContent = this._t('cancel');
+  }
+
+  _offerZone(rect) {
+    this._zone = rect;
+    this._scene.showZone(rect);
+    const { panel, msg, clean, cancel } = this._els;
+    const m = (mm) => (mm / 1000).toLocaleString(this._lang(), { maximumFractionDigits: 1 });
+    panel.hidden = false;
+    msg.dataset.error = 'false';
+    msg.textContent = this._t('zoneSize', { w: m(rect[2] - rect[0]), h: m(rect[3] - rect[1]) });
+    clean.hidden = false;
+    clean.textContent = this._t('cleanZone');
+    cancel.textContent = this._t('cancel');
+  }
+
+  /** A tap on a room offers to clean it; a tap elsewhere or Cancel closes the offer (and leaves zone mode). */
   _pick(id) {
+    if (id == null && this._zoneMode) {
+      this._zoneMode = false;
+      this._zone = null;
+      this._scene?.setZoneMode(false);
+      if (this._root) this._renderButtons();
+    }
     const room = id != null ? this._map?.rooms?.[id] : null;
     this._picked = room ? id : null;
     this._scene?.select(this._picked);
@@ -448,23 +492,25 @@ class DreameVacuum3DCard extends HTMLElement {
   }
 
   async _clean() {
-    const id = this._picked;
-    if (id == null) return;
-    const name = this._map.rooms[id]?.name ?? `#${id}`;
+    const id = this._picked, zone = this._zone;
+    if (id == null && !zone) return;
     const { clean } = this._els;
     clean.disabled = true;
     try {
-      if (await this._start({ segments: [Number(id)] }, name)) clean.hidden = true;
+      const started = zone
+        ? await this._start({ zone }, this._t('theZone'), 'vacuum_clean_zone')
+        : await this._start({ segments: [Number(id)] }, this._map.rooms[id]?.name ?? `#${id}`);
+      if (started) clean.hidden = true;
     } finally {
       clean.disabled = false;
     }
   }
 
-  /** Start cleaning rooms and say so on the panel; true if the robot took it. */
-  async _start(data, name) {
+  /** Start cleaning rooms (or a zone) and say so on the panel; true if the robot took it. */
+  async _start(data, name, service = 'vacuum_clean_segment') {
     const { msg, cancel } = this._els;
     try {
-      await this._hass.callService(DOMAIN, 'vacuum_clean_segment', data, { entity_id: this._config.entity });
+      await this._hass.callService(DOMAIN, service, data, { entity_id: this._config.entity });
       msg.dataset.error = 'false';
       msg.textContent = this._t('started', { room: name });
       cancel.textContent = this._t('close');

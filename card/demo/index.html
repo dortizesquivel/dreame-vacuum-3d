@@ -96,6 +96,7 @@
     },
     async callService(domain, service, data) {
       if (service === 'vacuum_clean_segment') sim.clean([].concat(data.segments));
+      else if (service === 'vacuum_clean_zone') sim.cleanZone(data.zone);
       else if (domain === 'vacuum' && service === 'start') sim.start(() => sim.clean(Object.keys(map.rooms).map(Number)));
       else if (domain === 'vacuum' && service === 'pause') sim.pause();
       else if (domain === 'vacuum' && service === 'return_to_base') sim.goHome();

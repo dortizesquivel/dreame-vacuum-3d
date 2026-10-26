@@ -145,14 +145,18 @@ export class Sim {
   /** Lanes across a room, alternating direction, as cell end points. */
   lanes(room) {
     const { width, height } = this.g;
+    // A room's id, or a zone [x0, y0, x1, y1] in cells across any room.
+    const ok = Array.isArray(room)
+      ? (x, y) => this.free[y * width + x] && x >= room[0] && x <= room[2] && y >= room[1] && y <= room[3]
+      : (x, y) => this.free[y * width + x] && this.id[y * width + x] === room;
     const out = [];
     let flip = false;
-    for (let y = 0; y < height; y += LANE) {
+    for (let y = Array.isArray(room) ? Math.max(0, room[1]) : 0; y < height; y += LANE) {
       let x = 0;
       while (x < width) {
-        while (x < width && !(this.free[y * width + x] && this.id[y * width + x] === room)) x++;
+        while (x < width && !ok(x, y)) x++;
         const x0 = x;
-        while (x < width && this.free[y * width + x] && this.id[y * width + x] === room) x++;
+        while (x < width && ok(x, y)) x++;
         if (x - x0 >= 4) out.push(flip ? [[x - 1, y], [x0, y]] : [[x0, y], [x - 1, y]]);
       }
       flip = !flip;
@@ -160,7 +164,14 @@ export class Sim {
     return out;
   }
 
-  /** Clean these rooms, in order, then go back to the dock. modes: { room: vacuum | mop | both }, both by default. */
+  /** Clean a zone [x0, y0, x1, y1] (mm), then go back to the dock. */
+  cleanZone([x0, y0, x1, y1]) {
+    const [a, b] = [this.toCell([x0, y0]), this.toCell([x1, y1])];
+    this.clean([[a[0], a[1], b[0], b[1]]]);
+    this.active = [];
+  }
+
+  /** Clean these rooms (or zones, in cells), in order, then go back to the dock. modes: { room: vacuum | mop | both }, both by default. */
   clean(rooms, modes = {}) {
     let at = this.toCell(this.pose);
     const route = [];

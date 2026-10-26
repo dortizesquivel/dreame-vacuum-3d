@@ -122,3 +122,24 @@ test('it lets go of WebGL when it leaves the page, and draws only while it shows
   });
   expect(result).toEqual({ away: { scene: false, canvases: 0 }, back: { scene: true, canvases: 1 }, below: false, shown: true });
 });
+
+test('a zone drawn on the floor gets cleaned', async ({ page }) => {
+  await open(page, '&house=flat&view=plan');
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-zone]').click();
+  await expect(card.locator('.panel .msg')).toHaveText('Drag on the floor to draw the zone');
+  const box = await card.locator('canvas').boundingBox();
+  const [cx, cy] = [box.x + box.width / 2, box.y + box.height / 2];
+  await page.mouse.move(cx - 120, cy - 60);
+  await page.mouse.down();
+  await page.mouse.move(cx + 40, cy + 20, { steps: 8 });
+  await page.mouse.move(cx + 120, cy + 60, { steps: 8 });
+  await page.mouse.up();
+  await expect(card.locator('.panel .msg')).toHaveText(/^Zone of [\d.]+ × [\d.]+ m$/);
+  await card.locator('.panel .clean').click();
+  await expect(card.locator('.panel .msg')).toHaveText('Cleaning the zone');
+  const { state, active, lanes } = await page.evaluate(() => ({ ...window.demo.sim, lanes: window.demo.sim.route.length }));
+  expect(state).toBe('cleaning');
+  expect(active).toEqual([]);
+  expect(lanes).toBeGreaterThan(2);
+});
