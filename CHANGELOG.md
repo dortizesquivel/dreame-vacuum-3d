@@ -2,6 +2,10 @@
 
 All notable releases of Dreame Vacuum 3D are listed here. The [Release workflow](.github/workflows/release.yml) prepends each tagged version.
 
+## v0.1.11 - 2026-10-28
+
+- fix(map): don't warn that the robot sent no map while it's paused (45d9419)
+
 ## v0.1.10 - 2026-10-28
 
 - fix: end a return stuck on the dock, and resume a paused return to the dock (debe88b)
