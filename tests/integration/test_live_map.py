@@ -203,6 +203,17 @@ async def test_errors_keep_the_last_map_and_warn_once(hass: HomeAssistant, caplo
     assert live_map.message["robot"] == [-700, -400, 0] and live_map.message["room"] == 2
 
 
+async def test_no_warning_while_paused(hass: HomeAssistant, caplog: pytest.LogCaptureFixture) -> None:
+    entry, _miio = await setup(hass)
+    device = entry.runtime_data.coordinator.device
+    device.values["status"] = Status.PAUSED.value
+    device.request_map = AsyncMock(return_value=(None, None))  # paused mid-task, as while cleaning: no map
+    with caplog.at_level(logging.DEBUG):
+        await entry.runtime_data.map.refresh()
+    assert "the robot sent no map" in caplog.text
+    assert not [r for r in caplog.records if r.levelno == logging.WARNING and "map" in r.getMessage()]
+
+
 def _with(*things: tuple[int, int], map_id: int = 45) -> str:
     """A live frame of the test house where the lidar sees these cells, and an obstacle and a sofa."""
     rows = [[3 if v else 0 for v in row] for row in SAVED_ROWS]

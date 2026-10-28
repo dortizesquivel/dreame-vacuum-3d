@@ -155,8 +155,12 @@ class LiveMap:
             if self.pose is None:
                 self._next = monotonic() + FIRST_RETRY
             if error is not None:
-                (_LOGGER.debug if self._warned else _LOGGER.warning)("Couldn't fetch the map: %s", error)
-                self._warned = True
+                # Paused mid-task, the robot sends no map, as while it cleans: not worth a warning.
+                if self._warned or parse_enum(Status, self._device.values.get("status")) == Status.PAUSED:
+                    _LOGGER.debug("Couldn't fetch the map: %s", error)
+                else:
+                    _LOGGER.warning("Couldn't fetch the map: %s", error)
+                    self._warned = True
             return
         self._warned = False
         if not self._loaded and self._store is not None:
