@@ -2,6 +2,12 @@
 
 All notable releases of Dreame Vacuum 3D are listed here. The [Release workflow](.github/workflows/release.yml) prepends each tagged version.
 
+## v0.1.10 - 2026-10-28
+
+- fix: end a return stuck on the dock, and resume a paused return to the dock (debe88b)
+- fix(history): look again 10 and 30 minutes after a cleaning (e60b8da)
+- fix(card): show the robot's error, and where it stopped, when the vacuum only says paused (aa20c93)
+
 ## v0.1.9 - 2026-10-26
 
 - feat(map): what the lidar newly sees, updated while the robot cleans (158c50e)
