@@ -72,6 +72,7 @@ class LiveMap:
         self._next = 0.0
         self._was_active = False
         self._warned = False
+        self._bad_frame = False  # warned about a frame with a bad saved map, until a whole frame is good again
         # What the lidar saw on open floor: in the last cleaning, and in the one before this one (the reference for
         # what is new), kept in .storage so a restart doesn't make everything new.
         self._store = store
@@ -168,7 +169,14 @@ class LiveMap:
             self._known = await self._store.async_load()
             self._loaded = True
         for frame in frames:
-            self._update(frame)
+            try:
+                self._update(frame)
+            except dmap.MapError as err:  # the frame itself reads, but the saved map it carries doesn't
+                (_LOGGER.debug if self._bad_frame else _LOGGER.warning)("Skipping a map frame: %s", err)
+                self._bad_frame = True
+            else:
+                if frame.frame_type == "I":
+                    self._bad_frame = False
 
     async def _frame(self) -> dmap.Frame:
         inline, name = await self._device.request_map()
@@ -252,6 +260,7 @@ class LiveMap:
             "path": dmap.path(frame),
             "room": dmap.room_at(grid, rooms["cells"], rooms["rooms"], robot[0], robot[1]) if robot else None,
             "active": dmap.active_rooms(frame) or list(self._device.segments or []),
+            "zones": list(self._device.zones or []),
             "obstacles": dmap.obstacles(frame),
             "furniture": dmap.furniture(frame) or (self._saved[2] if self._saved else []),
             "new_cells": dmap.runs(self._new(rooms["map_id"], dmap.seen_cells(frame, *self._saved[:2])))
@@ -276,7 +285,7 @@ class LiveMap:
             self._live = None  # one is missing: what it changed is lost until the next whole frame
         self._at = (frame.map_id, frame.frame_id)
         self.last_frames["P"] = _summary(frame)
-        update: dict[str, Any] = {"frame_id": frame.frame_id}
+        update: dict[str, Any] = {"frame_id": frame.frame_id, "zones": list(self._device.zones or [])}
         if self._live is not None and dmap.merge(self._live[0].grid, self._live[1], frame):
             self._merged += 1
             if self._saved and self._rooms:

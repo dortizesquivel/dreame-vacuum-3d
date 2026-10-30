@@ -15,6 +15,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.dreame_vacuum_3d.const import DOMAIN
+from custom_components.dreame_vacuum_3d.device import map as dmap
 from custom_components.dreame_vacuum_3d.device.capabilities import load
 from custom_components.dreame_vacuum_3d.device.enums import Status, TaskStatus
 from custom_components.dreame_vacuum_3d.live_map import FIRST_RETRY, IDLE_EVERY
@@ -212,6 +213,80 @@ async def test_errors_keep_the_last_map_and_warn_once(hass: HomeAssistant, caplo
     device.request_map = AsyncMock(return_value=(live(robot=(-700, -400, 0)), None))
     await live_map.refresh()
     assert live_map.message["robot"] == [-700, -400, 0] and live_map.message["room"] == 2
+
+
+async def test_a_malformed_saved_map_warns_once_and_keeps_the_last_map(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    entry, _miio = await setup(hass)
+    live_map = entry.runtime_data.map
+    before = live_map.message
+    device = entry.runtime_data.coordinator.device
+    device.request_map = AsyncMock(return_value=(live({"rism": "not a map"}, robot=IN_ROOM_1), None))
+    with caplog.at_level(logging.DEBUG):
+        await live_map.refresh()
+        await live_map.refresh()
+    assert len(_map_warnings(caplog)) == 1
+    assert "Skipping a map frame" in caplog.text
+    assert live_map.message == before
+
+    # Good again, the next bad one is news.
+    device.request_map = AsyncMock(return_value=(live(robot=IN_ROOM_1), None))
+    await live_map.refresh()
+    device.request_map = AsyncMock(return_value=(live({"rism": "still not a map"}, robot=IN_ROOM_1), None))
+    await live_map.refresh()
+    assert len(_map_warnings(caplog)) == 2
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"sa": [["kitchen", 1]]},
+        {"sa": [[None]]},
+        {"rism": frame(SAVED_ROWS, {"seg_inf": {"1": "kitchen"}}, map_id=45, frame_id=0, robot=(0, 0, 0))},
+        {"rism": frame(SAVED_ROWS, {"seg_inf": {"1": {"name": "cocinañ"}}}, map_id=45, frame_id=0, robot=(0, 0, 0))},
+    ],
+)
+async def test_odd_map_data_is_left_out(hass: HomeAssistant, data: dict) -> None:
+    entry, _miio = await setup(hass)
+    device = entry.runtime_data.coordinator.device
+    device.request_map = AsyncMock(return_value=(live(data, robot=(-700, -400, 0)), None))
+    await entry.runtime_data.map.refresh()  # used to raise, in a task nobody awaits: an error in the log each tick
+    assert entry.runtime_data.map.message["robot"] == [-700, -400, 0]
+
+
+async def test_a_map_with_a_bad_origin_is_a_map_error(hass: HomeAssistant, caplog: pytest.LogCaptureFixture) -> None:
+    entry, _miio = await setup(hass)
+    device = entry.runtime_data.coordinator.device
+    device.request_map = AsyncMock(return_value=(live({"origin": ["left", 0]}), None))
+    await entry.runtime_data.map.refresh()
+    await entry.runtime_data.map.refresh()
+    assert len(_map_warnings(caplog)) == 1
+
+
+async def test_a_zone_cleaning_tells_the_card_its_zones_until_the_task_ends(hass: HomeAssistant) -> None:
+    entry, _miio = await setup(hass)
+    live_map = entry.runtime_data.map
+    assert live_map.message["zones"] == []
+    device = entry.runtime_data.coordinator.device
+    await device.clean_zone([100, 200, 300, 400])
+    device.request_map = AsyncMock(return_value=(live(robot=IN_ROOM_1), None))
+    await live_map.refresh()
+    assert live_map.message["zones"] == [[100, 200, 300, 400]]
+
+    # While it cleans it mostly sends partial frames: the zones go with them.
+    seen = []
+    live_map.listen(seen.append)
+    await device.clean_zone([[1, 2, 3, 4], [5, 6, 7, 8]])
+    map_id, frame_id = live_map._at
+    live_map._apply_partial(dmap.decode(frame([[0]], map_id=map_id, frame_id=frame_id + 1, kind="P")))
+    assert seen[-1]["zones"] == [[1, 2, 3, 4], [5, 6, 7, 8]]
+
+    # Rooms next: they aren't a zone's, and the other way round.
+    await device.clean_segment(3)
+    assert device.zones is None
+    await device.clean_zone([100, 200, 300, 400])
+    assert device.segments is None
 
 
 async def test_no_warning_while_paused(hass: HomeAssistant, caplog: pytest.LogCaptureFixture) -> None:

@@ -94,7 +94,10 @@ def decode(raw: str | bytes, *, key: str | None = None, iv: str | None = None) -
         data = {}
     origin = data.get("origin")
     if isinstance(origin, list) and len(origin) > 1:
-        left, top = int(origin[0]), int(origin[1])
+        try:
+            left, top = int(origin[0]), int(origin[1])
+        except (TypeError, ValueError, OverflowError) as err:
+            raise MapError(f"map origin isn't a point: {err}") from err
     return Frame(
         map_id=map_id,
         frame_id=frame_id,
@@ -176,7 +179,8 @@ def rooms(frame: Frame, *, saved: bool) -> tuple[Runs, dict[str, dict[str, Any]]
     for room, runs in cells.items():
         if room in (WALL, FLOOR):
             continue
-        meta = seg_inf.get(room, {}) if isinstance(seg_inf, dict) else {}
+        meta = seg_inf.get(room) if isinstance(seg_inf, dict) else None
+        meta = meta if isinstance(meta, dict) else {}
         x, y = _centre(frame.grid, runs)
         info[room] = {"name": _name(meta.get("name")), "type": meta.get("type", 0), "x": x, "y": y}
     return cells, info
@@ -187,7 +191,7 @@ def _name(value: Any) -> str | None:
         return None
     try:
         return base64.b64decode(value).decode().strip() or None
-    except binascii.Error, UnicodeDecodeError:
+    except ValueError:  # not base64, not ASCII or not UTF-8
         return None
 
 
@@ -261,15 +265,15 @@ def obstacles(frame: Frame) -> list[dict[str, Any]]:
             if not isinstance(o, list) or len(o) < 3:
                 continue
             try:
-                x, y, kind = float(o[0]), float(o[1]), int(o[2])
+                x, y, kind = round(float(o[0])), round(float(o[1])), int(o[2])
                 confidence = round(float(o[3]) * 100) if len(o) > 3 and str(o[3]).strip() else 100
-            except TypeError, ValueError:
+            except TypeError, ValueError, OverflowError:
                 continue
             # The app hides "small objects", and anything it is less than half sure of.
             small = len(o) > 17 and str(o[17]) == "1" and (128 <= kind <= 138 or kind == 142)
             if kind in _NOT_OBSTACLES or small or confidence < 50 or _ignore_status(o) in _IGNORED:
                 continue
-            out.append({"x": round(x), "y": round(y), "type": _OBSTACLES.get(kind, "obstacle"),
+            out.append({"x": x, "y": y, "type": _OBSTACLES.get(kind, "obstacle"),
                         "confidence": confidence, "source": source})  # fmt: skip
     return out
 
@@ -278,7 +282,7 @@ def _ignore_status(o: list[Any]) -> int:
     value = o[18] if len(o) > 18 else o[-1] if len(str(o[-1])) == 1 else 0
     try:
         return int(value)
-    except TypeError, ValueError:
+    except TypeError, ValueError, OverflowError:
         return 0
 
 
@@ -292,7 +296,7 @@ def furniture(frame: Frame) -> list[dict[str, Any]]:
         try:
             kind, x0, y0, width, height = int(f[2]), int(f[4]), int(f[5]), abs(int(f[6])), abs(int(f[7]))
             angle = float(f[8]) if len(f) > 8 else 0.0
-        except TypeError, ValueError:
+        except TypeError, ValueError, OverflowError:
             continue
         if kind not in _FURNITURE or not width or not height:
             continue
@@ -374,7 +378,7 @@ def runs(cells: set[tuple[int, int]]) -> list[int]:
 def active_rooms(frame: Frame) -> list[int]:
     """Rooms the robot is cleaning (`sa`: [[room, …], …])."""
     sa = frame.data.get("sa")
-    return [int(s[0]) for s in sa if isinstance(s, list) and s] if isinstance(sa, list) else []
+    return [s[0] for s in sa if isinstance(s, list) and s and isinstance(s[0], int)] if isinstance(sa, list) else []
 
 
 def room_at(grid: Grid, cells: Runs, info: dict[str, Any], x: int, y: int) -> int | None:

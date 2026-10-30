@@ -136,7 +136,7 @@ class DreameNotifier:
             "duration": duration,
             "segments": device.segments,
         }
-        device.segments = None  # they belonged to this task
+        device.segments = device.zones = None  # they belonged to this task
         self._fire(EVENT_TASK_STATUS, data)
         if completed:
             message = self._text("exceptions.notify_cleanup_completed.message", "Cleaning completed")

@@ -779,5 +779,121 @@
     "notify_consumable": {
       "message": "{name}: queda un {life} %"
     }
+  },
+  "services": {
+    "vacuum_clean_segment": {
+      "name": "Limpiar habitaciones",
+      "description": "Limpia las habitaciones indicadas por su id de segmento.",
+      "fields": {
+        "segments": {
+          "name": "Habitaciones",
+          "description": "El id de segmento de una habitación, o una lista de ellos."
+        },
+        "repeats": {
+          "name": "Pasadas",
+          "description": "Pasadas de limpieza, de 1 a 3: un número, o una lista con uno por cada habitación."
+        },
+        "suction_level": {
+          "name": "Nivel de succión",
+          "description": "De 0 (silencio) a 3 (turbo): un número, o una lista con uno por cada habitación. Sin él, el del robot."
+        },
+        "water_volume": {
+          "name": "Cantidad de agua",
+          "description": "De 1 (baja) a 3 (alta): un número, o una lista con uno por cada habitación. Sin él, la del robot."
+        }
+      }
+    },
+    "vacuum_clean_zone": {
+      "name": "Limpiar zonas",
+      "description": "Limpia uno o varios rectángulos del mapa.",
+      "fields": {
+        "zone": {
+          "name": "Zona",
+          "description": "Un rectángulo [x0, y0, x1, y1] en mm del mapa, o una lista de ellos."
+        },
+        "repeats": {
+          "name": "Pasadas",
+          "description": "Pasadas de limpieza, de 1 a 3: un número, o una lista con uno por cada zona."
+        },
+        "suction_level": {
+          "name": "Nivel de succión",
+          "description": "De 0 (silencio) a 3 (turbo): un número, o una lista con uno por cada zona. Sin él, el del robot."
+        },
+        "water_volume": {
+          "name": "Cantidad de agua",
+          "description": "De 1 (baja) a 3 (alta): un número, o una lista con uno por cada zona. Sin él, la del robot."
+        }
+      }
+    },
+    "vacuum_clean_spot": {
+      "name": "Limpiar puntos",
+      "description": "Limpia alrededor de uno o varios puntos del mapa.",
+      "fields": {
+        "points": {
+          "name": "Puntos",
+          "description": "Un punto [x, y] en mm del mapa, o una lista de ellos."
+        },
+        "repeats": {
+          "name": "Pasadas",
+          "description": "Pasadas de limpieza, de 1 a 3: un número, o una lista con uno por cada punto."
+        },
+        "suction_level": {
+          "name": "Nivel de succión",
+          "description": "De 0 (silencio) a 3 (turbo): un número, o una lista con uno por cada punto. Sin él, el del robot."
+        },
+        "water_volume": {
+          "name": "Cantidad de agua",
+          "description": "De 1 (baja) a 3 (alta): un número, o una lista con uno por cada punto. Sin él, la del robot."
+        }
+      }
+    },
+    "vacuum_goto": {
+      "name": "Ir a un punto",
+      "description": "Manda el robot a un punto del mapa.",
+      "fields": {
+        "x": {
+          "name": "X",
+          "description": "X del punto, en mm del mapa."
+        },
+        "y": {
+          "name": "Y",
+          "description": "Y del punto, en mm del mapa."
+        }
+      }
+    },
+    "vacuum_remote_control_move_step": {
+      "name": "Paso de control remoto",
+      "description": "Mueve el robot un paso, por control remoto.",
+      "fields": {
+        "rotation": {
+          "name": "Giro",
+          "description": "Cuánto gira, de -360 a 360."
+        },
+        "velocity": {
+          "name": "Velocidad",
+          "description": "A qué velocidad va, de -600 a 600; por debajo de 0 va hacia atrás."
+        }
+      }
+    },
+    "vacuum_select_map": {
+      "name": "Elegir un mapa",
+      "description": "Hace actual uno de los mapas guardados del robot, en un robot con varias plantas.",
+      "fields": {
+        "map_id": {
+          "name": "Id del mapa",
+          "description": "El id del mapa guardado."
+        }
+      }
+    },
+    "vacuum_reset_consumable": {
+      "name": "Reiniciar un consumible",
+      "description": "Pone a cero el contador de vida de un consumible, tras cambiarlo por uno nuevo.",
+      "fields": {
+        "consumable": {
+          "name": "Consumible",
+          "description": "El consumible que reiniciar."
+        }
+      }
+    }
   }
 }
