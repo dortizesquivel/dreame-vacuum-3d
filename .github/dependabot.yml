@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # GitHub Actions, pinned to commits; one grouped PR a month.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # three.js, esbuild and the card's lint and browser test tools. A three.js or esbuild bump fails CI until
+  # npm run build refreshes the committed bundle in custom_components/dreame_vacuum_3d/frontend/.
+  - package-ecosystem: npm
+    directory: /card
+    schedule:
+      interval: monthly
+    groups:
+      npm:
+        patterns: ["*"]
+
+  # The Python test tools, pinned in requirements_test.txt (pytest-homeassistant-custom-component brings
+  # Home Assistant itself). The integration has no Python requirements of its own.
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      pip:
+        patterns: ["*"]
