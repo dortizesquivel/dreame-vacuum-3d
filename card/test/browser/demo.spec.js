@@ -187,6 +187,8 @@ test('the floor overlays sit above the rug, so they do not flicker into it as th
 
 test('the path does not run ahead of the robot: it shows as the robot gets there', async ({ page }) => {
   await open(page);
+  // Two frames a second, as a slow wall tablet (or a CI runner's software WebGL) draws: it must keep up all the same.
+  await page.evaluate(() => { const raf = window.requestAnimationFrame; window.requestAnimationFrame = (f) => setTimeout(() => raf(f), 500); });
   await page.evaluate(() => { const { sim, send, card } = window.demo; sim.clean(Object.keys(card._map.rooms).map(Number)); send(); });
   await run(page, 10);
   await page.waitForFunction(() => { const s = window.demo.card._scene; return !s.glide && !s.queue.length; });
@@ -199,7 +201,6 @@ test('the path does not run ahead of the robot: it shows as the robot gets there
   expect(before.gliding).toBe(true);
   expect(before.shown).toBeLessThan(before.all);
   // It catches up with the batch within about two seconds, so it isn't drawn far from where the robot really is.
-  // The timeout is wider: each glide starts on the next frame, and software WebGL on a CI runner draws few of them.
   await page.waitForFunction(() => { const s = window.demo.card._scene; return !s.glide && !s.queue.length; }, null, { timeout: 10_000 });
   const after = await drawn();
   expect(after.shown).toBeGreaterThanOrEqual(after.all);
