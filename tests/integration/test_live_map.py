@@ -177,6 +177,15 @@ async def test_each_tick_only_while_a_card_shows_the_map(hass: HomeAssistant, ha
     assert await ticks(4) == 2
 
 
+def _map_warnings(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+    """The integration's own warnings about the map (asyncio's slow-callback warning names live_map.py too)."""
+    return [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING and r.name.startswith("custom_components.dreame_vacuum_3d") and "map" in r.getMessage()
+    ]
+
+
 async def test_errors_keep_the_last_map_and_warn_once(hass: HomeAssistant, caplog: pytest.LogCaptureFixture) -> None:
     entry, miio = await setup(hass)
     live_map = entry.runtime_data.map
@@ -186,7 +195,7 @@ async def test_errors_keep_the_last_map_and_warn_once(hass: HomeAssistant, caplo
     with caplog.at_level(logging.DEBUG):
         await live_map.refresh()
         await live_map.refresh()
-    warnings = [r for r in caplog.records if r.levelno == logging.WARNING and r.name.startswith("custom_components.dreame_vacuum_3d") and "map" in r.getMessage()]
+    warnings = _map_warnings(caplog)
     assert len(warnings) == 1
     assert live_map.message == before
 
@@ -211,7 +220,7 @@ async def test_no_warning_while_paused(hass: HomeAssistant, caplog: pytest.LogCa
     with caplog.at_level(logging.DEBUG):
         await entry.runtime_data.map.refresh()
     assert "the robot sent no map" in caplog.text
-    assert not [r for r in caplog.records if r.levelno == logging.WARNING and r.name.startswith("custom_components.dreame_vacuum_3d") and "map" in r.getMessage()]
+    assert not _map_warnings(caplog)
 
 
 def _with(*things: tuple[int, int], map_id: int = 45) -> str:
