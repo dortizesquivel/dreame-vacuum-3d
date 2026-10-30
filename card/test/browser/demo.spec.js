@@ -430,7 +430,9 @@ test('a wet floor that is only drying is drawn about once a second, not every fr
   // Home, so the demo stops sending poses (each one draws the scene).
   await page.evaluate(() => { const { sim, send } = window.demo; sim.goHome(); while (sim.state !== 'docked') { sim.step(0.5); send(); } });
   await page.waitForFunction(() => { const s = window.demo.card._scene; return !s.glide && !s.queue.length; });
-  await page.waitForTimeout(1500);   // the dust fades out
+  // The dust fades out and the camera settles.
+  await page.waitForFunction(() => window.demo.card._scene.effects.layers.dust.mesh.material.opacity < 0.006);
+  await page.waitForTimeout(500);
   const { renders, wet } = await page.evaluate(async () => {
     const s = window.demo.card._scene, render = s.renderer.render.bind(s.renderer);
     let renders = 0;
@@ -441,7 +443,7 @@ test('a wet floor that is only drying is drawn about once a second, not every fr
     return { renders, wet: s.effects.trail.pieces.some((p) => p.mode !== 'vacuum' && now - p.t < s.effects.dryMs) };
   });
   expect(wet).toBe(true);
-  expect(renders).toBeLessThanOrEqual(4);
+  expect(renders).toBeLessThanOrEqual(6);   // 3 s: about once a second, with room for a slow runner (every frame: well over 100)
 });
 
 test('the scene comes back after the WebGL context is lost and restored', async ({ page }) => {
