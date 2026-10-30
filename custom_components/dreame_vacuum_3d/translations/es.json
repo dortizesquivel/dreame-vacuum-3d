@@ -764,6 +764,9 @@
     "command_failed": {
       "message": "El robot no ha aceptado la orden: {error}"
     },
+    "consumable_not_supported": {
+      "message": "Este robot no tiene {consumable} que reiniciar"
+    },
     "notify_cleanup_completed": {
       "message": "Limpieza completada"
     },

@@ -7,6 +7,7 @@ from typing import Any
 
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 import pytest
 from voluptuous.error import MultipleInvalid
@@ -121,6 +122,21 @@ async def test_vacuum_goto_select_map_remote_reset(hass: HomeAssistant) -> None:
     )
     action = _action_payload(miio)
     assert action["siid"] == 9 and action["aiid"] == 1
+
+
+async def test_reset_a_consumable_the_robot_lacks(hass: HomeAssistant) -> None:
+    _entry, miio = await setup_fixture_entry(hass)  # the X10+ has no detergent cartridge
+
+    miio.calls.clear()
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(
+            DOMAIN,
+            "vacuum_reset_consumable",
+            {ATTR_ENTITY_ID: _vacuum_entity_id(hass), "consumable": "detergent"},
+            blocking=True,
+        )
+    assert err.value.translation_key == "consumable_not_supported"
+    assert miio.calls == []
 
 
 async def test_invalid_service_data_rejected(hass: HomeAssistant) -> None:

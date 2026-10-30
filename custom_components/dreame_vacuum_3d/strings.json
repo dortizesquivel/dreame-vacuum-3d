@@ -764,6 +764,9 @@
     "command_failed": {
       "message": "The robot didn't take the command: {error}"
     },
+    "consumable_not_supported": {
+      "message": "This robot has no {consumable} to reset"
+    },
     "notify_cleanup_completed": {
       "message": "Cleaning completed"
     },
