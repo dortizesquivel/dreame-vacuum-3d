@@ -139,15 +139,10 @@ class DreameSwitchEntity(DreameEntity, SwitchEntity):
         description = self.entity_description
         key = description.prop or description.key
         # DND is a bool on the X10+; most other switches are 0/1 ints.
-        if key == "dnd":
-            value: bool | int = bool(is_on)
-        elif description.bit is not None:
-            mask = self.device.values.get(key)
-            mask = mask if isinstance(mask, int) else 0
-            value = mask | description.bit if is_on else mask & ~description.bit
+        if description.bit is not None:
+            await self.device.set_bit(key, description.bit, is_on)
         else:
-            value = 1 if is_on else 0
-        await self.device.set(key, value)
+            await self.device.set(key, bool(is_on) if key == "dnd" else int(is_on))
         self._attr_is_on = is_on
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()

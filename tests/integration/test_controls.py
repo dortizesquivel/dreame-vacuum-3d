@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from homeassistant.const import ATTR_ENTITY_ID, STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -134,6 +136,32 @@ async def test_ai_switches_flip_one_bit(hass: HomeAssistant) -> None:
         await hass.services.async_call("switch", service, {ATTR_ENTITY_ID: switches[key].entity_id}, blocking=True)
         writes = [p for m, params in miio.calls if m == "set_properties" for p in params]
         assert writes == [{"did": "set", "siid": 4, "piid": 22, "value": expected}]
+
+
+async def test_ai_switches_flipped_together_keep_both_bits(hass: HomeAssistant) -> None:
+    entry, miio = await setup_fixture_entry(hass)
+    switches = _by_key(hass, "switch")
+    send = miio.send.side_effect
+
+    async def slow_send(method: str, params: object = None) -> object:
+        await asyncio.sleep(0)  # the robot takes a moment to answer
+        return await send(method, params)
+
+    miio.send.side_effect = slow_send
+    await asyncio.gather(
+        *(
+            hass.services.async_call("switch", service, {ATTR_ENTITY_ID: switches[key].entity_id}, blocking=True)
+            for service, key in (("turn_off", "ai_pet_detection"), ("turn_on", "ai_image_upload"))
+        )
+    )
+    assert miio.overrides[(4, 22)] == 287 - 16 + 32
+
+    # A poll that read the mask before the last write and ended after it: the next flip starts from the robot's.
+    entry.runtime_data.coordinator.device.values["ai_obstacle_detection"] = 287
+    await hass.services.async_call(
+        "switch", "turn_off", {ATTR_ENTITY_ID: switches["fuzzy_obstacle_detection"].entity_id}, blocking=True
+    )
+    assert miio.overrides[(4, 22)] == 287 - 16 + 32 - 256
 
 
 async def test_failed_command_is_a_readable_error(hass: HomeAssistant) -> None:
