@@ -52,6 +52,8 @@ jobs:
           cache: npm
           cache-dependency-path: card/package-lock.json
       - run: npm ci
+      - name: Lint (ESLint's recommended rules; any warning fails)
+        run: npm run lint
       - name: Unit tests (node:test)
         run: npm test
       - name: The committed bundle is built from this source

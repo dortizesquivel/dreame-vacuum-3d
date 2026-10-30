@@ -9,6 +9,7 @@
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
     "test": "node --test \"test/**/*.test.js\"",
+    "lint": "eslint . --max-warnings 0",
     "demo": "python3 -m http.server 8792 --bind 127.0.0.1 --directory ..",
     "test:browser": "playwright test"
   },
@@ -16,7 +17,10 @@
     "three": "0.186.1"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@playwright/test": "1.63.0",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "eslint": "10.13.0",
+    "globals": "17.13.0"
   }
 }

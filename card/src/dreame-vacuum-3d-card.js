@@ -514,7 +514,7 @@ class DreameVacuum3DCard extends HTMLElement {
     panel.hidden = false;
     clean.hidden = true;
     cancel.textContent = this._t('close');
-    let cleanings = [];
+    let cleanings;
     try {
       ({ cleanings } = await this._hass.callWS({ type: `${DOMAIN}/history`, entity_id: this._config.entity }));
     } catch (err) {
