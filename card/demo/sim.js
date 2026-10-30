@@ -171,14 +171,14 @@ export class Sim {
     this.active = [];
   }
 
-  /** Clean these rooms (or zones, in cells), in order, then go back to the dock. modes: { room: vacuum | mop | both }, both by default. */
+  /** Clean these rooms (or zones, in cells), in order, then go back to the dock. modes: { room: vacuum | mop | both }, else this.mode, else both. */
   clean(rooms, modes = {}) {
     let at = this.toCell(this.pose);
     const route = [];
     let mode = 'both', mopped = 0;
     const dock = this.toCell(this.map.dock);
     for (const room of rooms) {
-      mode = modes[room] ?? 'both';
+      mode = modes[room] ?? this.mode ?? 'both';
       for (const [a, b] of this.lanes(room)) {
         route.push(...this.way(at, a).map((c) => ({ c, mode })), { c: b, mode });
         at = b;
