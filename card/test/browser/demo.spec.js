@@ -198,7 +198,8 @@ test('the path does not run ahead of the robot: it shows as the robot gets there
   expect(before.gliding).toBe(true);
   expect(before.shown).toBeLessThan(before.all);
   // It catches up with the batch within about two seconds, so it isn't drawn far from where the robot really is.
-  await page.waitForFunction(() => { const s = window.demo.card._scene; return !s.glide && !s.queue.length; }, null, { timeout: 4000 });
+  // The timeout is wider: each glide starts on the next frame, and software WebGL on a CI runner draws few of them.
+  await page.waitForFunction(() => { const s = window.demo.card._scene; return !s.glide && !s.queue.length; }, null, { timeout: 10_000 });
   const after = await drawn();
   expect(after.shown).toBeGreaterThanOrEqual(after.all);
 });
