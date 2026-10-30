@@ -157,6 +157,68 @@ test('the dust and wet floor can be hidden, together or one of them', async ({ p
   expect(await shown()).toMatchObject({ dust: true, glint: true, wet: false });
 });
 
+/** Wait for the house model to be in the scene. */
+const modelLoaded = (page) => page.waitForFunction(() => window.demo.card._scene.modelGroup.children.length > 0);
+
+test('the floor overlays sit above the rug, so they do not flicker into it as the camera turns', async ({ page }) => {
+  await open(page);
+  await modelLoaded(page);
+  await run(page, 20);
+  const { rugTop, lowest } = await page.evaluate(() => {
+    const s = window.demo.card._scene, floor = s.xf.floor;
+    // What the model has flat on the floor (a rug, a mat): meshes no taller than 3 cm whose bottom is at the floor.
+    let rugTop = floor;
+    s.modelGroup.updateMatrixWorld(true);
+    s.modelGroup.traverse((o) => {
+      if (!o.isMesh) return;
+      o.geometry.computeBoundingBox();
+      const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);
+      if (b.max.y - b.min.y < 0.03 && b.min.y < floor + 0.01) rugTop = Math.max(rugTop, b.max.y);
+    });
+    const ys = [];
+    for (const l of Object.values(s.effects.layers)) ys.push(l.mesh.geometry.attributes.position.getY(0));
+    s.overlayGroup.traverse((o) => { if (o.isMesh) { o.geometry.computeBoundingBox(); ys.push(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld).min.y); } });
+    return { rugTop, lowest: Math.min(...ys) };
+  });
+  expect(rugTop).toBeGreaterThan(0);   // the demo's living room has a rug
+  expect(lowest).toBeGreaterThan(rugTop);
+});
+
+test('the 3D, Plan and Follow buttons move the camera', async ({ page }) => {
+  await open(page);
+  const card = page.locator('dreame-vacuum-3d-card');
+  const camera = () => page.evaluate(() => {
+    const s = window.demo.card._scene, d = s.camera.position.clone().sub(s.controls.target).normalize();
+    return { up: d.y, follow: s.follow, toRobot: s.controls.target.distanceTo(s.robot.position) };
+  });
+  await card.locator('[data-view="plan"]').click();
+  await page.waitForTimeout(1200);   // the camera's 800 ms move
+  expect((await camera()).up).toBeGreaterThan(0.999);
+  await expect(card.locator('[data-view="plan"]')).toHaveAttribute('aria-pressed', 'true');
+  await card.locator('[data-follow]').click();
+  await expect(card.locator('[data-follow]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(card.locator('[data-view="plan"]')).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(async () => (await camera()).toRobot).toBeLessThan(0.1);
+  expect((await camera()).follow).toBe(true);
+  await card.locator('[data-view="3d"]').click();
+  await page.waitForTimeout(1200);
+  const c = await camera();
+  expect(c.follow).toBe(false);
+  expect(c.up).toBeLessThan(0.95);   // tilted, not from straight above
+});
+
+test('the futuristic style draws the house as a hologram', async ({ page }) => {
+  const errors = await open(page, '&style=futuristic');
+  await modelLoaded(page);
+  const holo = await page.evaluate(() => {
+    const s = window.demo.card._scene, kinds = new Set();
+    s.modelGroup.traverse((o) => { if (o.material) kinds.add(o.material.type); });
+    return { holo: !!s.holo, kinds: [...kinds] };
+  });
+  expect(holo).toEqual({ holo: true, kinds: ['ShaderMaterial'] });
+  expect(errors).toEqual([]);
+});
+
 test('past cleanings: replay one, and show the coverage of the last ones', async ({ page }) => {
   await open(page, '&house=flat');
   const card = page.locator('dreame-vacuum-3d-card');
