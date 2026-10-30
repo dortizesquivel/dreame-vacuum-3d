@@ -182,7 +182,9 @@ def _map_warnings(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
     return [
         r
         for r in caplog.records
-        if r.levelno == logging.WARNING and r.name.startswith("custom_components.dreame_vacuum_3d") and "map" in r.getMessage()
+        if r.levelno == logging.WARNING
+        and r.name.startswith("custom_components.dreame_vacuum_3d")
+        and "map" in r.getMessage()
     ]
 
 
