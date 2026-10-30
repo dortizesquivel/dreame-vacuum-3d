@@ -2,6 +2,19 @@
 
 All notable releases of Dreame Vacuum 3D are listed here. The [Release workflow](.github/workflows/release.yml) prepends each tagged version.
 
+## v0.1.13 - 2026-10-30
+
+- test(card): let the dust fade before counting renders (142440d)
+- fix(scene): fix pose queue, stuck mark, floor effects and context loss bugs (30881bf)
+- fix(card): header at phone width, lost settings clicks, stale history (08a8f30)
+- fix(integration): a robot without a token sets up through the cloud (0347f65)
+- fix(integration): resetting a consumable the robot lacks is a clear error (603b91d)
+- fix(integration): AI detection switches flipped together keep both bits (e9c6a91)
+- fix(integration): keep the partial map frames when the whole one fails (7e10f1b)
+- fix(integration): keep what is new on the floor across a pause (54e10bf)
+- fix(integration): pausing mid-task no longer ends the task (e17a771)
+- fix(integration): an offline robot makes its entities unavailable (dbabe3a)
+
 ## v0.1.12 - 2026-10-30
 
 - fix(card): the robot settles after a turn past ±π, and keeps up on slow frames (4741ec9)
