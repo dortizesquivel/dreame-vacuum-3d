@@ -74,6 +74,20 @@
       washing: 'Lavando las mopas', returning_to_wash: 'Volviendo a lavar las mopas', robot_stuck: 'Robot atascado' },
   };
   const entity = (entity_id, translation_key) => ({ entity_id, device_id: 'demo', platform: 'dreame_vacuum_3d', translation_key });
+  // The robot's cleaning settings, as the integration's select entities have them (?mop=0: the mop pads are off).
+  const SETTINGS = {
+    cleaning_mode: ['sweeping', 'mopping', 'sweeping_and_mopping'],
+    suction_level: ['quiet', 'standard', 'strong', 'turbo'],
+    water_volume: ['low', 'medium', 'high'],
+  };
+  const settings = { cleaning_mode: 'sweeping_and_mopping', suction_level: 'standard', water_volume: 'medium' };
+  const SIM_MODE = { sweeping: 'vacuum', mopping: 'mop', sweeping_and_mopping: 'both' };
+  const OPTIONS = {
+    en: { sweeping: 'Vacuum', mopping: 'Mop', sweeping_and_mopping: 'Vacuum and mop', quiet: 'Quiet', standard: 'Standard', strong: 'Strong',
+      turbo: 'Turbo', low: 'Low', medium: 'Medium', high: 'High' },
+    es: { sweeping: 'Aspirar', mopping: 'Fregar', sweeping_and_mopping: 'Aspirar y fregar', quiet: 'Silencio', standard: 'Estándar',
+      strong: 'Fuerte', turbo: 'Turbo', low: 'Baja', medium: 'Media', high: 'Alta' },
+  };
   let dark = q.get('theme') === 'dark';
   let speed = Number(q.get('speed') ?? 10);
 
@@ -94,12 +108,17 @@
       'vacuum.demo': { entity_id: 'vacuum.demo', state: sim.state, attributes: { friendly_name: 'Robot (demo)', battery_level: 100 } },
       'sensor.demo_state': { entity_id: 'sensor.demo_state', state: sim.robotState, attributes: {} },
       'sensor.demo_error': { entity_id: 'sensor.demo_error', state: sim.error ?? 'no_error', attributes: {} },
+      ...Object.fromEntries(Object.entries(SETTINGS).map(([k, options]) => [`select.demo_${k}`,
+        { entity_id: `select.demo_${k}`, state: settings[k], attributes: { options } }])),
+      'binary_sensor.demo_mop': { entity_id: 'binary_sensor.demo_mop', state: q.get('mop') === '0' ? 'off' : 'on', attributes: {} },
     },
-    entities: { 'vacuum.demo': entity('vacuum.demo'), 'sensor.demo_state': entity('sensor.demo_state', 'state'), 'sensor.demo_error': entity('sensor.demo_error', 'error') },
+    entities: { 'vacuum.demo': entity('vacuum.demo'), 'sensor.demo_state': entity('sensor.demo_state', 'state'), 'sensor.demo_error': entity('sensor.demo_error', 'error'),
+      ...Object.fromEntries(Object.keys(SETTINGS).map((k) => [`select.demo_${k}`, entity(`select.demo_${k}`, k)])),
+      'binary_sensor.demo_mop': entity('binary_sensor.demo_mop', 'mop_attached') },
     themes: { darkMode: dark },
     locale: { language: lang },
     language: lang,
-    formatEntityState: (st) => (STATES[lang] ?? STATES.en)[st.state] ?? st.state,
+    formatEntityState: (st, state = st.state) => (st.entity_id.startsWith('select.') ? OPTIONS[lang] ?? OPTIONS.en : STATES[lang] ?? STATES.en)[state] ?? state,
     connection: {
       subscribeMessage(cb) {
         subs.add(cb);
@@ -113,8 +132,10 @@
       if (!found) throw { code: 'not_found', message: 'No map for that cleaning' };
       return { start: found.start, map_id: found.map_id, path: found.path, rooms: found.rooms };
     },
-    async callService(domain, service, data) {
-      if (service === 'vacuum_clean_segment') sim.clean([].concat(data.segments));
+    async callService(domain, service, data, target = {}) {
+      sim.mode = SIM_MODE[settings.cleaning_mode];
+      if (domain === 'select' && service === 'select_option') settings[Object.keys(SETTINGS).find((k) => target.entity_id === `select.demo_${k}`)] = data.option;
+      else if (service === 'vacuum_clean_segment') sim.clean([].concat(data.segments));
       else if (service === 'vacuum_clean_zone') sim.cleanZone(data.zone);
       else if (domain === 'vacuum' && service === 'start') sim.start(() => sim.clean(Object.keys(map.rooms).map(Number)));
       else if (domain === 'vacuum' && service === 'pause') sim.pause();
@@ -180,7 +201,7 @@
   press('effects', effects);
   document.getElementById('speed').textContent = `×${speed}`;
   if (q.has('start')) go();
-  window.demo = { sim, card, send };   // for scripts: sim.step(seconds), then send()
+  window.demo = { sim, card, send, settings };   // for scripts: sim.step(seconds), then send()
 </script>
 </body>
 </html>
