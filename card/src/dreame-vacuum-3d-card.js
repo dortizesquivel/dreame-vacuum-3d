@@ -104,10 +104,11 @@ const STYLE = `
   .seg { position: absolute; z-index: 2; display: flex; gap: 2px; padding: 3px; border-radius: 8px; border: 1px solid var(--divider-color);
     background: color-mix(in srgb, var(--card-background-color, #fff) 85%, transparent); backdrop-filter: blur(6px); }
   .views { top: 10px; right: 10px; }
-  .zoom { top: 10px; left: 10px; flex-direction: column; }
+  /* On a low card its buttons give up some height, so all of them stay in the card. */
+  .zoom { top: 10px; left: 10px; flex-direction: column; box-sizing: border-box; max-height: calc(100% - 20px); }
   .seg button { font: inherit; font-size: 12px; font-weight: 500; color: var(--secondary-text-color); background: none; border: 0;
     border-radius: 6px; padding: 8px 10px; min-height: 32px; min-width: 32px; cursor: pointer; }
-  .zoom button { font-size: 18px; line-height: 1; padding: 0; }
+  .zoom button { font-size: 18px; line-height: 1; padding: 0; flex: 0 1 32px; min-height: 0; }
   .seg button:hover { color: var(--primary-text-color); background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
   .seg button[aria-pressed="true"] { color: var(--text-primary-color, #fff); background: var(--primary-color); }
   button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
@@ -307,7 +308,10 @@ class DreameVacuum3DCard extends HTMLElement {
     root.querySelector('[data-download]').addEventListener('click', () => this._download());
     root.querySelector('[data-zone]').addEventListener('click', () => this._setZoneMode(!this._zoneMode));
     root.querySelector('[data-history]').addEventListener('click', () => this._showHistory());
-    this._els.settings.addEventListener('click', () => this._showSettings());
+    this._els.settings.addEventListener('click', () => {
+      if (this._els.settings.getAttribute('aria-pressed') === 'true') this._pick(null);
+      else this._showSettings();
+    });
     this._els.tune.addEventListener('click', () => {
       this._els.opts.hidden = !this._els.opts.hidden;
       this._renderSettings();
@@ -348,11 +352,13 @@ class DreameVacuum3DCard extends HTMLElement {
     s.onZone = (rect) => this._offerZone(rect);
     s.onModelError = (err) => this._status(this._t('modelError', { error: err.message }));
     this._configureScene();
+    s.setView(this._view, true);
     s.setFollow(!!this._follow);
     if (this._hass) {
       this._applyTheme();
       this._renderHead();
     }
+    s.setCoverage(this._coverage);
     if (this._map) s.setMap(this._map);
     this._io = new IntersectionObserver(([e]) => (e.isIntersecting ? this._scene?.start() : this._scene?.stop()));
     this._io.observe(this._els.viewport);
@@ -369,12 +375,14 @@ class DreameVacuum3DCard extends HTMLElement {
   _applyConfig() {
     const c = this._config;
     this._els.viewport.style.height = `${c.height}px`;
-    this._view = c.view;
+    const newView = c.view !== this._configView;   // else the view stays the one the person chose
+    if (newView) this._view = this._configView = c.view;
     this._els.title.hidden = c.title === false || c.title === '';
     this._renderButtons();
     this._renderRoutines();
     this._status(this._noWebgl ? this._t('noWebgl') : !c.entity ? this._t('noEntity') : this._map ? '' : this._t('waiting'));
     this._configureScene();
+    if (newView) this._scene?.setView(this._view, true);
   }
 
   _configureScene() {
@@ -385,7 +393,6 @@ class DreameVacuum3DCard extends HTMLElement {
     s.setDryTime(c.dryTime);
     s.setEffects(c.effects);
     s.setModel(c.model);
-    s.setView(this._view, true);
   }
 
   _applyTheme() {
@@ -413,7 +420,6 @@ class DreameVacuum3DCard extends HTMLElement {
     r.querySelector('[data-settings]').title = this._t('settings');
     r.querySelector('[data-cmd="return_to_base"]').setAttribute('aria-label', this._t('dock'));
     r.querySelector('[data-cmd="return_to_base"]').title = this._t('dock');
-    this._els.cancel.textContent = this._t('cancel');
   }
 
   _renderHead() {
@@ -518,13 +524,15 @@ class DreameVacuum3DCard extends HTMLElement {
     row.dataset.key = key;
     row.setAttribute('role', 'radiogroup');
     row.setAttribute('aria-labelledby', id);
+    // The row's one Tab stop: the picked option, or the first that can be picked when that one can't.
+    const stop = (options.find((o) => o.value === value && !o.disabled) ?? options.find((o) => !o.disabled))?.value;
     row.append(...options.map((o) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.dataset.option = o.value;
       b.setAttribute('role', 'radio');
       b.setAttribute('aria-checked', String(o.value === value));
-      b.tabIndex = o.value === value ? 0 : -1;
+      b.tabIndex = o.value === stop ? 0 : -1;
       b.disabled = o.disabled;
       if (o.title) b.title = o.title;
       if (o.level) {
@@ -569,10 +577,16 @@ class DreameVacuum3DCard extends HTMLElement {
     }
     const s = this._related(key);
     if (!s) return;
+    const { msg } = this._els;
     try {
       await this._hass.callService('select', 'select_option', { option }, { entity_id: s.entity_id });
+      if (this._beforeError != null && msg.dataset.error === 'true') {   // it went through: back to what the panel said
+        msg.dataset.error = 'false';
+        msg.textContent = this._beforeError;
+      }
+      this._beforeError = null;
     } catch (err) {
-      const { msg } = this._els;
+      if (msg.dataset.error !== 'true') this._beforeError = msg.textContent;
       msg.dataset.error = 'true';
       msg.textContent = this._t('commandFailed', { error: err?.message ?? String(err) });
     }

@@ -23,7 +23,8 @@ from .device.enums import DreameVacuumState, SuctionLevel, TaskStatus, parse_enu
 from .entity import DreameEntity, command
 
 # Portions of service schemas derived from Tasshack/dreame-vacuum (MIT), see NOTICE.
-_OPTIONAL_INT_OR_LIST = vol.Any(vol.Coerce(int), [vol.Coerce(int)])
+_NOT_EMPTY = vol.Length(min=1)  # an empty list would reach the robot as a task with nothing in it
+_OPTIONAL_INT_OR_LIST = vol.Any(vol.Coerce(int), vol.All([vol.Coerce(int)], _NOT_EMPTY))
 _CONSUMABLES = (
     "main_brush",
     "side_brush",
@@ -141,7 +142,7 @@ def _register_entity_services(platform: entity_platform.EntityPlatform) -> None:
     platform.async_register_entity_service(
         "vacuum_clean_segment",
         {
-            vol.Required("segments"): vol.Any(vol.Coerce(int), [vol.Coerce(int)]),
+            vol.Required("segments"): _OPTIONAL_INT_OR_LIST,
             vol.Optional("repeats"): _OPTIONAL_INT_OR_LIST,
             vol.Optional("suction_level"): _OPTIONAL_INT_OR_LIST,
             vol.Optional("water_volume"): _OPTIONAL_INT_OR_LIST,
@@ -152,7 +153,7 @@ def _register_entity_services(platform: entity_platform.EntityPlatform) -> None:
         "vacuum_clean_zone",
         {
             vol.Required("zone"): vol.Any(
-                [vol.ExactSequence([vol.Coerce(int)] * 4)],
+                vol.All([vol.ExactSequence([vol.Coerce(int)] * 4)], _NOT_EMPTY),
                 vol.ExactSequence([vol.Coerce(int)] * 4),
             ),
             vol.Optional("repeats"): _OPTIONAL_INT_OR_LIST,
@@ -165,7 +166,7 @@ def _register_entity_services(platform: entity_platform.EntityPlatform) -> None:
         "vacuum_clean_spot",
         {
             vol.Required("points"): vol.Any(
-                [vol.ExactSequence([vol.Coerce(int)] * 2)],
+                vol.All([vol.ExactSequence([vol.Coerce(int)] * 2)], _NOT_EMPTY),
                 vol.ExactSequence([vol.Coerce(int)] * 2),
             ),
             vol.Optional("repeats"): _OPTIONAL_INT_OR_LIST,

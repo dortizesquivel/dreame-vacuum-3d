@@ -130,6 +130,33 @@ def test_a_file_that_inflates_too_far_is_refused(monkeypatch: pytest.MonkeyPatch
         dmap.decode(base64.b64encode(zlib.compress(bytes(5000))))
 
 
+_JSON = st.recursive(
+    st.none() | st.booleans() | st.integers() | st.floats() | st.text(max_size=4),
+    lambda inner: st.lists(inner, max_size=4) | st.dictionaries(st.sampled_from(["1", "2", "name"]), inner, max_size=3),
+    max_leaves=10,
+)
+
+
+@given(
+    st.dictionaries(
+        st.sampled_from(
+            ["origin", "sa", "seg_inf", "rism", "tr", "ai_obstacle", "laser_obstacle", "ai_furniture", "fsm"]
+        ),
+        _JSON,
+    )
+)
+def test_any_data_with_a_frame_is_a_frame_or_a_map_error(data: dict) -> None:
+    with contextlib.suppress(dmap.MapError):
+        f = dmap.decode(frame([[1, 2], [3, 4]], data))
+        dmap.saved_map(f)
+        dmap.rooms(f, saved=True)
+        dmap.rooms(f, saved=False)
+        dmap.path(f)
+        dmap.obstacles(f)
+        dmap.furniture(f)
+        dmap.active_rooms(f)
+
+
 @given(st.binary(max_size=400))
 def test_any_bytes_decode_or_raise_map_error(blob: bytes) -> None:
     for raw in (blob, base64.b64encode(zlib.compress(blob))):

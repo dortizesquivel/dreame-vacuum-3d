@@ -120,12 +120,13 @@ export class FloorEffects {
     this.drawnAt = 0;
   }
 
-  /** Dust on the rooms being cleaned (every room when the task names none), cleared where the robot vacuumed. */
+  /** Dust on the rooms being cleaned (every room when the task names none, inside its zones if it has them), cleared where the robot vacuumed. */
   _updateDust() {
     const map = this.map;
     const rooms = this.cleaning ? (map.active?.length ? map.active.map(String) : Object.keys(map.rooms ?? {})) : [];
     this.dustRooms = rooms.filter((id) => map.cells?.[id]);
-    const sig = this.dustRooms.join(), n = this.trail.pieces.length;
+    this.dustZones = map.active?.length ? [] : map.zones ?? [];
+    const sig = `${this.dustRooms.join()}|${this.dustZones.join()}`, n = this.trail.pieces.length;
     if (sig !== this.dustSig || this.trail !== this.dustTrail) {
       this.dustSig = sig;
       this._drawDust(map.cells);
@@ -138,7 +139,9 @@ export class FloorEffects {
 
   _build(g, xf) {
     this.dispose(false);
-    const w = Math.min(MAX_PX, g.width * PX), h = Math.min(MAX_PX, g.height * PX);
+    // Over MAX_PX both sides shrink alike: the texture lays the whole canvas on the whole grid.
+    const k = Math.min(PX, MAX_PX / Math.max(g.width, g.height));
+    const w = Math.round(g.width * k), h = Math.round(g.height * k);
     this.scale = Math.min(w / (g.width * g.size), h / (g.height * g.size));   // canvas px per mm
     this.grid = g;
     const right = g.left + g.width * g.size, bottom = g.top + g.height * g.size;
@@ -199,8 +202,15 @@ export class FloorEffects {
     if (!this.dustRooms.length) return;   // keep the last drawing while it fades out
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const k = this.grid.size * this.scale;
+    ctx.save();
+    if (this.dustZones.length) {
+      ctx.beginPath();
+      for (const [x0, y0, x1, y1] of this.dustZones) ctx.rect(...this._px([x0, y0]), (x1 - x0) * this.scale, (y1 - y0) * this.scale);
+      ctx.clip();
+    }
     ctx.fillStyle = this.dustPattern;
     for (const id of this.dustRooms) for (const [x0, y0, x1, y1] of cellRects(cells[id])) ctx.fillRect(x0 * k, y0 * k, (x1 - x0) * k, (y1 - y0) * k);
+    ctx.restore();
     tex.needsUpdate = true;
     this._clearDust(this.trail.pieces);
   }

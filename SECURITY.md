@@ -17,7 +17,7 @@ Fixes go into the latest release. HACS offers it as an update.
 
 ## What the integration can do
 
-Dreame Vacuum 3D is a Home Assistant integration (Python, running inside Home Assistant). Phase 1 has no dashboard card yet.
+Dreame Vacuum 3D is a Home Assistant integration (Python, running inside Home Assistant) with a dashboard card (JavaScript, running in the browser). The card talks to Home Assistant only, and loads the 3D model of the house from the URL in its configuration.
 
 - **Stores** Xiaomi username and password, cloud session (`auth`), local IP, miIO token and device id in the config entry (Home Assistant `.storage`). Treat backups of `/config` as containing those secrets.
 - **Talks to** Xiaomi's regional cloud (login, device list, RPC fallback, map object URLs) and to the robot on the LAN (UDP miIO).

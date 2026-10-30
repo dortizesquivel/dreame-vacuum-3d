@@ -644,3 +644,207 @@ test('the passes go back to one once a cleaning starts', async ({ page }) => {
   await card.locator('.panel .clean').click();
   expect(await page.evaluate(() => window.demo.calls.at(-1).data)).not.toHaveProperty('repeats');
 });
+
+test('every settings row with something to pick can be reached with Tab', async ({ page }) => {
+  await open(page, '&mop=0');   // the mode the robot has is one it can't pick now: the row starts on another
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-settings]').click();
+  await card.locator('[data-settings]').focus();
+  const reached = [];
+  for (let i = 0; i < 4; i++) {
+    await page.keyboard.press('Tab');
+    reached.push(await page.evaluate(() => window.demo.card.shadowRoot.activeElement?.closest('[data-key]')?.dataset.key));
+  }
+  expect(reached).toEqual(['cleaning_mode', 'suction_level', 'water_volume', 'repeats']);
+});
+
+test('Close stays Close when the view changes behind the panel', async ({ page }) => {
+  await open(page, '&lang=es');
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-settings]').click();
+  await expect(card.locator('.panel .cancel')).toHaveText('Cerrar');
+  await card.locator('[data-view="plan"]').click();
+  await expect(card.locator('.panel .cancel')).toHaveText('Cerrar');
+});
+
+test('a setting that failed stops showing its error once one goes through', async ({ page }) => {
+  await open(page);
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-settings]').click();
+  await page.evaluate(() => {   // the next call fails, the ones after it work
+    const { card } = window.demo, real = card._hass;
+    card._hass = { ...real, callService: async () => { card._hass = real; throw new Error('no answer'); } };
+  });
+  const msg = card.locator('.panel .msg'), strong = card.locator('.opts [data-key="suction_level"] [data-option="strong"]');
+  await strong.click();
+  await expect(msg).toHaveText('The robot did not take it: no answer');
+  await expect(msg).toHaveAttribute('data-error', 'true');
+  await strong.click();
+  await expect(strong).toHaveAttribute('aria-checked', 'true');
+  await expect(msg).toHaveText('Cleaning settings');
+  await expect(msg).toHaveAttribute('data-error', 'false');
+});
+
+test('the coverage comes back when the card goes back on the page', async ({ page }) => {
+  await open(page, '&house=flat');
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-history]').click();
+  await card.locator('.panel .coverage').click();
+  await expect(card.locator('.panel .coverage')).toHaveAttribute('aria-pressed', 'true');
+  await page.evaluate(() => { const { card } = window.demo, parent = card.parentNode; card.remove(); parent.append(card); });
+  await page.waitForFunction(() => window.demo.card._scene?.effects.layers);
+  expect(await page.evaluate(() => {
+    const fx = window.demo.card._scene.effects;
+    return { paths: fx.coverage?.length, shown: fx.layers.coverage.mesh.visible };
+  })).toEqual({ paths: 3, shown: true });
+});
+
+test('a change of config leaves the view and the camera where they were', async ({ page }) => {
+  await open(page);
+  await modelLoaded(page);
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-view="plan"]').click();
+  await page.waitForTimeout(1200);   // the camera's 800 ms move
+  await card.locator('[data-zoom="in"]').click();
+  await page.waitForTimeout(300);
+  const camera = () => page.evaluate(() => window.demo.card._scene.camera.position.toArray());
+  const before = await camera();
+  const moved = async () => Math.hypot(...(await camera()).map((v, i) => v - before[i]));
+  await page.locator('#effects').click();
+  expect(await moved()).toBeLessThan(1e-3);
+  await page.locator('#futuristic').click();   // the same house in another style
+  await page.waitForFunction(() => window.demo.card._scene.holo);
+  expect(await moved()).toBeLessThan(1e-3);
+  await expect(card.locator('[data-view="plan"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('a config that names another view shows it, and without the model the camera frames the map', async ({ page }) => {
+  await open(page);
+  await modelLoaded(page);
+  await page.evaluate(() => { const { card } = window.demo; card.setConfig({ ...card._config, model: undefined, view: 'plan' }); });
+  await expect(page.locator('dreame-vacuum-3d-card [data-view="plan"]')).toHaveAttribute('aria-pressed', 'true');
+  const off = await page.evaluate(() => {
+    const s = window.demo.card._scene, was = s.camera.position.clone();
+    s.setView(s.view, true);
+    return was.distanceTo(s.camera.position);
+  });
+  expect(off).toBeLessThan(1e-3);
+});
+
+test('the settings button closes the sheet it opened', async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => { const { card } = window.demo; card.setConfig({ ...card._config, model: undefined, height: 640 }); });
+  const card = page.locator('dreame-vacuum-3d-card'), button = card.locator('[data-settings]');
+  await button.click();
+  await expect(card.locator('.panel')).toBeVisible();
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  await button.click();
+  await expect(card.locator('.panel')).toBeHidden();
+  await expect(button).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('at the lowest height the left column fits the card, and the settings open from it', async ({ page }) => {
+  await open(page);
+  const card = page.locator('dreame-vacuum-3d-card');
+  expect((await card.locator('[data-settings]').boundingBox()).height).toBe(32);   // at a normal height, as ever
+  await page.evaluate(() => { const { card } = window.demo; card.setConfig({ ...card._config, model: undefined, height: 200 }); });
+  const view = await card.locator('.viewport').boundingBox();
+  for (const b of await card.locator('.zoom button').all()) {
+    const box = await b.boundingBox();
+    expect(box.y).toBeGreaterThanOrEqual(view.y);
+    expect(box.y + box.height).toBeLessThanOrEqual(view.y + view.height);
+  }
+  await card.locator('[data-settings]').click();
+  const panel = await card.locator('.panel').boundingBox();
+  expect(panel.y).toBeGreaterThanOrEqual(view.y);
+  expect(panel.y + panel.height).toBeLessThanOrEqual(view.y + view.height);
+  const three = card.locator('.opts [data-key="repeats"] [data-option="3"]');
+  await three.click();
+  await expect(three).toHaveAttribute('aria-checked', 'true');
+});
+
+test('renaming a room renames its label', async ({ page }) => {
+  await open(page, '&house=flat');
+  await page.evaluate(() => {
+    const { card } = window.demo, rooms = structuredClone(card._map.rooms);
+    rooms[Object.keys(rooms)[0]].name = 'Pantry';
+    card._onMap({ rooms });
+  });
+  await expect(page.locator('dreame-vacuum-3d-card .room', { hasText: 'Pantry' })).toHaveCount(1);
+});
+
+for (const view of ['3d', 'plan']) {
+  test(`a tap on a room's name picks that room, in every room (${view})`, async ({ page }) => {
+    await open(page, `&house=flat&view=${view}`);
+    await page.waitForTimeout(1500);   // the first frames place the labels
+    const labels = await page.evaluate(() => [...window.demo.card.shadowRoot.querySelectorAll('.room')].map((el) => {
+      const r = el.getBoundingClientRect();
+      return { name: el.textContent, x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    }));
+    expect(labels.length).toBe(6);
+    for (const { name, x, y } of labels) {
+      await page.evaluate(() => window.demo.card._pick(null));
+      await page.mouse.click(x, y);
+      expect(await page.evaluate(() => { const c = window.demo.card; return c._map.rooms[c._picked]?.name; })).toBe(name);
+    }
+  });
+}
+
+test('a zone gets dust in the zone, not over the whole house', async ({ page }) => {
+  await open(page, '&house=flat');
+  const { box, zone } = await page.evaluate(async () => {
+    const { card } = window.demo, r = Object.values(card._map.rooms)[0];
+    const zone = [r.x - 500, r.y - 500, r.x + 500, r.y + 500];
+    await card._hass.callService('dreame_vacuum_3d', 'vacuum_clean_zone', { zone });
+    const fx = card._scene.effects, { ctx, canvas } = fx.layers.dust, px = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    // Where the dust is, on the canvas.
+    const box = [Infinity, Infinity, -1, -1];
+    for (let i = 3, n = 0; i < px.length; i += 4, n++) {
+      if (!px[i]) continue;
+      const x = n % canvas.width, y = Math.floor(n / canvas.width);
+      box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], y); box[2] = Math.max(box[2], x); box[3] = Math.max(box[3], y);
+    }
+    return { box, zone: [...fx._px([zone[0], zone[1]]), ...fx._px([zone[2], zone[3]])] };
+  });
+  expect(box[2]).toBeGreaterThan(0);   // there is dust
+  expect(box[0]).toBeGreaterThanOrEqual(Math.floor(zone[0]));
+  expect(box[1]).toBeGreaterThanOrEqual(Math.floor(zone[1]));
+  expect(box[2]).toBeLessThanOrEqual(Math.ceil(zone[2]));
+  expect(box[3]).toBeLessThanOrEqual(Math.ceil(zone[3]));
+});
+
+test('a map too big for the effects\' canvases keeps its shape on them', async ({ page }) => {
+  await open(page);
+  const fit = await page.evaluate(() => {
+    const s = window.demo.card._scene, fx = s.effects, grid = { ...s.map.grid, width: 3000, height: 1000 };
+    fx.setMap({ ...s.map, grid }, s.xf);
+    const { canvas } = fx.layers.dust, mm = (n) => n * grid.size * fx.scale;
+    return { across: mm(grid.width) / canvas.width, down: mm(grid.height) / canvas.height, widest: canvas.width };
+  });
+  expect(fit.widest).toBe(2048);
+  expect(fit.across).toBeCloseTo(1, 2);   // the grid fills the canvas both ways, as the texture lays it on the floor
+  expect(fit.down).toBeCloseTo(1, 2);
+});
+
+test('rebuilding the map lets go of the walls\' instance buffer', async ({ page }) => {
+  await open(page, '&model=0');
+  expect(await page.evaluate(() => {
+    const s = window.demo.card._scene, walls = s.mapGroup.children.find((o) => o.isInstancedMesh);
+    let freed = false;
+    walls.addEventListener('dispose', () => { freed = true; });
+    s.mapSig = '';
+    s.setMap(s.map);
+    return freed;
+  })).toBe(true);
+});
+
+test('after a calibration the robot is at its new place at once, it does not glide there', async ({ page }) => {
+  await open(page);
+  await modelLoaded(page);
+  await lagging(page);
+  await recalibrate(page);
+  expect(await page.evaluate(() => {
+    const s = window.demo.card._scene, [x, z] = s.xf.point(...s.map.robot), p = s.robot.position;
+    return { gliding: !!s.glide, queued: s.queue.length, off: Math.hypot(p.x - x, p.z - z) < 1e-6 };
+  })).toEqual({ gliding: false, queued: 0, off: true });
+});

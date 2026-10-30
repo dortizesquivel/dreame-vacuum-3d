@@ -779,5 +779,121 @@
     "notify_consumable": {
       "message": "{name}: {life}% left"
     }
+  },
+  "services": {
+    "vacuum_clean_segment": {
+      "name": "Clean rooms",
+      "description": "Cleans the rooms given by their segment ids.",
+      "fields": {
+        "segments": {
+          "name": "Rooms",
+          "description": "A room's segment id, or a list of them."
+        },
+        "repeats": {
+          "name": "Passes",
+          "description": "Cleaning passes, 1 to 3: one number, or a list with one for each room."
+        },
+        "suction_level": {
+          "name": "Suction level",
+          "description": "From 0 (quiet) to 3 (turbo): one number, or a list with one for each room. Without it, the robot's own."
+        },
+        "water_volume": {
+          "name": "Water volume",
+          "description": "From 1 (low) to 3 (high): one number, or a list with one for each room. Without it, the robot's own."
+        }
+      }
+    },
+    "vacuum_clean_zone": {
+      "name": "Clean zones",
+      "description": "Cleans one or more rectangles of the map.",
+      "fields": {
+        "zone": {
+          "name": "Zone",
+          "description": "A rectangle [x0, y0, x1, y1] in the map's mm, or a list of them."
+        },
+        "repeats": {
+          "name": "Passes",
+          "description": "Cleaning passes, 1 to 3: one number, or a list with one for each zone."
+        },
+        "suction_level": {
+          "name": "Suction level",
+          "description": "From 0 (quiet) to 3 (turbo): one number, or a list with one for each zone. Without it, the robot's own."
+        },
+        "water_volume": {
+          "name": "Water volume",
+          "description": "From 1 (low) to 3 (high): one number, or a list with one for each zone. Without it, the robot's own."
+        }
+      }
+    },
+    "vacuum_clean_spot": {
+      "name": "Clean spots",
+      "description": "Cleans around one or more points of the map.",
+      "fields": {
+        "points": {
+          "name": "Points",
+          "description": "A point [x, y] in the map's mm, or a list of them."
+        },
+        "repeats": {
+          "name": "Passes",
+          "description": "Cleaning passes, 1 to 3: one number, or a list with one for each point."
+        },
+        "suction_level": {
+          "name": "Suction level",
+          "description": "From 0 (quiet) to 3 (turbo): one number, or a list with one for each point. Without it, the robot's own."
+        },
+        "water_volume": {
+          "name": "Water volume",
+          "description": "From 1 (low) to 3 (high): one number, or a list with one for each point. Without it, the robot's own."
+        }
+      }
+    },
+    "vacuum_goto": {
+      "name": "Go to a point",
+      "description": "Sends the robot to a point of the map.",
+      "fields": {
+        "x": {
+          "name": "X",
+          "description": "X of the point, in the map's mm."
+        },
+        "y": {
+          "name": "Y",
+          "description": "Y of the point, in the map's mm."
+        }
+      }
+    },
+    "vacuum_remote_control_move_step": {
+      "name": "Remote control step",
+      "description": "Moves the robot one step, by remote control.",
+      "fields": {
+        "rotation": {
+          "name": "Rotation",
+          "description": "How much it turns, from -360 to 360."
+        },
+        "velocity": {
+          "name": "Velocity",
+          "description": "How fast it goes, from -600 to 600; below 0 it goes backwards."
+        }
+      }
+    },
+    "vacuum_select_map": {
+      "name": "Select a map",
+      "description": "Makes one of the robot's saved maps the current one, on a robot with several floors.",
+      "fields": {
+        "map_id": {
+          "name": "Map id",
+          "description": "The id of the saved map."
+        }
+      }
+    },
+    "vacuum_reset_consumable": {
+      "name": "Reset a consumable",
+      "description": "Sets a consumable's life counter back to full, after fitting a new one.",
+      "fields": {
+        "consumable": {
+          "name": "Consumable",
+          "description": "The consumable to reset."
+        }
+      }
+    }
   }
 }

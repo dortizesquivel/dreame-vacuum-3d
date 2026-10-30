@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from homeassistant.const import ATTR_ENTITY_ID
@@ -11,6 +12,7 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 import pytest
 from voluptuous.error import MultipleInvalid
+import yaml
 
 from custom_components.dreame_vacuum_3d.const import DOMAIN
 from custom_components.dreame_vacuum_3d.device.enums import Status
@@ -166,3 +168,36 @@ async def test_invalid_service_data_rejected(hass: HomeAssistant) -> None:
             {ATTR_ENTITY_ID: entity_id, "zone": [1, 2, 3]},
             blocking=True,
         )
+
+
+@pytest.mark.parametrize(
+    ("service", "data"),
+    [
+        ("vacuum_clean_segment", {"segments": []}),
+        ("vacuum_clean_zone", {"zone": []}),
+        ("vacuum_clean_spot", {"points": []}),
+        ("vacuum_clean_segment", {"segments": 6, "repeats": []}),
+        ("vacuum_clean_zone", {"zone": [1, 2, 3, 4], "suction_level": []}),
+        ("vacuum_clean_spot", {"points": [1, 2], "water_volume": []}),
+    ],
+)
+async def test_empty_lists_never_reach_the_robot(hass: HomeAssistant, service: str, data: dict[str, Any]) -> None:
+    _entry, miio = await setup_fixture_entry(hass)
+    entity_id = _vacuum_entity_id(hass)
+    miio.calls.clear()
+    with pytest.raises(MultipleInvalid):
+        await hass.services.async_call(DOMAIN, service, {ATTR_ENTITY_ID: entity_id, **data}, blocking=True)
+    assert miio.calls == []
+
+
+@pytest.mark.parametrize("file", ["strings.json", "translations/en.json", "translations/es.json"])
+def test_every_service_and_field_has_a_name_and_a_description(file: str) -> None:
+    folder = Path(__file__).parents[2] / "custom_components" / DOMAIN
+    services = yaml.safe_load((folder / "services.yaml").read_text(encoding="utf-8"))
+    texts = json.loads((folder / file).read_text(encoding="utf-8"))["services"]
+    assert set(texts) == set(services)
+    for service, schema in services.items():
+        assert texts[service]["name"] and texts[service]["description"]
+        assert set(texts[service]["fields"]) == set(schema["fields"])
+        for field in texts[service]["fields"].values():
+            assert field["name"] and field["description"]

@@ -66,6 +66,7 @@ class DreameDevice:
         self._bits_lock = asyncio.Lock()
         # Rooms of the segment clean this integration started, for the task_status event.
         self.segments: list[int] | None = None
+        self.zones: list[list[int]] | None = None  # the zones of the task sent, as segments are its rooms
 
     async def _send(self, method: str, params: Any) -> Any:
         if self.channel == "cloud" and monotonic() < self._local_retry_at:
@@ -239,7 +240,7 @@ class DreameDevice:
         ]
         params = json.dumps({"selects": cleanlist}, separators=(",", ":"))
         result = await self._start_custom(Status.SEGMENT_CLEANING.value, params)
-        self.segments = selected
+        self.segments, self.zones = selected, None
         return result
 
     async def clean_zone(
@@ -251,8 +252,9 @@ class DreameDevice:
     ) -> Any:
         """Clean rectangles [[x0,y0,x1,y1], ...] (Tasshack clean_zone payload)."""
         fan, wet = self._levels()
+        rects = _rects(zones)
         areas: list[list[int]] = []
-        for index, zone in enumerate(_rects(zones)):
+        for index, zone in enumerate(rects):
             if len(zone) != 4:
                 raise ValueError(f"zone {index} must have 4 coordinates")
             areas.append(
@@ -267,7 +269,9 @@ class DreameDevice:
                 ]
             )
         params = json.dumps({"areas": areas}, separators=(",", ":"))
-        return await self._start_custom(Status.ZONE_CLEANING.value, params)
+        result = await self._start_custom(Status.ZONE_CLEANING.value, params)
+        self.segments, self.zones = None, rects
+        return result
 
     async def clean_spot(
         self,
