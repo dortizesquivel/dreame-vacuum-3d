@@ -162,9 +162,10 @@
   card.hass = hass();
 
   const send = () => { const m = sim.message({ delta: true }); subs.forEach((cb) => cb(m)); card.hass = hass(); };
-  // Like the integration while the robot cleans: every 5 s, the frames the robot logged since (one every 2.5 s).
-  // ?batch=1 sends one a second instead. ?loop cleans again a few seconds after the robot docks.
-  const batch = Number(q.get('batch') ?? 5);
+  // Where the robot is, every half second: the demo runs ten times faster than a robot, so batches as the integration's
+  // (?batch=5: every 5 s, the frames the robot logged since, one every 2.5 s) would move it metres at a time.
+  // ?loop cleans again a few seconds after the robot docks.
+  const batch = Number(q.get('batch') ?? 0.5);
   let dockedAt = null;
   setInterval(() => {
     if (sim.state === 'docked') {
