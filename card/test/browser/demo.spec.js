@@ -33,6 +33,7 @@ for (const house of ['living-room', 'flat']) {
 }
 
 test('the robot goes round the furniture, not through it', async ({ page }) => {
+  test.setTimeout(300_000);   // 600 looks at the robot: about two minutes on a CI runner's software WebGL, sometimes more
   await open(page, '&start');
   // The living room's furniture (model metres) and how close the robot's centre may come (its radius is 0.175).
   const hits = await page.evaluate(async () => {
