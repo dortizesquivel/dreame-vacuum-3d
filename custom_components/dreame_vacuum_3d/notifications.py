@@ -44,6 +44,19 @@ _ACTIVE_TASK = frozenset(
         TaskStatus.ZONE_CLEANING_PAUSED,
         TaskStatus.SEGMENT_CLEANING_PAUSED,
         TaskStatus.SPOT_CLEANING_PAUSED,
+        TaskStatus.MAP_CLEANING_PAUSED,
+        TaskStatus.MOPPING_PAUSED,
+        TaskStatus.SEGMENT_MOPPING_PAUSED,
+        TaskStatus.ZONE_MOPPING_PAUSED,
+        TaskStatus.AUTO_MOPPING_PAUSED,
+        TaskStatus.AUTO_DOCKING_PAUSED,
+        TaskStatus.SEGMENT_DOCKING_PAUSED,
+        TaskStatus.ZONE_DOCKING_PAUSED,
+        TaskStatus.CRUISING_PATH_PAUSED,
+        TaskStatus.CRUISING_POINT_PAUSED,
+        TaskStatus.AUTO_CLEANING_WASHING_PAUSED,
+        TaskStatus.AREA_CLEANING_WASHING_PAUSED,
+        TaskStatus.CUSTOM_CLEANING_WASHING_PAUSED,
     }
 )
 
