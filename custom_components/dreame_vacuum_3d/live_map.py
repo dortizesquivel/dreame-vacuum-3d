@@ -82,6 +82,7 @@ class LiveMap:
         # While it cleans the robot logs its frames in the cloud: partial ones (P) in 6.1, a whole one's file in 6.3.
         self._fetch_history = fetch_history
         self._since = 0  # cloud time (s) of the next log entries to read
+        self._failed_whole: str | None = None  # the logged whole frame whose file couldn't be read
         self._at: tuple[int, int] | None = None  # (map id, frame id) the pose is at
         self._whole_at = -float(WHOLE_EVERY)  # monotonic time of the last whole frame
         self._watched = watched  # whether a card shows the map now
@@ -192,7 +193,6 @@ class LiveMap:
         partial = await fetch("{}.{}".format(*props["map_data"]), since)
         whole = await fetch("{}.{}".format(*props["object_name"]), since)
         stamp = lambda r: int(r.get("time") or 0)  # noqa: E731
-        self._since = max([since, *(stamp(r) + 1 for r in partial + whole)])
         entries = [(stamp(r), False, r) for r in partial]
         if whole:
             entries.append((stamp(newest := max(whole, key=stamp)), True, newest))
@@ -201,12 +201,20 @@ class LiveMap:
             if (value := _logged_value(record)) is None:
                 continue
             if is_whole:
-                frames.append(await self._file_frame(value))
+                try:
+                    frames.append(await self._file_frame(value))
+                except _ERRORS as err:
+                    if value == self._failed_whole:  # the second time: go on without it rather than stall on it
+                        _LOGGER.debug("Skipping a logged whole map frame: %s", err)
+                        continue
+                    self._failed_whole = value  # read these entries again next time, to try it once more
+                    raise
                 continue
             try:
                 frames.append(dmap.decode(value, iv=self._device.caps.map_iv))
             except dmap.MapError as err:
                 _LOGGER.debug("Skipping a logged map frame: %s", err)
+        self._since = max([since, *(stamp(r) + 1 for r in partial + whole)])
         return frames
 
     @callback

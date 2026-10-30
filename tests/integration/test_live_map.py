@@ -387,6 +387,31 @@ async def test_a_whole_frame_from_the_cloud_log(hass: HomeAssistant) -> None:
     miio.cloud.interim_file_url.assert_awaited_with("1000001/123/1", model="dreame.vacuum.p2114a")
 
 
+@pytest.mark.parametrize("second_try_ok", [True, False])
+async def test_partial_frames_survive_a_whole_frame_that_fails(hass: HomeAssistant, second_try_ok: bool) -> None:
+    entry, miio = await setup(hass)  # a whole frame of map 7, frame 1
+    live_map = entry.runtime_data.map
+    entry.runtime_data.coordinator.device.values["status"] = Status.CLEANING.value
+    sent: list[dict] = []
+    live_map.listen(sent.append)
+    now = int(time.time())
+    p2 = frame([[0]], {}, kind="P", frame_id=2, robot=(-800, -400, 0))
+    log = {"6.1": _logged(p2, start=now), "6.3": [{"time": now + 1, "value": json.dumps(["1000001/123/1"])}]}
+    miio.cloud.device_data.side_effect = lambda _did, key, since: [r for r in log[key] if r["time"] >= since]
+    miio.cloud.download.return_value = None  # the whole frame's file isn't there
+
+    await live_map.refresh()
+    assert sent == []
+
+    if second_try_ok:
+        miio.cloud.download.return_value = live(robot=(-700, -400, 0), frame_id=9).encode()
+    await live_map.refresh()
+    assert sent[0]["frame_id"] == 2 and sent[0]["robot"] == [-800, -400, 0]  # the partial frame read with it
+    assert [m["frame_id"] for m in sent] == ([2, 9] if second_try_ok else [2])
+    await live_map.refresh()
+    assert miio.cloud.device_data.await_args.args[2] == now + 2  # the log is read on from after both
+
+
 async def test_a_cloud_log_error_falls_back_to_asking_the_robot(
     hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
