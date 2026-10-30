@@ -2,8 +2,11 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub release](https://img.shields.io/github/v/release/dortizesquivel/dreame-vacuum-3d)](https://github.com/dortizesquivel/dreame-vacuum-3d/releases)
+[![Downloads](https://img.shields.io/github/downloads/dortizesquivel/dreame-vacuum-3d/dreame_vacuum_3d.zip?displayAssetName=false&label=downloads)](https://github.com/dortizesquivel/dreame-vacuum-3d/releases)
 [![CI](https://github.com/dortizesquivel/dreame-vacuum-3d/actions/workflows/ci.yml/badge.svg)](https://github.com/dortizesquivel/dreame-vacuum-3d/actions/workflows/ci.yml)
 [![Validate](https://github.com/dortizesquivel/dreame-vacuum-3d/actions/workflows/validate.yml/badge.svg)](https://github.com/dortizesquivel/dreame-vacuum-3d/actions/workflows/validate.yml)
+[![CodeQL](https://github.com/dortizesquivel/dreame-vacuum-3d/actions/workflows/codeql.yml/badge.svg)](https://github.com/dortizesquivel/dreame-vacuum-3d/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/dortizesquivel/dreame-vacuum-3d/badge)](https://scorecard.dev/viewer/?uri=github.com/dortizesquivel/dreame-vacuum-3d)
 [![License: MIT](https://img.shields.io/github/license/dortizesquivel/dreame-vacuum-3d)](LICENSE)
 [![Home Assistant 2026.10+](https://img.shields.io/badge/Home%20Assistant-2026.10%2B-blue.svg)](https://www.home-assistant.io/)
 
@@ -155,13 +158,13 @@ ruff format --check .
 mypy
 python scripts/check_translations.py
 pytest
-cd card && npm ci && npm test && npm run build   # the card; commit the rebuilt bundle with its source
+cd card && npm ci && npm run lint && npm test && npm run build   # the card; commit the rebuilt bundle with its source
 npx playwright install chromium && npm run test:browser   # the card in the demo, in a browser
 ```
 
 `main` is protected: changes go in through a pull request. Required checks are **Python tests** (ruff, formatting, mypy, translations, pytest with a 95 % coverage floor) and **Validate** (HACS + hassfest); see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Layout: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Security model: [docs/ASSURANCE.md](docs/ASSURANCE.md) and [SECURITY.md](SECURITY.md).
+Layout: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Security model: [docs/ASSURANCE.md](docs/ASSURANCE.md) and [SECURITY.md](SECURITY.md). Who decides what: [GOVERNANCE.md](GOVERNANCE.md); what comes next: [ROADMAP.md](ROADMAP.md).
 
 ### Releasing
 
