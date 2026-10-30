@@ -18,8 +18,17 @@ const ICONS = {   // Material Design Icons
   pause: 'M14,19H18V5H14M6,19H10V5H6V19Z',
   dock: 'M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z',
   zone: 'M3,3H9V5H5V9H3V3M15,3H21V9H19V5H15V3M3,15H5V19H9V21H3V15M19,15H21V21H15V19H19V15M8,8H16V16H8V8Z',
+  settings: 'M3,17V19H9V17H3M3,5V7H13V5H3M13,21V19H21V17H13V15H11V21H13M7,9V11H3V13H7V15H9V9H7M21,13V11H11V13H21M15,9H17V7H21V5H17V3H15V9Z',
   history: 'M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3',
 };
+
+// The cleaning settings: the robot's select entities by translation key. A level row draws a meter, its options in order.
+const SETTINGS = [
+  { key: 'cleaning_mode', label: 'mode' },
+  { key: 'suction_level', label: 'suction', level: true, off: ['mopping'] },
+  { key: 'water_volume', label: 'water', level: true, off: ['sweeping'] },
+];
+const MOPPING = ['mopping', 'sweeping_and_mopping', 'mopping_after_sweeping'];
 
 const STRINGS = {
   en: {
@@ -37,6 +46,8 @@ const STRINGS = {
     history: 'Past cleanings', noHistory: 'No cleanings yet', lastCleanings: 'Last cleanings: tap one to watch it again',
     coverage: 'Coverage', live: 'Live', replaying: 'Replaying {when}, ×{speed}', replayed: 'Replayed {when}',
     otherMap: 'That cleaning was on another map', noReplay: 'Could not get that cleaning: {error}', whole: 'the whole house',
+    settings: 'Cleaning settings', mode: 'Mode', suction: 'Suction', water: 'Water', repeats: 'Passes',
+    nextCleaning: 'The mode changes on the next cleaning', fitMop: 'Fit the mop pads to mop', noSettings: 'This robot has no cleaning settings to change',
   },
   es: {
     noEntity: 'Pon en "entity" una aspiradora de Dreame Vacuum 3D.',
@@ -53,6 +64,8 @@ const STRINGS = {
     history: 'Limpiezas anteriores', noHistory: 'Aún no hay limpiezas', lastCleanings: 'Últimas limpiezas: toca una para verla otra vez',
     coverage: 'Cobertura', live: 'En directo', replaying: 'Repitiendo {when}, ×{speed}', replayed: 'Repetida {when}',
     otherMap: 'Esa limpieza fue en otro mapa', noReplay: 'No se pudo traer esa limpieza: {error}', whole: 'toda la casa',
+    settings: 'Ajustes de limpieza', mode: 'Modo', suction: 'Succión', water: 'Agua', repeats: 'Pasadas',
+    nextCleaning: 'El modo cambia en la próxima limpieza', fitMop: 'Pon las mopas para fregar', noSettings: 'Este robot no tiene ajustes de limpieza que cambiar',
   },
 };
 
@@ -111,6 +124,25 @@ const STYLE = `
   .panel .list button:hover { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
   .panel .list button:disabled { color: var(--secondary-text-color); cursor: default; background: none; }
   .panel button[aria-pressed="true"] { color: var(--text-primary-color, #fff); background: var(--primary-color); border-color: transparent; }
+  .panel .opts { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; max-height: 300px; overflow-y: auto; }
+  .panel .opts[hidden] { display: none; }
+  /* One setting a line: its label beside its options, or above them when the card is narrow. */
+  .opts .field { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+  .opts .name { flex: 0 0 72px; font-size: 13px; color: var(--secondary-text-color); }
+  .opts .row { flex: 1 1 260px; display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: color-mix(in srgb, var(--primary-text-color) 6%, transparent); }
+  .opts .row button { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+    min-width: 0; min-height: 44px; padding: 6px 8px; border: 0; border-radius: 8px; font-weight: 500; color: var(--secondary-text-color); }
+  .opts .row button[aria-checked="true"] { color: var(--text-primary-color, #fff); background: var(--primary-color); }
+  .opts .row button:disabled { opacity: .4; cursor: default; }
+  .opts .row button:not(:disabled):not([aria-checked="true"]):hover { color: var(--primary-text-color); }
+  .opts .row span { line-height: 1.2; text-align: center; }
+  /* The level meter: one bar per step up to this one, rising, so the steps read at a glance from across the room. */
+  .opts .meter { display: flex; align-items: flex-end; gap: 3px; height: 18px; }
+  .opts .meter i { width: 5px; border-radius: 1.5px; background: currentColor; opacity: .25; }
+  .opts .meter i[data-on] { opacity: 1; }
+  .opts .note { flex: 1 1 100%; margin: 0; font-size: 12px; color: var(--secondary-text-color); }
+  .panel .tune { display: inline-flex; align-items: center; gap: 6px; }
+  .panel .tune svg { width: 18px; height: 18px; fill: currentColor; }
   .routines { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 12px; border-top: 1px solid var(--divider-color); }
   .routines[hidden] { display: none; }
   .routines button { font: inherit; font-size: 13px; font-weight: 500; color: var(--primary-text-color); background: none;
@@ -137,6 +169,7 @@ class DreameVacuum3DCard extends HTMLElement {
       throw new Error('"effects" must be true, false, or which to show: { dust: false } or { wet: false }');
     }
     const effects = typeof fx === 'boolean' ? { dust: fx, wet: fx } : { dust: fx.dust !== false, wet: fx.wet !== false };
+    if (config.controls != null && typeof config.controls !== 'boolean') throw new Error('"controls" must be true or false');
     const routines = config.routines ?? [];
     if (!Array.isArray(routines) || !routines.every((r) => Array.isArray(r?.rooms) && r.rooms.length
       && r.rooms.every((x) => typeof x === 'number' || (typeof x === 'string' && x.trim())))) {
@@ -204,11 +237,14 @@ class DreameVacuum3DCard extends HTMLElement {
             <button type="button" data-download>⤓</button>
             <button type="button" data-zone><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.zone}"></path></svg></button>
             <button type="button" data-history><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.history}"></path></svg></button>
+            <button type="button" data-settings hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.settings}"></path></svg></button>
           </div>
           <div class="panel" hidden>
             <div class="msg" aria-live="polite"></div>
             <div class="list" hidden></div>
+            <div class="opts" hidden></div>
             <button type="button" class="coverage" hidden></button>
+            <button type="button" class="tune" hidden><svg viewBox="0 0 24 24"><path d="${ICONS.settings}"></path></svg><span></span></button>
             <button type="button" class="cancel"></button>
             <button type="button" class="primary clean"></button>
           </div>
@@ -220,7 +256,8 @@ class DreameVacuum3DCard extends HTMLElement {
     const $ = (s) => root.querySelector(s);
     this._els = { title: $('.title'), chip: $('.chip'), viewport: $('.viewport'), status: $('.status'), panel: $('.panel'),
       msg: $('.panel .msg'), clean: $('.panel .clean'), cancel: $('.panel .cancel'), routines: $('.routines'),
-      list: $('.panel .list'), coverage: $('.panel .coverage') };
+      list: $('.panel .list'), coverage: $('.panel .coverage'), opts: $('.panel .opts'), tune: $('.panel .tune'),
+      settings: $('[data-settings]') };
     root.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
       this._view = b.dataset.view;
       this._follow = false;
@@ -237,6 +274,16 @@ class DreameVacuum3DCard extends HTMLElement {
     root.querySelector('[data-download]').addEventListener('click', () => this._download());
     root.querySelector('[data-zone]').addEventListener('click', () => this._setZoneMode(!this._zoneMode));
     root.querySelector('[data-history]').addEventListener('click', () => this._showHistory());
+    this._els.settings.addEventListener('click', () => this._showSettings());
+    this._els.tune.addEventListener('click', () => {
+      this._els.opts.hidden = !this._els.opts.hidden;
+      this._renderSettings();
+    });
+    this._els.opts.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-option]');
+      if (b && !b.disabled) this._setOption(b.closest('[data-key]').dataset.key, b.dataset.option);
+    });
+    this._els.opts.addEventListener('keydown', (e) => this._arrowKeys(e));
     this._els.list.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-start]');
       if (b) this._replay(Number(b.dataset.start));
@@ -329,6 +376,8 @@ class DreameVacuum3DCard extends HTMLElement {
     r.querySelector('[data-zone]').setAttribute('aria-label', this._t('zone'));
     r.querySelector('[data-zone]').title = this._t('zone');
     r.querySelector('[data-zone]').setAttribute('aria-pressed', String(!!this._zoneMode));
+    r.querySelector('[data-settings]').setAttribute('aria-label', this._t('settings'));
+    r.querySelector('[data-settings]').title = this._t('settings');
     r.querySelector('[data-cmd="return_to_base"]').setAttribute('aria-label', this._t('dock'));
     r.querySelector('[data-cmd="return_to_base"]').title = this._t('dock');
     this._els.cancel.textContent = this._t('cancel');
@@ -366,6 +415,132 @@ class DreameVacuum3DCard extends HTMLElement {
     toggle.title = this._t(busy ? 'pause' : 'start');
     toggle.disabled = !st;
     this._root.querySelector('[data-cmd="return_to_base"]').disabled = !st || st.state === 'docked' || st.state === 'returning';
+    this._els.settings.hidden = this._config.controls === false || !SETTINGS.some((x) => this._related(x.key));
+    this._renderSettings();
+  }
+
+  /** The settings sheet alone, from the button in the left column. */
+  _showSettings() {
+    this._pick(null);
+    const { panel, msg, clean, cancel, opts } = this._els;
+    panel.hidden = false;
+    clean.hidden = true;
+    opts.hidden = false;
+    msg.textContent = this._t('settings');
+    cancel.textContent = this._t('close');
+    this._els.settings.setAttribute('aria-pressed', 'true');
+    this._renderSettings();
+  }
+
+  /** The settings rows, each showing the robot's setting now; and the summary of them on the panel's Settings button. */
+  _renderSettings() {
+    const { opts, tune } = this._els;
+    if (!opts || this._config.controls === false || (opts.hidden && tune.hidden)) return;   // nothing of it shows
+    const h = this._hass, st = h.states[this._config.entity];
+    const label = (s, o) => h.formatEntityState?.(s, o) ?? o.replace(/_/g, ' ');
+    const mode = this._related('cleaning_mode')?.state;
+    const mop = this._related('mop_attached');
+    const cleaning = ['cleaning', 'returning', 'paused'].includes(st?.state);
+    const rows = [];
+    const summary = [];
+    for (const def of SETTINGS) {
+      const s = this._related(def.key);
+      const options = s?.attributes.options;
+      if (!options?.length) continue;
+      if (!def.off?.includes(mode)) summary.push(label(s, s.state));
+      const row = this._radioRow(def.key, this._t(def.label), options.map((o, i) => ({
+        value: o, text: label(s, o), level: def.level ? [i + 1, options.length] : null,
+        // The mode is the task's: it can't change while it runs. Mopping needs the pads on.
+        disabled: (def.key === 'cleaning_mode' && (cleaning || (mop?.state === 'off' && MOPPING.includes(o)))) || !!def.off?.includes(mode),
+        title: def.key === 'cleaning_mode' && mop?.state === 'off' && MOPPING.includes(o) ? this._t('fitMop') : '',
+      })), s.state);
+      rows.push(row);
+    }
+    if (rows.length) {
+      const passes = [1, 2, 3].map((n) => ({ value: String(n), text: `×${n}`, disabled: cleaning }));
+      rows.push(this._radioRow('repeats', this._t('repeats'), passes, String(this._repeats ?? 1)));
+      if ((this._repeats ?? 1) > 1) summary.push(`×${this._repeats}`);
+      if (cleaning) rows.push(Object.assign(document.createElement('p'), { className: 'note', textContent: this._t('nextCleaning') }));
+    } else {
+      rows.push(Object.assign(document.createElement('p'), { className: 'note', textContent: this._t('noSettings') }));
+    }
+    // Rebuilt on every state update: keep the focus on the option it was on.
+    const focused = this._root.activeElement?.closest?.('[data-option]');
+    const where = focused && [focused.closest('[data-key]').dataset.key, focused.dataset.option];
+    opts.replaceChildren(...rows);
+    if (where) opts.querySelector(`[data-key="${where[0]}"] [data-option="${where[1]}"]`)?.focus();
+    tune.querySelector('span').textContent = summary.join(' · ') || this._t('settings');
+    tune.setAttribute('aria-expanded', String(!opts.hidden));
+    tune.setAttribute('aria-label', `${this._t('settings')}: ${summary.join(', ')}`);
+  }
+
+  /** A label and a row of options to pick one of (radio buttons), the picked one filled. */
+  _radioRow(key, name, options, value) {
+    const id = `opt-${key}`;
+    const title = Object.assign(document.createElement('span'), { className: 'name', id, textContent: name });
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.dataset.key = key;
+    row.setAttribute('role', 'radiogroup');
+    row.setAttribute('aria-labelledby', id);
+    row.append(...options.map((o) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.option = o.value;
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', String(o.value === value));
+      b.tabIndex = o.value === value ? 0 : -1;
+      b.disabled = o.disabled;
+      if (o.title) b.title = o.title;
+      if (o.level) {
+        const meter = document.createElement('span');
+        meter.className = 'meter';
+        meter.setAttribute('aria-hidden', 'true');
+        for (let k = 1; k <= o.level[1]; k++) {
+          const bar = document.createElement('i');
+          bar.style.height = `${(k / o.level[1]) * 100}%`;
+          if (k <= o.level[0]) bar.dataset.on = '';
+          meter.append(bar);
+        }
+        b.append(meter);
+      }
+      b.append(Object.assign(document.createElement('span'), { textContent: o.text }));
+      return b;
+    }));
+    const field = document.createElement('div');
+    field.className = 'field';
+    field.append(title, row);
+    return field;
+  }
+
+  /** Arrow keys move between a row's options, as in any radio group. */
+  _arrowKeys(e) {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    const b = e.target.closest('button[data-option]');
+    if (!step || !b) return;
+    e.preventDefault();
+    const all = [...b.parentElement.querySelectorAll('button:not(:disabled)')];
+    const next = all[(all.indexOf(b) + step + all.length) % all.length];
+    next?.focus();
+    next?.click();
+  }
+
+  /** Change one of the robot's settings (it keeps it for the next cleanings too), or the passes of the next task. */
+  async _setOption(key, option) {
+    if (key === 'repeats') {
+      this._repeats = Number(option);
+      this._renderSettings();
+      return;
+    }
+    const s = this._related(key);
+    if (!s) return;
+    try {
+      await this._hass.callService('select', 'select_option', { option }, { entity_id: s.entity_id });
+    } catch (err) {
+      const { msg } = this._els;
+      msg.dataset.error = 'true';
+      msg.textContent = this._t('commandFailed', { error: err?.message ?? String(err) });
+    }
   }
 
   /** Another entity of the same robot by its translation key, such as the integration's state or error sensor. */
@@ -505,6 +680,7 @@ class DreameVacuum3DCard extends HTMLElement {
     clean.hidden = false;
     clean.textContent = this._t('cleanZone');
     cancel.textContent = this._t('cancel');
+    this._offerSettings();
   }
 
   /** The last cleanings, to replay one, and the coverage of the last few. */
@@ -620,6 +796,9 @@ class DreameVacuum3DCard extends HTMLElement {
     if (this._els) {
       this._els.list.hidden = true;
       this._els.coverage.hidden = true;
+      this._els.opts.hidden = true;
+      this._els.tune.hidden = true;
+      this._els.settings.setAttribute('aria-pressed', 'false');
     }
     if (id == null && this._zoneMode) {
       this._zoneMode = false;
@@ -638,6 +817,14 @@ class DreameVacuum3DCard extends HTMLElement {
     clean.hidden = false;
     clean.textContent = this._t('clean', { room: room.name ?? `#${id}` });
     cancel.textContent = this._t('cancel');
+    this._offerSettings();
+  }
+
+  /** On an offer to clean, the settings it will clean with, as a button that opens them. */
+  _offerSettings() {
+    const { tune, settings } = this._els;
+    tune.hidden = settings.hidden;
+    this._renderSettings();
   }
 
   async _clean() {
@@ -646,10 +833,15 @@ class DreameVacuum3DCard extends HTMLElement {
     const { clean } = this._els;
     clean.disabled = true;
     try {
+      const repeats = (this._repeats ?? 1) > 1 ? { repeats: this._repeats } : {};
       const started = zone
-        ? await this._start({ zone }, this._t('theZone'), 'vacuum_clean_zone')
-        : await this._start({ segments: [Number(id)] }, this._map.rooms[id]?.name ?? `#${id}`);
-      if (started) clean.hidden = true;
+        ? await this._start({ zone, ...repeats }, this._t('theZone'), 'vacuum_clean_zone')
+        : await this._start({ segments: [Number(id)], ...repeats }, this._map.rooms[id]?.name ?? `#${id}`);
+      if (started) {
+        clean.hidden = true;
+        this._els.tune.hidden = true;
+        this._els.opts.hidden = true;
+      }
     } finally {
       clean.disabled = false;
     }

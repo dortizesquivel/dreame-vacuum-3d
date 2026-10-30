@@ -153,12 +153,14 @@ export class FloorEffects {
     };
     this.env ??= new PMREMGenerator(this.renderer).fromScene(new RoomEnvironment(), 0.04).texture;
     const flat = { transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 };
+    // Above a rug's top (about 12 mm in the demo's room), below the room overlay (LIFT in scene.js): a layer inside the rug
+    // flickers as the camera turns.
     this.layers = {
-      coverage: layer(0.002, new MeshBasicMaterial({ ...flat })),
+      coverage: layer(0.013, new MeshBasicMaterial({ ...flat })),
       // Glossier than water on a floor really is, so the sheen also shows when seen from above.
-      wet: layer(0.004, new MeshStandardMaterial({ ...flat, roughness: 0.1, metalness: 0.35, envMap: this.env, envMapIntensity: 1.6 })),
-      dust: layer(0.006, new MeshBasicMaterial({ ...flat, opacity: 0 })),
-      glint: layer(0.008, new MeshBasicMaterial({ ...flat, blending: AdditiveBlending })),
+      wet: layer(0.015, new MeshStandardMaterial({ ...flat, roughness: 0.1, metalness: 0.35, envMap: this.env, envMapIntensity: 1.6 })),
+      dust: layer(0.017, new MeshBasicMaterial({ ...flat, opacity: 0 })),
+      glint: layer(0.019, new MeshBasicMaterial({ ...flat, blending: AdditiveBlending })),
     };
     this.dustPattern = dustPattern(this.layers.dust.ctx, this.theme.dark);
     this.dustSig = '';
