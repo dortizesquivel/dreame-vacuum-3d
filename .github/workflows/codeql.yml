@@ -1,0 +1,40 @@
+name: CodeQL
+
+# Static security analysis of the integration's Python, the card's JavaScript and these workflows, with GitHub's
+# extended query set: on every pull request, on main and every week. Findings show under Security → Code scanning.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+          # The frontend bundle is built from card/src plus three.js (CI checks it matches); the source is what gets reviewed.
+          config: |
+            paths-ignore:
+              - custom_components/dreame_vacuum_3d/frontend
+              - node_modules
+      - uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
+        with:
+          category: /language:${{ matrix.language }}

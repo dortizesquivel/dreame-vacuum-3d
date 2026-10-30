@@ -1,0 +1,85 @@
+name: Bug report
+description: Something in the integration or the 3D card doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting it. Security problems go privately through [Report a vulnerability](https://github.com/dortizesquivel/dreame-vacuum-3d/security/advisories/new), not here.
+
+        Before you paste anything, remove passwords, tokens, `did`, MAC and serial number. The diagnostics download already redacts them, but have a quick look.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens
+      description: What you see, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen
+      description: The steps, so it can be reproduced.
+      placeholder: |
+        1. Start cleaning the kitchen from the card
+        2. Pause it halfway
+        3. …
+    validations:
+      required: true
+  - type: dropdown
+    id: part
+    attributes:
+      label: Where
+      options:
+        - The integration (setup, entities, services, map)
+        - The 3D card
+        - Both
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Vacuum model
+      description: The product name and the model id, shown on the device page in Home Assistant.
+      placeholder: Xiaomi Robot Vacuum X10+, dreame.vacuum.p2114a
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Dreame Vacuum 3D version
+      description: In HACS, or under Settings → Devices & services → Dreame Vacuum 3D.
+      placeholder: v0.1.11
+    validations:
+      required: true
+  - type: input
+    id: ha
+    attributes:
+      label: Home Assistant version
+      placeholder: 2026.10.2
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser or app
+      description: For problems with the card.
+      placeholder: Chrome 140 on Windows, the Home Assistant app on Android, a wall tablet…
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Optional, but it helps a lot. On the device page → Download diagnostics, then drag the JSON file here.
+  - type: textarea
+    id: config
+    attributes:
+      label: Card configuration
+      description: Optional. The card's YAML, for problems with the card. Remove anything private.
+      render: yaml
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Optional. From Settings → System → Logs, filtered by `dreame_vacuum_3d`; for the card, the red lines in the browser console (F12) that mention dreame-vacuum-3d. Remove passwords, tokens and identifiers.
+      render: text

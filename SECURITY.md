@@ -29,7 +29,9 @@ The [assurance case](docs/ASSURANCE.md) explains the threat model and redaction 
 
 ## How it's checked
 
-- **[CI](.github/workflows/ci.yml)** on every pull request: ruff, translation key check, pytest with a coverage floor.
+- **[CI](.github/workflows/ci.yml)** on every pull request: ruff, mypy, translation key check, pytest with a coverage floor, the card's lint, unit and browser tests.
+- **[CodeQL](.github/workflows/codeql.yml)**: static security analysis of the Python, the card and the workflows, on every pull request and weekly.
+- **[OpenSSF Scorecard](.github/workflows/scorecard.yml)** and monthly [Dependabot](.github/dependabot.yml) updates of the actions, npm and pip dependencies.
 - **[Validate](.github/workflows/validate.yml)**: HACS and hassfest, also weekly.
 - **Workflows**: every action is pinned to a commit; tokens are read-only except in the release job.
 

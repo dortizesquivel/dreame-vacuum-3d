@@ -59,4 +59,4 @@ Xiaomi credentials, the miIO token, cloud cookies and map downloads cross into t
 
 ## Tests
 
-`tests/` runs on Home Assistant's test harness (`pytest-homeassistant-custom-component`): protocol vectors and recorded cloud replies, capabilities, config flow, entities, services, events, diagnostics, and `scripts/check_translations.py`. CI runs ruff, formatting, mypy, the translations check, pytest (coverage floor in `pyproject.toml`), the card's unit tests and bundle check, the DCO sign-off, and HACS + hassfest validation.
+`tests/` runs on Home Assistant's test harness (`pytest-homeassistant-custom-component`): protocol vectors and recorded cloud replies, capabilities, config flow, entities, services, events, diagnostics, and `scripts/check_translations.py`. CI runs ruff, formatting, mypy, the translations check, pytest (coverage floor in `pyproject.toml`), the card's unit tests and bundle check, and HACS + hassfest validation.

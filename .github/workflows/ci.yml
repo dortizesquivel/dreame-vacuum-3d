@@ -1,6 +1,6 @@
 name: CI
 
-# Runs on every pull request and on main. "Python tests", "DCO" and the HACS and hassfest
+# Runs on every pull request and on main. "Python tests" and the HACS and hassfest
 # validation are required checks: main only accepts changes through a pull request where they pass.
 on:
   push:
@@ -52,6 +52,8 @@ jobs:
           cache: npm
           cache-dependency-path: card/package-lock.json
       - run: npm ci
+      - name: Lint (ESLint's recommended rules; any warning fails)
+        run: npm run lint
       - name: Unit tests (node:test)
         run: npm test
       - name: The committed bundle is built from this source
@@ -82,25 +84,3 @@ jobs:
             card/playwright-report/
             card/test-results/
           retention-days: 14
-
-  dco:
-    name: DCO
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          fetch-depth: 0
-      - name: Every commit is signed off (git commit -s)
-        env:
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          missing=0
-          for commit in $(git rev-list --no-merges "$BASE..$HEAD"); do
-            if ! git log -1 --format=%B "$commit" | grep -q '^Signed-off-by: '; then
-              echo "::error::$commit has no Signed-off-by line: commit with git commit -s"
-              missing=1
-            fi
-          done
-          exit $missing
