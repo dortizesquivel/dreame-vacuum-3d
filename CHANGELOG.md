@@ -2,6 +2,45 @@
 
 All notable releases of Dreame Vacuum 3D are listed here. The [Release workflow](.github/workflows/release.yml) prepends each tagged version.
 
+## v0.1.12 - 2026-10-30
+
+- fix(card): the robot settles after a turn past ±π, and keeps up on slow frames (4741ec9)
+- test(card): give the furniture test its own five minutes (857eb25)
+- test(card): give the path catch-up test room on a slow CI runner (d49cbd8)
+- docs: the demo moves the robot every half second, and the GIF has no lag (a082794)
+- test(card): passes, arrow keys, a zone's settings, the controls option, no scan wave (430ea29)
+- docs(readme): the cleaning settings and the controls option (1127fe5)
+- test(card): the cleaning settings (2e8c965)
+- feat(demo): the robot's cleaning settings, and cleaning with its mode (bb5a16d)
+- feat(card): cleaning settings: mode, suction, water and passes (4a58afc)
+- test: split the map-warning filter's condition (d45ee2e)
+- test: the map-warning filter in a helper, within the line length (2b419e7)
+- test: count only the integration's own map warnings (2c21251)
+- test(card): the path follows the robot, which catches up within 2 s (7cae4a1)
+- fix(card): the path and floor effects don't run ahead of the robot, and it keeps up (930ecfe)
+- chore(deps): bump the actions group with 6 updates (11d74ad)
+- chore(deps): bump the pip group with 3 updates (4be84c7)
+- chore(deps-dev): bump @playwright/test in /card in the npm group (e81cc7f)
+- docs(readme): the demo GIF and the futuristic screenshot without the flicker (ab78547)
+- test(card): overlays above the rug, the view buttons, the futuristic hologram (376adc8)
+- fix(card): the floor overlays don't flicker over a rug as the camera turns (ae10bd6)
+- docs: private vulnerability reporting is enabled (0bedc6d)
+- docs: list the lint, CodeQL, Scorecard and Dependabot checks (bb6d816)
+- docs(readme): Downloads, CodeQL and OpenSSF Scorecard badges (26a7ccf)
+- docs: OpenSSF Best Practices answers in .bestpractices.json (babb3f2)
+- docs: code of conduct, governance and roadmap (0f105f9)
+- docs: bug report and feature request forms (568f3ff)
+- ci: monthly Dependabot updates for actions, npm and pip (f3eec04)
+- ci: CodeQL and OpenSSF Scorecard (80bf333)
+- chore(card): lint with ESLint's recommended rules in CI (49c7447)
+- ci: drop the DCO sign-off check (0527103)
+- docs(readme): the left card follows the robot after swinging around the room; the GIF and the futuristic screenshot without the scan wave (021bda1)
+- fix(card): no scan wave in the futuristic style (f501a9f)
+- docs(readme): the demo GIF's right card is the futuristic hologram (e2c19a6)
+- docs(readme): the demo GIF shows two cards side by side (6702916)
+- docs(readme): the demo GIF goes from 3D to Follow to Plan (27e4559)
+- docs(readme): a demo GIF that shows the room from the first frame and swings around it (bc66079)
+
 ## v0.1.11 - 2026-10-28
 
 - fix(map): don't warn that the robot sent no map while it's paused (45d9419)
