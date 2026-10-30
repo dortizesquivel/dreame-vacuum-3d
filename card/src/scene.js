@@ -32,7 +32,7 @@ const MOP_SPIN = 6;             // rad/s of the mop pads while it mops
 const ROOM_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#c84fb4', '#d6a72a', '#4fb6c8', '#7a5fd6', '#d65f5f', '#5f9e3a', '#8a8a8a'];
 const ease = (s) => (s < 0.5 ? 4 * s * s * s : 1 - Math.pow(-2 * s + 2, 3) / 2);
 
-// Futuristic style, from the mmWave 3D Card: a hologram with glowing edges; the scan wave starts at the robot.
+// Futuristic style, from the mmWave 3D Card: a hologram with glowing edges.
 const HOLO_VERTEX = `
   varying vec3 vW, vN;
   void main() {
@@ -41,18 +41,12 @@ const HOLO_VERTEX = `
     vN = normalize(mat3(modelMatrix) * normal);
     gl_Position = projectionMatrix * viewMatrix * w;
   }`;
-const HOLO_WAVE = `
-  uniform vec3 scanColor;
-  uniform vec2 center;
-  uniform float wave, waveOn;
-  float scan(vec3 p) { float d = length(p.xz - center) - wave; return waveOn * exp(-d * d / 0.05); }`;
 const HOLO_SURFACE = {
   vertexShader: HOLO_VERTEX,
   fragmentShader: `
     uniform vec3 color, base;
     uniform float opacity;
     varying vec3 vW, vN;
-    ${HOLO_WAVE}
     void main() {
       float rim = pow(1.0 - abs(dot(normalize(vN), normalize(cameraPosition - vW))), 2.0);
       float a = 0.06 + 0.34 * rim;
@@ -63,33 +57,24 @@ const HOLO_SURFACE = {
         a += 0.22 * line;
         c = mix(c, color, line);
       }
-      float w = scan(vW);
-      gl_FragColor = vec4(mix(c, scanColor, w), (a + 0.3 * w) * opacity);
+      gl_FragColor = vec4(c, a * opacity);
       #include <colorspace_fragment>
     }`,
 };
 const HOLO_EDGE = {
   vertexShader: `
-    varying vec3 vW;
     void main() {
-      vec4 w = modelMatrix * vec4(position, 1.0);
-      vW = w.xyz;
-      gl_Position = projectionMatrix * viewMatrix * w;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
     }`,
   fragmentShader: `
     uniform vec3 color;
     uniform float opacity;
-    varying vec3 vW;
-    ${HOLO_WAVE}
     void main() {
-      float w = scan(vW);
-      gl_FragColor = vec4(mix(color, scanColor, w), (0.5 + 0.5 * w) * opacity);
+      gl_FragColor = vec4(color, 0.5 * opacity);
       #include <colorspace_fragment>
     }`,
 };
 const HOLO_EDGE_ANGLE = 28;
-const WAVE_SPEED = 2.5;          // m/s
-const WAVE_REACH = 8;            // m before the wave starts again
 
 export class VacuumScene {
   constructor(container) {
@@ -294,7 +279,7 @@ export class VacuumScene {
     this.dirty = true;
   }
 
-  /** While the robot cleans, a ring pulses around it (and the futuristic style's scan wave starts at it). */
+  /** While the robot cleans, a ring pulses around it. */
   setCleaning(on) {
     this.robot.userData.cleaning = on;
     this.effects.setCleaning(on);
@@ -580,8 +565,7 @@ export class VacuumScene {
 
   _holoModel(root, opacity) {
     const u = {
-      color: { value: new Color() }, base: { value: new Color() }, scanColor: { value: new Color() },
-      opacity: { value: opacity }, wave: { value: 0 }, waveOn: { value: 0 }, center: { value: new Vector2() },
+      color: { value: new Color() }, base: { value: new Color() }, opacity: { value: opacity },
     };
     const common = { uniforms: u, transparent: true, depthWrite: false };
     const surface = new ShaderMaterial({ ...HOLO_SURFACE, ...common, side: FrontSide });
@@ -603,7 +587,6 @@ export class VacuumScene {
     const color = cssColor(this.model?.color, th.model, th.bg);
     u.color.value.set(color);
     u.base.value.set(mix(th.bg, color, th.dark ? 0.25 : 0.45));
-    u.scanColor.value.set(th.accent);
     for (const m of this.holo.materials) m.blending = th.dark ? AdditiveBlending : NormalBlending;
   }
 
@@ -804,14 +787,6 @@ export class VacuumScene {
       ring.scale.setScalar(1 + p * 1.6);
       ring.material.opacity = 0.55 * (1 - p);
       moving = true;
-    }
-    if (this.holo) {
-      const u = this.holo.uniforms;
-      u.waveOn.value = cleaning ? 1 : 0;
-      if (cleaning) {
-        u.wave.value = ((now / 1000) * WAVE_SPEED) % WAVE_REACH;
-        u.center.value.set(this.robot.position.x, this.robot.position.z);
-      }
     }
     if (this.effects.frame(now)) moving = true;
     if (this.controls.update()) moving = true;
