@@ -109,9 +109,16 @@ async def test_rpc_returns_the_result(session, cloud):
 
 
 async def test_rpc_without_a_result(session, cloud):
-    session.api("v2/home/rpc/1001", {"code": -2, "message": "device offline"})
+    session.api("v2/home/rpc/1001", {"code": 0, "message": "ok"})
 
     assert await cloud.rpc("1001", "get_properties", []) is None
+
+
+async def test_rpc_to_an_offline_robot_fails(session, cloud):
+    session.api("v2/home/rpc/1001", {"code": -2, "message": "device offline"})
+
+    with pytest.raises(CloudConnectionError, match="offline"):
+        await cloud.rpc("1001", "get_properties", [])
 
 
 async def test_rpc_sender_plugs_into_miot(session, cloud):
