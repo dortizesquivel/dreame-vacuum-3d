@@ -5,11 +5,12 @@ const SPEED = 0.3;     // mm/ms (0.3 m/s), about a robot's: to date a path that 
 /**
  * Add a path's new pieces to a trail. path: the whole task so far, as strokes [{ mode, points: [[x, y], …] }] (mm).
  * New pieces get times spread between the last update and `now`, so the trail dries as the robot drew it, not in steps;
- * a path seen for the first time (the card just opened) is dated backwards from `now` at the robot's speed. A path
- * that isn't the old one grown (a new task) starts a new trail.
+ * a path seen for the first time (the card just opened) is dated backwards from `now` at the robot's speed while it
+ * cleans (`live`), and long ago when it doesn't (a finished cleaning: dry). A path that isn't the old one grown (a new
+ * task) starts a new trail.
  *   trail: { seen: [points per stroke], first: 'x,y', last: ms, pieces: [{ mode, a: [x, y], b: [x, y], t }] }
  */
-export function extendTrail(trail, path, now) {
+export function extendTrail(trail, path, now, live = true) {
   const strokes = Array.isArray(path) ? path : [];
   const first = strokes[0]?.points?.[0]?.join() ?? null;
   const grown = trail && first === trail.first && strokes.length >= trail.seen.length
@@ -22,7 +23,7 @@ export function extendTrail(trail, path, now) {
     t.seen[i] = pts.length;
   });
   if (t.last === null) {
-    let at = now;
+    let at = live ? now : -Infinity;
     for (let k = added.length - 1; k >= 0; k--) {
       added[k].t = at;
       at -= Math.hypot(added[k].b[0] - added[k].a[0], added[k].b[1] - added[k].a[1]) / SPEED;
