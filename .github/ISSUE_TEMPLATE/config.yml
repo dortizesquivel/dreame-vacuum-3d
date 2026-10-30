@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Add a model
+    url: https://github.com/dortizesquivel/dreame-vacuum-3d/blob/main/CONTRIBUTING.md#adding-a-model-via-diagnostics
+    about: Your Dreame isn't listed as tested? Its diagnostics are how support for it gets added.
+  - name: Report a security problem
+    url: https://github.com/dortizesquivel/dreame-vacuum-3d/security/advisories/new
+    about: Privately, as SECURITY.md explains.

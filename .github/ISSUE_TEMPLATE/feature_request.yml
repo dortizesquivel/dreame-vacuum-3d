@@ -1,0 +1,32 @@
+name: Feature request
+description: Something you'd like Dreame Vacuum 3D to do.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before you write, check the [ideas already proposed](https://github.com/dortizesquivel/dreame-vacuum-3d/issues?q=label%3Aenhancement) and the [roadmap](https://github.com/dortizesquivel/dreame-vacuum-3d/blob/main/ROADMAP.md); give a 👍 to the ones you want.
+
+        To add support for another model, see [Adding a model via diagnostics](https://github.com/dortizesquivel/dreame-vacuum-3d/blob/main/CONTRIBUTING.md#adding-a-model-via-diagnostics).
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The situation, in your words. For example, "I want to see where the robot got stuck yesterday".
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What it could do
+      description: How you imagine it, in the integration, the card or both. A sketch or a screenshot of something similar helps.
+  - type: input
+    id: model
+    attributes:
+      label: Your vacuum
+      placeholder: Xiaomi Robot Vacuum X10+, dreame.vacuum.p2114a
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: How you use the vacuum in Home Assistant, other integrations or cards you combine it with…
