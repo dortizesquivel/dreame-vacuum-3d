@@ -22,10 +22,10 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util.hass_dict import HassKey
 
 from .const import DOMAIN
-from .coordinator import ACTIVE_STATUSES
+from .coordinator import ACTIVE_STATUSES, ACTIVE_TASKS
 from .device import map as dmap
 from .device.device import DreameDevice
-from .device.enums import Status, parse_enum
+from .device.enums import Status, TaskStatus, parse_enum
 from .protocol.cloud import CloudError
 from .protocol.miio_codec import MiioError
 from .protocol.miot import MiotError
@@ -314,7 +314,12 @@ class LiveMap:
         The first frame of a map is the reference: nothing is new then. When a cleaning starts, what the last one saw
         becomes the reference, so what shows up stays new until the next cleaning.
         """
-        active = parse_enum(Status, self._device.values.get("status")) in ACTIVE_STATUSES
+        values = self._device.values
+        # Paused, the robot's status isn't active but its task is: a resume continues the same cleaning.
+        active = (
+            parse_enum(Status, values.get("status")) in ACTIVE_STATUSES
+            or parse_enum(TaskStatus, values.get("task_status")) in ACTIVE_TASKS
+        )
         known = self._known
         if not known or known.get("map_id") != map_id:
             known = self._known = {"map_id": map_id, "before": sorted(seen), "last": sorted(seen)}

@@ -16,7 +16,7 @@ from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.dreame_vacuum_3d.const import DOMAIN
 from custom_components.dreame_vacuum_3d.device.capabilities import load
-from custom_components.dreame_vacuum_3d.device.enums import Status
+from custom_components.dreame_vacuum_3d.device.enums import Status, TaskStatus
 from custom_components.dreame_vacuum_3d.live_map import FIRST_RETRY, IDLE_EVERY
 from custom_components.dreame_vacuum_3d.protocol.cloud import CloudAuthError, CloudConnectionError
 from custom_components.dreame_vacuum_3d.protocol.miio import MiioTimeoutError
@@ -275,6 +275,22 @@ async def test_obstacles_furniture_and_what_is_new_since_the_last_cleaning(
 
     # Another saved map starts a new reference.
     assert await frame_with((7, 0), (5, 0), map_id=46) == []
+
+
+async def test_what_is_new_carries_over_a_pause(hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("custom_components.dreame_vacuum_3d.live_map.WHOLE_EVERY", 0)  # a whole frame each time
+    entry, _miio = await setup(hass)  # its first frame, with nothing on the floor, is the reference
+    device = entry.runtime_data.coordinator.device
+    device.request_map = AsyncMock(return_value=(_with((7, 0)), None))  # a box on the floor
+
+    for status, task in (
+        (Status.CLEANING, TaskStatus.AUTO_CLEANING),
+        (Status.PAUSED, TaskStatus.AUTO_CLEANING_PAUSED),
+        (Status.CLEANING, TaskStatus.AUTO_CLEANING),  # resumed: still the same cleaning
+    ):
+        device.values["status"], device.values["task_status"] = status.value, task.value
+        await entry.runtime_data.map.refresh()
+        assert entry.runtime_data.map.pose["new_cells"] == [7, 0, 1]
 
 
 def _logged(*frames: str, start: int = 100) -> list[dict]:
