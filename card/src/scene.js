@@ -219,9 +219,14 @@ export class VacuumScene {
   setModel(model) {
     const sig = JSON.stringify(model);
     if (sig === this.modelSig) return;
+    // Another style or dock of the same house doesn't change what the camera frames.
+    const sameHouse = this.modelBox && model && ['url', 'scale', 'upRotX'].every((k) => model[k] === this.model[k]);
     this.modelSig = sig;
     this.model = model;
-    this.modelBox = null;
+    if (!sameHouse) {
+      this.modelBox = null;
+      this.framed = false;
+    }
     this.holo = null;
     clearGroup(this.modelGroup);
     this._modelChanged();
@@ -237,7 +242,7 @@ export class VacuumScene {
       else root.traverse((o) => { if (o.isMesh) [].concat(o.material).forEach((m) => modelMaterial(m, model.opacity)); });
       this.modelGroup.updateMatrixWorld(true);
       this.modelBox = new Box3().setFromObject(this.modelGroup);
-      this.framed = false;
+      if (!sameHouse) this.framed = false;
       this._modelChanged();
     }).catch((err) => {
       if (this.modelSig === sig) this.onModelError?.(err);
@@ -253,7 +258,8 @@ export class VacuumScene {
 
   /**
    * map: { grid: { left, top, size, width, height }, cells: { id: [x, y, n, …] }, rooms: { id: { name, x, y } },
-   *        robot: [x, y, angle], dock: [x, y, angle], path: [{ mode, points: [[x, y], …] }], room, active: [id] }
+   *        robot: [x, y, angle], dock: [x, y, angle], path: [{ mode, points: [[x, y], …] }], room, active: [id],
+   *        zones: [[x0, y0, x1, y1], …] }
    */
   setMap(map) {
     this.map = map;
@@ -263,8 +269,12 @@ export class VacuumScene {
       this.xf = { ...robotToModel(map.dock, this.model), dockSig };
       this.mapSig = this.overlaySig = this.thingSig = '';
       this._buildStuck();
+      // The poses so far are in the old frame, nothing to glide from: _setPose places a robot that doesn't show.
+      this.queue = [];
+      this.glide = null;
+      this.robot.visible = false;
     }
-    const sig = `${map.map_id}|${Object.entries(map.cells ?? {}).map(([k, v]) => `${k}:${v.length}`).join()}`;
+    const sig = `${map.map_id}|${Object.entries(map.cells ?? {}).map(([k, v]) => `${k}:${v.length}`).join()}|${JSON.stringify(map.rooms)}`;
     if (sig !== this.mapSig) {
       this.mapSig = sig;
       this._buildMap();
@@ -701,6 +711,15 @@ export class VacuumScene {
     const down = this._down;
     this._down = null;
     if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 6 || !this.map?.grid) return;
+    // A room's name floats above the floor, and can stand over a wall or the next room: a tap on it means its room.
+    const label = this.labelGroup.children.find(({ element }) => {
+      const r = element.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    });
+    if (label) {
+      this.onRoomTap?.(label.userData.id);
+      return;
+    }
     const at = this._floorAt(e);
     if (at) this.onRoomTap?.(roomAt(this.map, ...at));
   }
@@ -970,6 +989,7 @@ function clearGroup(group) {
   group.traverse((o) => {
     if (o.isCSS2DObject) o.element.remove();
     if (o === group) return;
+    if (o.isInstancedMesh) o.dispose();   // its instance matrix: the geometry's dispose leaves that on the GPU
     o.geometry?.dispose();
     if (o.material) [].concat(o.material).forEach(disposeMaterial);
   });

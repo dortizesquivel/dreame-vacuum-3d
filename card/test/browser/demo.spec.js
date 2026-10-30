@@ -644,3 +644,89 @@ test('the passes go back to one once a cleaning starts', async ({ page }) => {
   await card.locator('.panel .clean').click();
   expect(await page.evaluate(() => window.demo.calls.at(-1).data)).not.toHaveProperty('repeats');
 });
+
+test('renaming a room renames its label', async ({ page }) => {
+  await open(page, '&house=flat');
+  await page.evaluate(() => {
+    const { card } = window.demo, rooms = structuredClone(card._map.rooms);
+    rooms[Object.keys(rooms)[0]].name = 'Pantry';
+    card._onMap({ rooms });
+  });
+  await expect(page.locator('dreame-vacuum-3d-card .room', { hasText: 'Pantry' })).toHaveCount(1);
+});
+
+for (const view of ['3d', 'plan']) {
+  test(`a tap on a room's name picks that room, in every room (${view})`, async ({ page }) => {
+    await open(page, `&house=flat&view=${view}`);
+    await page.waitForTimeout(1500);   // the first frames place the labels
+    const labels = await page.evaluate(() => [...window.demo.card.shadowRoot.querySelectorAll('.room')].map((el) => {
+      const r = el.getBoundingClientRect();
+      return { name: el.textContent, x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    }));
+    expect(labels.length).toBe(6);
+    for (const { name, x, y } of labels) {
+      await page.evaluate(() => window.demo.card._pick(null));
+      await page.mouse.click(x, y);
+      expect(await page.evaluate(() => { const c = window.demo.card; return c._map.rooms[c._picked]?.name; })).toBe(name);
+    }
+  });
+}
+
+test('a zone gets dust in the zone, not over the whole house', async ({ page }) => {
+  await open(page, '&house=flat');
+  const { box, zone } = await page.evaluate(async () => {
+    const { card } = window.demo, r = Object.values(card._map.rooms)[0];
+    const zone = [r.x - 500, r.y - 500, r.x + 500, r.y + 500];
+    await card._hass.callService('dreame_vacuum_3d', 'vacuum_clean_zone', { zone });
+    const fx = card._scene.effects, { ctx, canvas } = fx.layers.dust, px = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    // Where the dust is, on the canvas.
+    const box = [Infinity, Infinity, -1, -1];
+    for (let i = 3, n = 0; i < px.length; i += 4, n++) {
+      if (!px[i]) continue;
+      const x = n % canvas.width, y = Math.floor(n / canvas.width);
+      box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], y); box[2] = Math.max(box[2], x); box[3] = Math.max(box[3], y);
+    }
+    return { box, zone: [...fx._px([zone[0], zone[1]]), ...fx._px([zone[2], zone[3]])] };
+  });
+  expect(box[2]).toBeGreaterThan(0);   // there is dust
+  expect(box[0]).toBeGreaterThanOrEqual(Math.floor(zone[0]));
+  expect(box[1]).toBeGreaterThanOrEqual(Math.floor(zone[1]));
+  expect(box[2]).toBeLessThanOrEqual(Math.ceil(zone[2]));
+  expect(box[3]).toBeLessThanOrEqual(Math.ceil(zone[3]));
+});
+
+test('a map too big for the effects\' canvases keeps its shape on them', async ({ page }) => {
+  await open(page);
+  const fit = await page.evaluate(() => {
+    const s = window.demo.card._scene, fx = s.effects, grid = { ...s.map.grid, width: 3000, height: 1000 };
+    fx.setMap({ ...s.map, grid }, s.xf);
+    const { canvas } = fx.layers.dust, mm = (n) => n * grid.size * fx.scale;
+    return { across: mm(grid.width) / canvas.width, down: mm(grid.height) / canvas.height, widest: canvas.width };
+  });
+  expect(fit.widest).toBe(2048);
+  expect(fit.across).toBeCloseTo(1, 2);   // the grid fills the canvas both ways, as the texture lays it on the floor
+  expect(fit.down).toBeCloseTo(1, 2);
+});
+
+test('rebuilding the map lets go of the walls\' instance buffer', async ({ page }) => {
+  await open(page, '&model=0');
+  expect(await page.evaluate(() => {
+    const s = window.demo.card._scene, walls = s.mapGroup.children.find((o) => o.isInstancedMesh);
+    let freed = false;
+    walls.addEventListener('dispose', () => { freed = true; });
+    s.mapSig = '';
+    s.setMap(s.map);
+    return freed;
+  })).toBe(true);
+});
+
+test('after a calibration the robot is at its new place at once, it does not glide there', async ({ page }) => {
+  await open(page);
+  await modelLoaded(page);
+  await lagging(page);
+  await recalibrate(page);
+  expect(await page.evaluate(() => {
+    const s = window.demo.card._scene, [x, z] = s.xf.point(...s.map.robot), p = s.robot.position;
+    return { gliding: !!s.glide, queued: s.queue.length, off: Math.hypot(p.x - x, p.z - z) < 1e-6 };
+  })).toEqual({ gliding: false, queued: 0, off: true });
+});

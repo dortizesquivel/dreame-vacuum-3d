@@ -67,6 +67,7 @@ export class Sim {
     this.newCells = [];
     this.route = [];
     this.active = [];
+    this.zones = [];          // what a zone cleaning was sent to, in mm
     this.state = 'docked';    // as Home Assistant's vacuum entity has it
     this.error = null;        // what stopped it, as the integration's error sensor has it
     this.held = null;         // the state it had before a pause or an error
@@ -169,6 +170,7 @@ export class Sim {
     const [a, b] = [this.toCell([x0, y0]), this.toCell([x1, y1])];
     this.clean([[a[0], a[1], b[0], b[1]]]);
     this.active = [];
+    this.zones = [[x0, y0, x1, y1]];
   }
 
   /** Clean these rooms (or zones, in cells), in order, then go back to the dock. modes: { room: vacuum | mop | both }, else this.mode, else both. */
@@ -195,6 +197,7 @@ export class Sim {
     this.route = route.map((r) => ({ ...r, mm: this.toMm(r.c) }));
     this.route.push({ mm: this.map.dock.slice(0, 2), mode, home: true });
     this.active = rooms;
+    this.zones = [];
     this.path = [];
     this.found = [];
     this.newCells = [];
@@ -290,6 +293,7 @@ export class Sim {
       this.pose = [...this.map.dock];
       this.state = 'docked';
       this.active = [];
+      this.zones = [];
     }
   }
 
@@ -308,6 +312,7 @@ export class Sim {
       path: this.path.map((st) => ({ mode: st.mode, points: st.points.slice() })),
       room: this.map.rooms[id] ? id : null,
       active: this.active.slice(),
+      zones: this.zones.slice(),
       obstacles: this.found.slice(),
       new_cells: this.newCells.slice(),
     };
