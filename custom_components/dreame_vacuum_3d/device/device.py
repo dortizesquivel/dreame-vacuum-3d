@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from random import randrange
@@ -62,6 +63,7 @@ class DreameDevice:
         self.values: dict[str, Any] = {}
         self._remote_control = False
         self._local_retry_at = 0.0
+        self._bits_lock = asyncio.Lock()
         # Rooms of the segment clean this integration started, for the task_status event.
         self.segments: list[int] | None = None
 
@@ -131,6 +133,14 @@ class DreameDevice:
         siid, piid = self.caps.properties[key]
         await miot.set_property(self._send, siid, piid, value)
         self.values[key] = value
+
+    async def set_bit(self, key: str, bit: int, on: bool) -> None:
+        """Turn one bit of a bitmask property on or off, one write at a time, from the mask the robot has now: two
+        at once would both start from the same mask, and a poll that ends after a write leaves a stale one."""
+        async with self._bits_lock:
+            mask = (await self._get([key])).get(key, self.values.get(key))
+            mask = mask if isinstance(mask, int) else 0
+            await self.set(key, mask | bit if on else mask & ~bit)
 
     async def reset_consumable(self, name: str) -> Any:
         return await self._action(f"reset_{name}")

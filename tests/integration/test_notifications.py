@@ -6,6 +6,7 @@ from homeassistant.components import persistent_notification as pn
 from homeassistant.const import ATTR_DEVICE_ID, ATTR_ENTITY_ID
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers import entity_registry as er
+import pytest
 
 from custom_components.dreame_vacuum_3d.const import (
     CONF_NOTIFY,
@@ -77,6 +78,34 @@ async def test_task_status_completed_and_cancelled(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
     assert len(events) == 1
     assert events[0].data["completed"] is False
+
+
+@pytest.mark.parametrize(
+    "paused",
+    [
+        TaskStatus.SEGMENT_DOCKING_PAUSED,
+        TaskStatus.SEGMENT_MOPPING_PAUSED,
+        TaskStatus.CUSTOM_CLEANING_WASHING_PAUSED,
+    ],
+)
+async def test_pause_and_resume_keep_the_task(hass: HomeAssistant, paused: TaskStatus) -> None:
+    entry, miio = await setup_fixture_entry(hass)
+    coordinator = entry.runtime_data.coordinator
+    events: list[Event] = []
+    hass.bus.async_listen(EVENT_TASK_STATUS, events.append)
+    coordinator.device.segments = [3, 5]
+
+    for status in (TaskStatus.SEGMENT_CLEANING, paused, TaskStatus.SEGMENT_CLEANING):
+        miio.overrides[_TASK] = status.value
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+    assert events == []
+    assert coordinator.device.segments == [3, 5]
+
+    miio.overrides[_TASK] = TaskStatus.COMPLETED.value
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert [(e.data["completed"], e.data["segments"]) for e in events] == [(True, [3, 5])]
 
 
 async def test_consumable_threshold_cross(hass: HomeAssistant) -> None:

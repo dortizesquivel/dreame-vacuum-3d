@@ -22,10 +22,10 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util.hass_dict import HassKey
 
 from .const import DOMAIN
-from .coordinator import ACTIVE_STATUSES
+from .coordinator import ACTIVE_STATUSES, ACTIVE_TASKS
 from .device import map as dmap
 from .device.device import DreameDevice
-from .device.enums import Status, parse_enum
+from .device.enums import Status, TaskStatus, parse_enum
 from .protocol.cloud import CloudError
 from .protocol.miio_codec import MiioError
 from .protocol.miot import MiotError
@@ -82,6 +82,7 @@ class LiveMap:
         # While it cleans the robot logs its frames in the cloud: partial ones (P) in 6.1, a whole one's file in 6.3.
         self._fetch_history = fetch_history
         self._since = 0  # cloud time (s) of the next log entries to read
+        self._failed_whole: str | None = None  # the logged whole frame whose file couldn't be read
         self._at: tuple[int, int] | None = None  # (map id, frame id) the pose is at
         self._whole_at = -float(WHOLE_EVERY)  # monotonic time of the last whole frame
         self._watched = watched  # whether a card shows the map now
@@ -192,7 +193,6 @@ class LiveMap:
         partial = await fetch("{}.{}".format(*props["map_data"]), since)
         whole = await fetch("{}.{}".format(*props["object_name"]), since)
         stamp = lambda r: int(r.get("time") or 0)  # noqa: E731
-        self._since = max([since, *(stamp(r) + 1 for r in partial + whole)])
         entries = [(stamp(r), False, r) for r in partial]
         if whole:
             entries.append((stamp(newest := max(whole, key=stamp)), True, newest))
@@ -201,12 +201,20 @@ class LiveMap:
             if (value := _logged_value(record)) is None:
                 continue
             if is_whole:
-                frames.append(await self._file_frame(value))
+                try:
+                    frames.append(await self._file_frame(value))
+                except _ERRORS as err:
+                    if value == self._failed_whole:  # the second time: go on without it rather than stall on it
+                        _LOGGER.debug("Skipping a logged whole map frame: %s", err)
+                        continue
+                    self._failed_whole = value  # read these entries again next time, to try it once more
+                    raise
                 continue
             try:
                 frames.append(dmap.decode(value, iv=self._device.caps.map_iv))
             except dmap.MapError as err:
                 _LOGGER.debug("Skipping a logged map frame: %s", err)
+        self._since = max([since, *(stamp(r) + 1 for r in partial + whole)])
         return frames
 
     @callback
@@ -314,7 +322,12 @@ class LiveMap:
         The first frame of a map is the reference: nothing is new then. When a cleaning starts, what the last one saw
         becomes the reference, so what shows up stays new until the next cleaning.
         """
-        active = parse_enum(Status, self._device.values.get("status")) in ACTIVE_STATUSES
+        values = self._device.values
+        # Paused, the robot's status isn't active but its task is: a resume continues the same cleaning.
+        active = (
+            parse_enum(Status, values.get("status")) in ACTIVE_STATUSES
+            or parse_enum(TaskStatus, values.get("task_status")) in ACTIVE_TASKS
+        )
         known = self._known
         if not known or known.get("map_id") != map_id:
             known = self._known = {"map_id": map_id, "before": sorted(seen), "last": sorted(seen)}

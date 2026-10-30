@@ -27,25 +27,8 @@ from .const import (
     EVENT_TASK_STATUS,
     NOTIFICATION,
 )
-from .coordinator import DreameDataUpdateCoordinator
+from .coordinator import ACTIVE_TASKS, DreameDataUpdateCoordinator
 from .device.enums import ErrorCode, LowWaterWarning, TaskStatus, parse_enum
-
-_ACTIVE_TASK = frozenset(
-    {
-        TaskStatus.AUTO_CLEANING,
-        TaskStatus.ZONE_CLEANING,
-        TaskStatus.SEGMENT_CLEANING,
-        TaskStatus.SPOT_CLEANING,
-        TaskStatus.FAST_MAPPING,
-        TaskStatus.CRUISING_PATH,
-        TaskStatus.CRUISING_POINT,
-        TaskStatus.STATION_CLEANING,
-        TaskStatus.AUTO_CLEANING_PAUSED,
-        TaskStatus.ZONE_CLEANING_PAUSED,
-        TaskStatus.SEGMENT_CLEANING_PAUSED,
-        TaskStatus.SPOT_CLEANING_PAUSED,
-    }
-)
 
 
 class DreameNotifier:
@@ -136,11 +119,11 @@ class DreameNotifier:
         current = parse_enum(TaskStatus, values.get("task_status"))
         if previous is None or current is None:
             return
-        if previous not in _ACTIVE_TASK:
+        if previous not in ACTIVE_TASKS:
             return
         if current is TaskStatus.COMPLETED:
             completed = True
-        elif current not in _ACTIVE_TASK:
+        elif current not in ACTIVE_TASKS:
             completed = False
         else:
             return
