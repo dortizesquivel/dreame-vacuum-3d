@@ -15,7 +15,8 @@ const MAX_PX = 2048;
 const VACUUM_WIDTH = 280;     // mm swept by the brushes and the suction
 const MOP_WIDTH = 340;        // mm under the mop pads
 const GLINT_MS = 20000;       // how long the floor just vacuumed glints
-const REDRAW_MS = 400;        // how often drying is redrawn
+const REDRAW_MS = 1000;       // how often drying is redrawn, at most
+const TILE = 32;              // canvas px: drying redraws only the tiles where a piece came, went or dried a step
 const LEVELS = 8;             // drying is drawn in this many steps, each one a single stroke (no darker overlaps)
 const SPECKS = 48;
 
@@ -33,6 +34,7 @@ export class FloorEffects {
     this.mode = null;          // what the robot is doing now: vacuum, mop or both
     this.dustOpacity = 0;
     this.drawnAt = 0;
+    this.full = true;          // draw the drying layers again whole, not only where they changed
     this.specks = makeSpecks();
     this.specks.visible = false;
     robot.add(this.specks);
@@ -83,12 +85,14 @@ export class FloorEffects {
     if (this.layers) this.dustPattern = dustPattern(this.layers.dust.ctx, theme.dark);
     this.dustSig = '';
     this.drawnAt = 0;
+    this.full = true;
     this._drawCoverage();
   }
 
   setDryTime(minutes) {
     this.dryMs = Math.max(0.1, minutes) * 60000;
     this.drawnAt = 0;
+    this.full = true;
   }
 
   setCleaning(on) {
@@ -101,13 +105,15 @@ export class FloorEffects {
   setMap(map, xf) {
     const g = map.grid;
     if (!g || !this.theme) return;
-    const sig = `${g.left},${g.top},${g.width},${g.height},${g.size}|${xf.dockSig}|${xf.floor}`;
+    // Where the map's origin lands and which way it turns: the map's dock and the model's (a new model, or calibrated again).
+    const sig = `${g.left},${g.top},${g.width},${g.height},${g.size}|${xf.point(0, 0)}|${xf.heading(0)}|${xf.floor}`;
     if (sig !== this.gridSig) {
       this.gridSig = sig;
       this._build(g, xf);
     }
     this.map = map;
-    this.trail = extendTrail(this.trail, map.path, performance.now());
+    // Not cleaning, a path already there is a finished cleaning's: it dried long ago.
+    this.trail = extendTrail(this.trail, map.path, performance.now(), this.cleaning);
     const last = this.trail.pieces[this.trail.pieces.length - 1];
     this.mode = last?.mode ?? null;
     this._updateDust();
@@ -119,11 +125,15 @@ export class FloorEffects {
     const map = this.map;
     const rooms = this.cleaning ? (map.active?.length ? map.active.map(String) : Object.keys(map.rooms ?? {})) : [];
     this.dustRooms = rooms.filter((id) => map.cells?.[id]);
-    const sig = `${this.dustRooms.join()}|${this.trail.pieces.length}|${this.trail.first}`;
-    if (sig !== this.dustSig) {
+    const sig = this.dustRooms.join(), n = this.trail.pieces.length;
+    if (sig !== this.dustSig || this.trail !== this.dustTrail) {
       this.dustSig = sig;
       this._drawDust(map.cells);
+    } else if (n > this.dustDrawn && this.dustRooms.length) {
+      this._clearDust(this.trail.pieces.slice(this.dustDrawn));   // the trail grew: clear only its new pieces
     }
+    this.dustTrail = this.trail;
+    this.dustDrawn = n;
   }
 
   _build(g, xf) {
@@ -151,7 +161,7 @@ export class FloorEffects {
       this.group.add(mesh);
       return { canvas, ctx: canvas.getContext('2d'), tex, mesh };
     };
-    this.env ??= new PMREMGenerator(this.renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+    this.env ??= makeEnv(this.renderer);
     const flat = { transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 };
     // Above a rug's top (about 12 mm in the demo's room), below the room overlay (LIFT in scene.js): a layer inside the rug
     // flickers as the camera turns.
@@ -191,19 +201,40 @@ export class FloorEffects {
     const k = this.grid.size * this.scale;
     ctx.fillStyle = this.dustPattern;
     for (const id of this.dustRooms) for (const [x0, y0, x1, y1] of cellRects(cells[id])) ctx.fillRect(x0 * k, y0 * k, (x1 - x0) * k, (y1 - y0) * k);
+    tex.needsUpdate = true;
+    this._clearDust(this.trail.pieces);
+  }
+
+  /** Clear the dust where these pieces vacuumed. */
+  _clearDust(pieces) {
+    const { ctx, tex } = this.layers.dust;
+    const swept = pieces.filter((p) => vacuums(p.mode));
+    if (!swept.length) return;
     ctx.globalCompositeOperation = 'destination-out';
     ctx.lineCap = ctx.lineJoin = 'round';
     ctx.strokeStyle = '#000';
-    this._stroke(ctx, this.trail.pieces.filter((p) => vacuums(p.mode)), VACUUM_WIDTH);
+    this._stroke(ctx, swept, VACUUM_WIDTH);
     ctx.globalCompositeOperation = 'source-over';
     tex.needsUpdate = true;
   }
 
-  /** Redraw what changes with time: the glint fading and the floor drying. Returns whether anything is still changing. */
+  /** After the WebGL context was lost: the wet floor's reflections were drawn on the GPU, so they are made again. */
+  restore() {
+    if (!this.env) return;
+    this.env.dispose();
+    this.env = makeEnv(this.renderer);
+    if (this.layers) this.layers.wet.mesh.material.envMap = this.env;
+  }
+
+  /**
+   * Redraw what changes with time: the glint fading and the floor drying, each in a few steps. Only the tiles where a
+   * piece came, went or dried a step are drawn again (a long trail is slow to draw whole, with the blur, in software).
+   * Returns whether anything is still changing (busy) and whether it drew anything (changed).
+   */
   _drawDrying(now) {
     const { wet, glint } = this.layers;
     const pieces = this.trail?.pieces ?? [];
-    let busy = false;
+    let busy = false, changed = false;
     for (const [layer, keep, life, width, paint] of [
       [glint, vacuums, GLINT_MS, VACUUM_WIDTH, (ctx, s) => { ctx.strokeStyle = `rgba(255,255,255,${0.14 * s})`; return 1; }],
       [wet, mops, this.dryMs, MOP_WIDTH, (ctx, s) => {
@@ -212,26 +243,54 @@ export class FloorEffects {
       }],
     ]) {
       const { ctx, canvas, tex } = layer;
+      const levels = new Map();   // piece → its drying step
+      for (const p of pieces) {
+        if (!keep(p.mode) || now - p.t >= life) continue;
+        const s = layer === wet ? wetness(now - p.t, life) : 1 - (now - p.t) / life;
+        if (s > 0) levels.set(p, Math.min(LEVELS - 1, Math.floor(s * LEVELS)));
+      }
+      busy ||= levels.size > 0;
+      const cols = Math.ceil(canvas.width / TILE), rows = Math.ceil(canvas.height / TILE);
+      const pad = (width * this.scale) / 2 + 6;   // half the stroke, and the blur
+      // The tiles a piece's stroke reaches, until `each` returns true.
+      const tiles = (p, each) => {
+        const [ax, ay] = this._px(p.a), [bx, by] = this._px(p.b);
+        const x0 = Math.max(0, Math.floor((Math.min(ax, bx) - pad) / TILE)), x1 = Math.min(cols - 1, Math.floor((Math.max(ax, bx) + pad) / TILE));
+        const y0 = Math.max(0, Math.floor((Math.min(ay, by) - pad) / TILE)), y1 = Math.min(rows - 1, Math.floor((Math.max(ay, by) + pad) / TILE));
+        for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (each(y * cols + x)) return true;
+        return false;
+      };
+      let dirty = null;   // the tiles to draw again; null: all of them
+      if (layer.levels && !this.full) {
+        dirty = new Set();
+        const mark = (p) => tiles(p, (i) => { dirty.add(i); });
+        for (const [p, level] of levels) if (layer.levels.get(p) !== level) mark(p);
+        for (const p of layer.levels.keys()) if (!levels.has(p)) mark(p);
+        if (!dirty.size) continue;
+      }
+      layer.levels = levels;
+      ctx.save();
+      if (dirty) {
+        ctx.beginPath();
+        for (const i of dirty) ctx.rect((i % cols) * TILE, Math.floor(i / cols) * TILE, TILE, TILE);
+        ctx.clip();
+      }
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.lineCap = ctx.lineJoin = 'round';
       ctx.filter = 'blur(1.5px)';
       const steps = Array.from({ length: LEVELS }, () => []);
-      for (const p of pieces) {
-        if (!keep(p.mode) || now - p.t >= life) continue;
-        const s = layer === wet ? wetness(now - p.t, life) : 1 - (now - p.t) / life;
-        if (s <= 0) continue;
-        steps[Math.min(LEVELS - 1, Math.floor(s * LEVELS))].push(p);
-        busy = true;
-      }
+      for (const [p, level] of levels) if (!dirty || tiles(p, (i) => dirty.has(i))) steps[level].push(p);
       steps.forEach((group, i) => {
         if (!group.length) return;
         const s = (i + 1) / LEVELS;
         this._stroke(ctx, group, width * paint(ctx, s));
       });
-      ctx.filter = 'none';
+      ctx.restore();
       tex.needsUpdate = true;
+      changed = true;
     }
-    return busy;
+    this.full = false;
+    return { busy, changed };
   }
 
   /** Called every frame; returns whether the scene needs drawing. */
@@ -245,9 +304,9 @@ export class FloorEffects {
       changed = true;
     }
     if (now - this.drawnAt >= REDRAW_MS) {
-      this.busy = this._drawDrying(now);
-      this.drawnAt = this.busy ? now : Infinity;   // nothing wet or glinting: wait for the next map
-      changed = true;
+      const { busy, changed: drew } = this._drawDrying(now);
+      this.drawnAt = busy ? now : Infinity;   // nothing wet or glinting: wait for the next map
+      if (drew) changed = true;
     }
     const sucking = this.cleaning && vacuums(this.mode) && this.shown.dust;
     this.specks.visible = sucking;
@@ -255,7 +314,7 @@ export class FloorEffects {
       moveSpecks(this.specks, now);
       changed = true;
     }
-    return changed || this.busy;
+    return changed;
   }
 
   dispose(all = true) {
@@ -296,6 +355,14 @@ function moveSpecks(points, now) {
 }
 
 const frac = (v) => v - Math.floor(v);
+
+/** A room's light to reflect, for the wet floor's sheen. */
+function makeEnv(renderer) {
+  const pmrem = new PMREMGenerator(renderer);
+  const env = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  pmrem.dispose();
+  return env;
+}
 
 /** Fine dust and a faint haze, the same every time (a seeded pattern). */
 function dustPattern(ctx, dark) {

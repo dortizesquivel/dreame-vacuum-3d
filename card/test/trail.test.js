@@ -33,3 +33,10 @@ test('wetness and modes', () => {
   assert.deepEqual(['vacuum', 'mop', 'both'].map(vacuums), [true, false, true]);
   assert.deepEqual(['vacuum', 'mop', 'both'].map(mops), [false, true, true]);
 });
+
+test('a path already there when nothing is cleaning is from a finished cleaning: dry', () => {
+  const t = extendTrail(null, [stroke('mop', [0, 0], [300, 0], [300, 600])], 10000, false);
+  assert.deepEqual(t.pieces.map((p) => wetness(10000 - p.t, 60000)), [0, 0]);
+  const more = extendTrail(t, [stroke('mop', [0, 0], [300, 0], [300, 600], [600, 600])], 11000, false);
+  assert.equal(wetness(11000 - more.pieces[2].t, 60000), 1);   // what it draws after that is new
+});

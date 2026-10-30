@@ -345,6 +345,187 @@ test('past cleanings: replay one, and show the coverage of the last ones', async
   expect(coverage).toEqual({ paths: 3, shown: true });
 });
 
+/** Start cleaning every room, let the robot drawn catch up, then send a batch of poses at once so it lags behind. */
+async function lagging(page) {
+  await page.evaluate(() => { const { sim, send, card } = window.demo; sim.clean(Object.keys(card._map.rooms).map(Number)); send(); });
+  await run(page, 10);
+  await page.waitForFunction(() => { const s = window.demo.card._scene; return !s.glide && !s.queue.length; });
+  await run(page, 15);
+}
+
+/** Move the model's dock and turn it a quarter turn, as calibrating it again does. */
+const recalibrate = (page) => page.evaluate(() => {
+  const s = window.demo.card._scene, { position: [x, y, z], heading } = s.model.dock;
+  s.setModel({ ...s.model, dock: { position: [x + 0.5, y, z - 0.3], heading: heading + 90 } });
+});
+
+test('the floor effects move with the model when its dock is calibrated again', async ({ page }) => {
+  await open(page);
+  await modelLoaded(page);
+  await run(page, 20);
+  await recalibrate(page);
+  const off = await page.evaluate(() => {
+    const s = window.demo.card._scene, g = s.map.grid, [X, Z] = s.xf.point(g.left, g.top);
+    return Object.values(s.effects.layers).map((l) => {
+      const p = l.mesh.geometry.attributes.position;
+      return Math.hypot(p.getX(0) - X, p.getZ(0) - Z);
+    });
+  });
+  expect(Math.max(...off)).toBeLessThan(1e-6);
+});
+
+test('the stuck mark is where the robot really is, and moves with the model', async ({ page }) => {
+  await open(page);
+  await modelLoaded(page);
+  await lagging(page);
+  const offset = () => page.evaluate(() => {
+    const s = window.demo.card._scene, [X, Z] = s.xf.point(...s.map.robot), ring = s.stuckGroup.children[0].position;
+    return { lag: s.queue.length, off: Math.hypot(ring.x - X, ring.z - Z) };
+  });
+  await page.evaluate(() => window.demo.card._scene.markStuck('Stuck'));
+  const marked = await offset();
+  expect(marked.lag).toBeGreaterThan(0);   // the robot drawn is still behind
+  expect(marked.off).toBeLessThan(1e-6);
+  await recalibrate(page);
+  expect((await offset()).off).toBeLessThan(1e-6);
+});
+
+test('the path shown only grows while the robot catches up with a batch', async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => { const { sim, send, card } = window.demo; sim.clean(Object.keys(card._map.rooms).map(Number)); send(); });
+  await run(page, 10);
+  await page.waitForFunction(() => { const s = window.demo.card._scene; return !s.glide && !s.queue.length; });
+  const { shown, trails, overflowed } = await page.evaluate(async () => {
+    const { sim, send, card } = window.demo, s = card._scene, shown = [], trails = new Set();
+    const look = () => { shown.push(s.shownPoints); trails.add(s.effects.trail); };
+    look();
+    for (let i = 0; i < 30; i++) { sim.step(0.5); send(); look(); }   // a batch of poses at once, as from the integration
+    const overflowed = s.queue.length >= 8;
+    while (s.glide || s.queue.length) { await new Promise((r) => setTimeout(r, 20)); look(); }
+    return { shown, trails: trails.size, overflowed };
+  });
+  expect(overflowed).toBe(true);   // more poses came than it queues: it catches up through the skipped ones
+  expect(shown).toEqual([...shown].sort((a, b) => a - b));
+  expect(trails).toBe(1);   // the floor effects' trail only grew, it didn't start over
+});
+
+test('a new cleaning shows at once, not after the last one\'s poses', async ({ page }) => {
+  await open(page);
+  await lagging(page);
+  const after = await page.evaluate(() => {
+    const { sim, send, card } = window.demo, s = card._scene;
+    sim.clean([Number(Object.keys(card._map.rooms)[0])]);
+    send();
+    for (let i = 0; i < 2; i++) { sim.step(0.5); send(); }
+    return { queued: s.queue.length, ahead: s._pathAhead(), points: s.map.path.flatMap((st) => st.points).length };
+  });
+  expect(after.queued).toBeLessThanOrEqual(3);   // only the new cleaning's poses
+  expect(after.ahead).toBeLessThanOrEqual(after.points);
+});
+
+test('a wet floor that is only drying is drawn about once a second, not every frame', async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => { const { sim, send, card } = window.demo; sim.clean(Object.keys(card._map.rooms).map(Number)); send(); });
+  await run(page, 20);
+  // Home, so the demo stops sending poses (each one draws the scene).
+  await page.evaluate(() => { const { sim, send } = window.demo; sim.goHome(); while (sim.state !== 'docked') { sim.step(0.5); send(); } });
+  await page.waitForFunction(() => { const s = window.demo.card._scene; return !s.glide && !s.queue.length; });
+  // The dust fades out and the camera settles.
+  await page.waitForFunction(() => window.demo.card._scene.effects.layers.dust.mesh.material.opacity < 0.006);
+  await page.waitForTimeout(500);
+  const { renders, wet } = await page.evaluate(async () => {
+    const s = window.demo.card._scene, render = s.renderer.render.bind(s.renderer);
+    let renders = 0;
+    s.renderer.render = (...a) => { renders++; return render(...a); };
+    await new Promise((r) => setTimeout(r, 3000));
+    s.renderer.render = render;
+    const now = performance.now();
+    return { renders, wet: s.effects.trail.pieces.some((p) => p.mode !== 'vacuum' && now - p.t < s.effects.dryMs) };
+  });
+  expect(wet).toBe(true);
+  expect(renders).toBeLessThanOrEqual(6);   // 3 s: about once a second, with room for a slow runner (every frame: well over 100)
+});
+
+test('the scene comes back after the WebGL context is lost and restored', async ({ page }) => {
+  await open(page);
+  await page.waitForTimeout(1500);   // nothing moves: the scene draws only when something changes
+  const after = await page.evaluate(async () => {
+    const s = window.demo.card._scene, gl = s.renderer.getContext(), render = s.renderer.render.bind(s.renderer), env = s.effects.env;
+    // What each drawing leaves on the canvas: how many pixels show something.
+    const drawn = [];
+    s.renderer.render = (...a) => {
+      render(...a);
+      const px = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+      gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      let n = 0;
+      for (let i = 3; i < px.length; i += 4) if (px[i]) n++;
+      drawn.push(n);
+    };
+    const ext = gl.getExtension('WEBGL_lose_context');
+    ext.loseContext();
+    await new Promise((r) => setTimeout(r, 300));
+    drawn.length = 0;
+    ext.restoreContext();
+    await new Promise((r) => setTimeout(r, 1000));
+    s.renderer.render = render;
+    return { drawn: drawn.at(-1) ?? 0, env: s.effects.env !== env };
+  });
+  expect(after.drawn).toBeGreaterThan(1000);
+  expect(after.env).toBe(true);   // the wet floor's reflections are made again: a lost context loses what was drawn into them
+});
+
+test('the camera frames the house again when the card resizes', async ({ page }) => {
+  await open(page);
+  const camera = () => page.evaluate(() => window.demo.card._scene.camera.position.toArray());
+  const before = await camera();
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.waitForTimeout(500);
+  const after = await camera();
+  const fitted = await page.evaluate(() => { const s = window.demo.card._scene; s.setView(s.view, true); return s.camera.position.toArray(); });
+  expect(Math.hypot(...fitted.map((v, i) => v - before[i]))).toBeGreaterThan(0.1);   // the narrower card needs another fit
+  expect(Math.hypot(...fitted.map((v, i) => v - after[i]))).toBeLessThan(1e-6);
+});
+
+test('the floor effects redraw only around what changed, the same as drawing it all', async ({ page }) => {
+  await open(page, '&house=flat&dry=30');
+  await page.evaluate(() => { const { sim, send, card } = window.demo; sim.clean(Object.keys(card._map.rooms).map(Number)); send(); });
+  await run(page, 900, 3);
+  await page.waitForFunction(() => { const s = window.demo.card._scene; return !s.glide && !s.queue.length; }, null, { timeout: 60_000 });
+  const result = await page.evaluate(() => {
+    const s = window.demo.card._scene, fx = s.effects, map = s.map;
+    const all = map.path.flatMap((st) => st.points).length;
+    const cut = (n) => { let left = n; return map.path.map((st) => { const p = st.points.slice(0, left); left -= p.length; return { ...st, points: p }; }).filter((st) => st.points.length); };
+    const layers = ['dust', 'wet', 'glint'].map((k) => fx.layers[k]);
+    const now = performance.now();
+    fx.setMap({ ...map, path: cut(all - 5) }, s.xf);
+    fx.frame(now);
+    // The robot gets to the path's next points: count the pieces drawn for them.
+    let lines = 0;
+    const lineTo = CanvasRenderingContext2D.prototype.lineTo;
+    CanvasRenderingContext2D.prototype.lineTo = function (...a) { if (layers.some((l) => l.ctx === this)) lines++; return lineTo.apply(this, a); };
+    for (let k = all - 4; k <= all; k++) { fx.setMap({ ...map, path: cut(k) }, s.xf); fx.frame(now); }
+    CanvasRenderingContext2D.prototype.lineTo = lineTo;
+    const pixels = () => layers.map(({ ctx, canvas }) => ctx.getImageData(0, 0, canvas.width, canvas.height).data);
+    const step = pixels();
+    // Everything drawn again from scratch, at the same time.
+    fx.setTheme(fx.theme);
+    fx.setMap({ ...map, path: cut(all) }, s.xf);
+    fx.frame(now);
+    const whole = pixels();
+    // Premultiplied, so the colour of a pixel next to transparent doesn't count.
+    const diff = step.map((a, i) => {
+      let d = 0;
+      for (let j = 0; j < a.length; j++) if (j % 4 !== 3) d = Math.max(d, Math.abs(a[j] * a[j - j % 4 + 3] - whole[i][j] * whole[i][j - j % 4 + 3]) / 255);
+      return d;
+    });
+    return { pieces: fx.trail.pieces.length, lines, diff };
+  });
+  expect(result.pieces).toBeGreaterThan(300);
+  expect(result.lines).toBeLessThan(result.pieces);   // not the whole trail again for each point
+  // The same but for anti-aliasing where the pieces meet (out of 255).
+  expect(Math.max(...result.diff)).toBeLessThan(12);
+});
+
 test('at phone width the header keeps its buttons in the card, the status shortened', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await open(page, '&house=flat');

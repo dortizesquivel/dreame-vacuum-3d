@@ -183,6 +183,11 @@ export class VacuumScene {
     this.renderer.domElement.addEventListener('pointerdown', this._onDown);
     this.renderer.domElement.addEventListener('pointermove', this._onMove);
     this.renderer.domElement.addEventListener('pointerup', this._onUp);
+    // three.js uploads the scene again after a lost context comes back; what was drawn on the GPU is made again here.
+    this.renderer.domElement.addEventListener('webglcontextrestored', () => {
+      this.effects.restore();
+      this.dirty = true;
+    });
 
     this.dirty = true;
     this.ro = new ResizeObserver(() => this._resize());
@@ -257,6 +262,7 @@ export class VacuumScene {
     if (!this.xf || this.xf.dockSig !== dockSig) {
       this.xf = { ...robotToModel(map.dock, this.model), dockSig };
       this.mapSig = this.overlaySig = this.thingSig = '';
+      this._buildStuck();
     }
     const sig = `${map.map_id}|${Object.entries(map.cells ?? {}).map(([k, v]) => `${k}:${v.length}`).join()}`;
     if (sig !== this.mapSig) {
@@ -300,9 +306,17 @@ export class VacuumScene {
 
   /** Mark where the robot is now as where it got stuck, with why; it stays until a new task starts. */
   markStuck(text) {
+    // Where the robot really is, not where the one drawn has got to; in map mm, so it moves with the model.
+    const at = this.map?.robot ?? this.map?.dock;
+    this.stuck = at ? { at, text } : null;
+    this._buildStuck();
+  }
+
+  _buildStuck() {
     clearGroup(this.stuckGroup);
-    if (!this.robot.visible || !this.xf) return;
-    const { x, z } = this.robot.userData.pose, floor = this.xf.floor, color = this.theme?.error ?? '#db4437';
+    if (!this.stuck || !this.xf) return;
+    const { at: [mx, my], text } = this.stuck;
+    const [x, z] = this.xf.point(mx, my), floor = this.xf.floor, color = this.theme?.error ?? '#db4437';
     const ring = new Mesh(new RingGeometry(0.26, 0.32, 48), new MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2;
     ring.position.set(x, floor + LIFT * 2, z);
@@ -508,14 +522,15 @@ export class VacuumScene {
 
   /** The path's points the robot hasn't reached yet as it glides: those of the poses still queued, and the rest of its glide. */
   _pathAhead() {
-    let n = this.queue.reduce((k, q) => k + q.via.length, 0);
+    let n = this.queue.reduce((k, q) => k + q.via.filter((v) => !v.pose).length, 0);
     const g = this.glide;
     if (g && g.points.length > 2) {
       const lengths = g.points.slice(1).map(([x, z], i) => Math.hypot(x - g.points[i][0], z - g.points[i][1]));
       const total = lengths.reduce((a, b) => a + b, 0);
       const done = Math.min(1, (performance.now() - g.t0) / g.dur) * total;
       let d = 0;
-      for (let i = 0; i < g.points.length - 2; i++) if ((d += lengths[i]) > done + 1e-6) n++;   // via points are 1 … length - 2
+      // via points are 1 … length - 2
+      for (let i = 0; i < g.points.length - 2; i++) if ((d += lengths[i]) > done + 1e-6 && !g.points[i + 1].pose) n++;
     }
     return n;
   }
@@ -539,7 +554,12 @@ export class VacuumScene {
     const first = points[0]?.join() ?? null;
     const grew = first !== null && first === this.pathFirst && points.length >= this.pathCount;
     const since = grew ? points.slice(this.pathCount) : [];
-    if (!grew && first !== this.pathFirst && this.pathFirst !== null) clearGroup(this.stuckGroup);   // a new task
+    if (!grew && first !== this.pathFirst && this.pathFirst !== null) {   // a new task: the last one's poses don't hold it up
+      this.stuck = null;
+      clearGroup(this.stuckGroup);
+      this.queue = [];
+      this.glide = null;
+    }
     this.pathFirst = first;
     this.pathCount = points.length;
     return since;
@@ -573,7 +593,8 @@ export class VacuumScene {
     this.queue.push(to);
     if (this.queue.length > MAX_QUEUE) {   // far behind: catch up, still along the path
       const skipped = this.queue.splice(0, this.queue.length - MAX_QUEUE);
-      this.queue[0].via = [...skipped.flatMap((p) => [...p.via, [p.x, p.z]]), ...this.queue[0].via];
+      // The skipped poses aren't the path's points: marked, so the path shown doesn't count them and draw back.
+      this.queue[0].via = [...skipped.flatMap((p) => [...p.via, Object.assign([p.x, p.z], { pose: true })]), ...this.queue[0].via];
     }
   }
 
@@ -766,6 +787,7 @@ export class VacuumScene {
     this.labels.setSize(w, h);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    if (this.framed && !this.follow) this.setView(this.view, true);   // following, the camera stays on the robot
     this.dirty = true;
   }
 
