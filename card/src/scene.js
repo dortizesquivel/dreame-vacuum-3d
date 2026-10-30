@@ -22,6 +22,7 @@ const MAP_WALL = 0.25;          // wall height drawn from the map when there is 
 const LIFT = 0.022;             // overlays float this far above the floor, and above a rug, so they don't flicker into it
 const MAX_GLIDE = 12000;        // ms: the longest glide between two poses
 const MIN_GLIDE = 250;
+const MAX_LAG = 2000;           // ms: a batch's poses play back within this, so the robot drawn isn't far behind the real one
 const BATCH_MS = 500;           // poses less than this apart came in the same batch
 const MAX_QUEUE = 8;
 const MIN_ZONE = 300;           // mm: a zone narrower than this on a side was a tap, not a drag
@@ -148,6 +149,7 @@ export class VacuumScene {
     this.perBatch = 1;        // poses per batch, smoothed
     this.inBatch = 0;
     this.lastBatch = 0;
+    this.catchUpBy = 0;       // when the robot drawn should have caught up with the last batch
     this.selected = null;
     this.zoneMode = false;
     this.zoneGroup = new Group();      // the zone being drawn or offered, a rectangle in the map's axes
@@ -272,8 +274,9 @@ export class VacuumScene {
       this._buildThings();
     }
     this._setPath(map.path);
-    this.effects.setMap(map, this.xf);
     this._setPose(map.robot ?? map.dock, this._pathSince(map.path));
+    this.shownPoints = null;
+    this._revealPath();
     for (const l of this.labelGroup.children) l.element.dataset.current = String(l.userData.id === map.room);
     if (!this.framed) this.setView(this.view, true);
     this.dirty = true;
@@ -491,6 +494,8 @@ export class VacuumScene {
       this.path.material.dispose();
       this.path = null;
     }
+    this.segmentsAt = [0];   // how many of the line's segments the path's first k points make
+    for (const { points: line = [] } of path ?? []) line.forEach((_, i) => this.segmentsAt.push(this.segmentsAt.at(-1) + (i ? 1 : 0)));
     if (!path?.length) return;
     const y = this.xf.floor + LIFT * 1.5;
     const at = ([x, yy]) => { const [X, Z] = this.xf.point(x, yy); return V(X, y, Z); };
@@ -499,6 +504,33 @@ export class VacuumScene {
     this.path = new LineSegments(new BufferGeometry().setFromPoints(pts),
       new LineBasicMaterial({ color: this.theme.accent, transparent: true, opacity: 0.55 }));
     this.scene.add(this.path);
+  }
+
+  /** The path's points the robot hasn't reached yet as it glides: those of the poses still queued, and the rest of its glide. */
+  _pathAhead() {
+    let n = this.queue.reduce((k, q) => k + q.via.length, 0);
+    const g = this.glide;
+    if (g && g.points.length > 2) {
+      const lengths = g.points.slice(1).map(([x, z], i) => Math.hypot(x - g.points[i][0], z - g.points[i][1]));
+      const total = lengths.reduce((a, b) => a + b, 0);
+      const done = Math.min(1, (performance.now() - g.t0) / g.dur) * total;
+      let d = 0;
+      for (let i = 0; i < g.points.length - 2; i++) if ((d += lengths[i]) > done + 1e-6) n++;   // via points are 1 … length - 2
+    }
+    return n;
+  }
+
+  /** Show the path, and the floor effects along it, only as far as the robot got: they don't run ahead of it. */
+  _revealPath() {
+    const path = this.map?.path ?? [];
+    const shown = Math.max(0, this.segmentsAt.length - 1 - this._pathAhead());
+    if (shown === this.shownPoints) return false;
+    this.shownPoints = shown;
+    this.path?.geometry.setDrawRange(0, this.segmentsAt[shown] * 2);
+    let left = shown;
+    const cut = path.map((st) => { const pts = (st.points ?? []).slice(0, left); left -= pts.length; return { ...st, points: pts }; }).filter((st) => st.points.length);
+    this.effects.setMap({ ...this.map, path: cut }, this.xf);
+    return true;
   }
 
   /** The path's points since the last message, if it grew (a new task starts over): where the robot went meanwhile. */
@@ -535,6 +567,7 @@ export class VacuumScene {
       this.perBatch = this.perBatch * 0.7 + Math.max(1, this.inBatch) * 0.3;
       this.inBatch = 0;
       this.lastBatch = now;
+      this.catchUpBy = now + MAX_LAG;
     }
     this.inBatch += 1;
     this.queue.push(to);
@@ -552,7 +585,7 @@ export class VacuumScene {
     if (dh > Math.PI) dh -= 2 * Math.PI;
     if (dh < -Math.PI) dh += 2 * Math.PI;
     const each = (this.batchGap || 1000) / Math.max(1, this.perBatch);
-    const dur = Math.min(MAX_GLIDE, Math.max(MIN_GLIDE, each / Math.max(1, this.queue.length)));
+    const dur = Math.min(MAX_GLIDE, Math.max(MIN_GLIDE, Math.min(each / Math.max(1, this.queue.length), (this.catchUpBy - now) / (this.queue.length + 1))));
     // Along the path it drew since the last pose, so it goes round furniture instead of straight through.
     this.glide = { t0: now, dur, from: { ...from }, to: { ...to, h: from.h + dh }, points: [[from.x, from.z], ...to.via, [to.x, to.z]] };
   }
@@ -756,6 +789,7 @@ export class VacuumScene {
         this._placeRobot({ x: g.from.x + (g.to.x - g.from.x) * s, z: g.from.z + (g.to.z - g.from.z) * s, h: g.from.h + (g.to.h - g.from.h) * s });
       }
       moving = true;
+      this._revealPath();
     }
     if (this.tween) {
       const tw = this.tween, s = Math.min(1, (now - tw.t0) / tw.dur), k = ease(s);
