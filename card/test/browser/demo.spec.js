@@ -184,6 +184,25 @@ test('the floor overlays sit above the rug, so they do not flicker into it as th
   expect(lowest).toBeGreaterThan(rugTop);
 });
 
+test('the path does not run ahead of the robot: it shows as the robot gets there', async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => { const { sim, send, card } = window.demo; sim.clean(Object.keys(card._map.rooms).map(Number)); send(); });
+  await run(page, 10);
+  await page.waitForFunction(() => { const s = window.demo.card._scene; return !s.glide && !s.queue.length; });
+  await run(page, 15);   // a batch of poses arrives at once, as from the integration
+  const drawn = () => page.evaluate(() => {
+    const s = window.demo.card._scene;
+    return { shown: s.path.geometry.drawRange.count, all: s.path.geometry.attributes.position.count, gliding: !!s.glide || s.queue.length > 0 };
+  });
+  const before = await drawn();
+  expect(before.gliding).toBe(true);
+  expect(before.shown).toBeLessThan(before.all);
+  // It catches up with the batch within about two seconds, so it isn't drawn far from where the robot really is.
+  await page.waitForFunction(() => { const s = window.demo.card._scene; return !s.glide && !s.queue.length; }, null, { timeout: 4000 });
+  const after = await drawn();
+  expect(after.shown).toBeGreaterThanOrEqual(after.all);
+});
+
 test('the 3D, Plan and Follow buttons move the camera', async ({ page }) => {
   await open(page);
   const card = page.locator('dreame-vacuum-3d-card');
