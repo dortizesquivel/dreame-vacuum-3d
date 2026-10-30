@@ -80,6 +80,7 @@
     suction_level: ['quiet', 'standard', 'strong', 'turbo'],
     water_volume: ['low', 'medium', 'high'],
   };
+  const calls = [];
   const settings = { cleaning_mode: 'sweeping_and_mopping', suction_level: 'standard', water_volume: 'medium' };
   const SIM_MODE = { sweeping: 'vacuum', mopping: 'mop', sweeping_and_mopping: 'both' };
   const OPTIONS = {
@@ -133,6 +134,7 @@
       return { start: found.start, map_id: found.map_id, path: found.path, rooms: found.rooms };
     },
     async callService(domain, service, data, target = {}) {
+      calls.push({ domain, service, data });
       sim.mode = SIM_MODE[settings.cleaning_mode];
       if (domain === 'select' && service === 'select_option') settings[Object.keys(SETTINGS).find((k) => target.entity_id === `select.demo_${k}`)] = data.option;
       else if (service === 'vacuum_clean_segment') sim.clean([].concat(data.segments));
@@ -201,7 +203,7 @@
   press('effects', effects);
   document.getElementById('speed').textContent = `×${speed}`;
   if (q.has('start')) go();
-  window.demo = { sim, card, send, settings };   // for scripts: sim.step(seconds), then send()
+  window.demo = { sim, card, send, settings, calls };   // for scripts: sim.step(seconds), then send(); calls: the services called
 </script>
 </body>
 </html>
