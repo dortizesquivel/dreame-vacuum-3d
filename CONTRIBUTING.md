@@ -1,17 +1,17 @@
 # Contributing
 
-Thanks for helping. Bug reports, ideas and pull requests are welcome.
+Thanks for helping. Bug reports, ideas and pull requests are welcome. Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Reporting
 
-- **Bugs**: open an [issue](https://github.com/dortizesquivel/dreame-vacuum-3d/issues) with Home Assistant version, integration version, vacuum model (`dreame.vacuum.…`), and logs filtered by `dreame_vacuum_3d`. Remove passwords, tokens, `did`, MAC and serial before pasting.
+- **Bugs**: open an [issue](https://github.com/dortizesquivel/dreame-vacuum-3d/issues/new/choose) with Home Assistant version, integration version, vacuum model (`dreame.vacuum.…`), and logs filtered by `dreame_vacuum_3d`. Remove passwords, tokens, `did`, MAC and serial before pasting.
 - **Security problems**: don't open an issue; report them privately as [SECURITY.md](SECURITY.md) explains.
 
 ## Pull requests
 
 `main` is protected: every change goes in through a pull request. A pull request is merged when:
 
-- **The CI passes.** That covers ruff, the translations check (`python scripts/check_translations.py`), pytest with its coverage floor, HACS validation and hassfest.
+- **The CI passes.** That covers ruff, mypy, the translations check (`python scripts/check_translations.py`), pytest with its coverage floor, the card's lint, unit and browser tests, HACS validation, hassfest and CodeQL.
 - **New functionality comes with tests** under `tests/`.
 - **The docs follow the change** when behaviour or settings change.
 
@@ -56,6 +56,7 @@ ruff format --check .
 mypy
 python scripts/check_translations.py
 pytest
+cd card && npm ci && npm run lint && npm test
 ```
 
 Contributions are released under the project's [MIT licence](LICENSE). Portions derived from Tasshack/dreame-vacuum remain attributed in [NOTICE](NOTICE).
