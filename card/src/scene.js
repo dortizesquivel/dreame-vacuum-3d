@@ -587,7 +587,7 @@ export class VacuumScene {
     const each = (this.batchGap || 1000) / Math.max(1, this.perBatch);
     const dur = Math.min(MAX_GLIDE, Math.max(MIN_GLIDE, Math.min(each / Math.max(1, this.queue.length), (this.catchUpBy - now) / (this.queue.length + 1))));
     // Along the path it drew since the last pose, so it goes round furniture instead of straight through.
-    this.glide = { t0: now, dur, from: { ...from }, to: { ...to, h: from.h + dh }, points: [[from.x, from.z], ...to.via, [to.x, to.z]] };
+    this.glide = { t0: now, dur, from: { ...from }, to, dh, points: [[from.x, from.z], ...to.via, [to.x, to.z]] };
   }
 
   _placeRobot(p) {
@@ -772,6 +772,13 @@ export class VacuumScene {
   _frame() {
     const now = performance.now();
     let moving = false;
+    // The next glide starts when the last one ended, not at this frame: on a device drawing few frames, it keeps up.
+    while (this.glide && now - this.glide.t0 >= this.glide.dur && this.queue.length) {
+      const end = this.glide.t0 + this.glide.dur;
+      this._placeRobot(this.glide.to);
+      this.glide = null;
+      this._nextGlide(end);
+    }
     if (!this.glide && this.queue.length) this._nextGlide(now);
     if (this.glide) {
       const g = this.glide, s = Math.min(1, (now - g.t0) / g.dur);
@@ -786,7 +793,7 @@ export class VacuumScene {
         if (dh < -Math.PI) dh += 2 * Math.PI;
         this._placeRobot({ x: p.x, z: p.z, h: h + dh * TURN });
       } else {
-        this._placeRobot({ x: g.from.x + (g.to.x - g.from.x) * s, z: g.from.z + (g.to.z - g.from.z) * s, h: g.from.h + (g.to.h - g.from.h) * s });
+        this._placeRobot({ x: g.from.x + (g.to.x - g.from.x) * s, z: g.from.z + (g.to.z - g.from.z) * s, h: g.from.h + g.dh * s });
       }
       moving = true;
       this._revealPath();
