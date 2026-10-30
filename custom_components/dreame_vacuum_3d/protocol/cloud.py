@@ -39,6 +39,7 @@ _API_HEADERS = {
     "MIOT-ENCRYPT-ALGORITHM": "ENCRYPT-RC4",
 }
 _AUTH_ERROR_CODES = (2, 3)
+_DEVICE_OFFLINE = -2  # rpc: the cloud can't reach the robot
 _AUTH_ERROR_MESSAGES = ("auth err", "invalid signature", "SERVICETOKEN_EXPIRED")
 _AUTH_START = "fe/service/identity/authStart"
 _IDENTITY_URL = f"{ACCOUNT_URL}/identity"
@@ -337,7 +338,10 @@ class XiaomiCloud:
 
     async def rpc(self, did: str, method: str, params: Any) -> Any:
         """Call a miIO method on a device through the cloud; return its result (None if it has none)."""
-        return (await self._api(f"v2/home/rpc/{did}", {"method": method, "params": params})).get("result")
+        reply = await self._api(f"v2/home/rpc/{did}", {"method": method, "params": params})
+        if reply.get("code") == _DEVICE_OFFLINE:
+            raise CloudConnectionError("the robot is offline")
+        return reply.get("result")
 
     def rpc_sender(self, did: str) -> Send:
         """Return rpc bound to one device, for the miot helpers."""

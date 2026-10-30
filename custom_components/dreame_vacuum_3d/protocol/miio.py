@@ -59,7 +59,8 @@ class MiioClient:
             self._token = bytes.fromhex(token)
         except ValueError:
             self._token = b""
-        if len(self._token) != 16:
+        # No token at all (the cloud lists some robots without one): every send fails, so the cloud takes over.
+        if token and len(self._token) != 16:
             raise ValueError("the token must be 32 hex characters")
         self._addr = (host, port)
         self._timeout = timeout
@@ -76,6 +77,8 @@ class MiioClient:
 
         A lost reply is retried, so the robot may run the command twice (inherent to miIO).
         """
+        if not self._token:
+            raise MiioConnectionError("no token for this robot: it is reached through the cloud only")
         async with self._lock:
             self._next_id(1)
             self._checksum_failed = False

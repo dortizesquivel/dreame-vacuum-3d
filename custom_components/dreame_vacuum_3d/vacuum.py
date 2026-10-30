@@ -12,10 +12,12 @@ from homeassistant.components.vacuum import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv, entity_platform
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import voluptuous as vol
 
+from .const import DOMAIN
 from .coordinator import DreameDataUpdateCoordinator
 from .device.enums import DreameVacuumState, SuctionLevel, TaskStatus, parse_enum
 from .entity import DreameEntity, command
@@ -348,6 +350,12 @@ class DreameVacuumEntity(DreameEntity, StateVacuumEntity):
     @command
     async def async_reset_consumable(self, consumable: str) -> None:
         """Reset a consumable life counter."""
+        if f"reset_{consumable}" not in self.device.caps.actions:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="consumable_not_supported",
+                translation_placeholders={"consumable": consumable},
+            )
         await self.device.reset_consumable(consumable)
         await self.coordinator.async_request_refresh()
 

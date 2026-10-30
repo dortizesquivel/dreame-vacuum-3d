@@ -64,10 +64,17 @@ async def test_params_are_passed_through(fake_robot, make_client):
     assert await client.send("set", {"a": 1}) == {"method": "set", "params": {"a": 1}}
 
 
-@pytest.mark.parametrize("token", ["", "00" * 15, "zz" * 16, "00" * 17])
+@pytest.mark.parametrize("token", ["00" * 15, "zz" * 16, "00" * 17])
 def test_bad_token_is_rejected(token):
     with pytest.raises(ValueError, match="32 hex"):
         miio.MiioClient("127.0.0.1", token)
+
+
+async def test_without_a_token_every_send_fails():
+    client = miio.MiioClient("", "")  # the cloud listed the robot with neither an address nor a token
+    with pytest.raises(miio.MiioConnectionError, match="cloud only"):
+        await client.send("miIO.info")
+    await client.close()
 
 
 async def test_handshake_is_reused_then_renewed(fake_robot, make_client, clock):
