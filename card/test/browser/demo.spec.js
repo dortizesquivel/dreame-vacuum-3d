@@ -238,6 +238,51 @@ test('the futuristic style draws the house as a hologram', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('the cleaning settings change the robot\'s, and a room cleans with them', async ({ page }) => {
+  await open(page);
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-settings]').click();
+  const mode = card.locator('.opts [data-key="cleaning_mode"]');
+  await expect(mode.locator('[aria-checked="true"]')).toHaveText('Vacuum and mop');
+  await mode.locator('[data-option="mopping"]').click();
+  await expect(mode.locator('[aria-checked="true"]')).toHaveText('Mop');
+  // Mopping only: suction doesn't apply.
+  await expect(card.locator('.opts [data-key="suction_level"] button').first()).toBeDisabled();
+  await card.locator('.opts [data-key="water_volume"] [data-option="high"]').click();
+  expect(await page.evaluate(() => ({ ...window.demo.settings }))).toMatchObject({ cleaning_mode: 'mopping', water_volume: 'high' });
+  // A room's offer says what it will clean with, and cleans with it.
+  await page.evaluate(() => window.demo.card._pick(1));
+  await expect(card.locator('.panel .tune')).toHaveText('Mop · High');
+  await card.locator('.panel .clean').click();
+  await run(page, 20);
+  expect(await page.evaluate(() => [...new Set(window.demo.sim.path.map((s) => s.mode))])).toEqual(['mop']);
+});
+
+test('the cleaning settings while it cleans: the mode waits, the suction changes', async ({ page }) => {
+  await open(page, '&lang=es');
+  await page.evaluate(() => { const { sim, send, card } = window.demo; sim.clean(Object.keys(card._map.rooms).map(Number)); send(); });
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-settings]').click();
+  await expect(card.locator('.opts [data-key="cleaning_mode"] [data-option="mopping"]')).toHaveText('Fregar');
+  await expect(card.locator('.opts [data-key="cleaning_mode"] button').first()).toBeDisabled();
+  await expect(card.locator('.opts .note')).toHaveText('El modo cambia en la próxima limpieza');
+  const strong = card.locator('.opts [data-key="suction_level"] [data-option="strong"]');
+  await strong.click();
+  await expect(strong).toHaveAttribute('aria-checked', 'true');
+  await expect(strong).toHaveText('Fuerte');
+});
+
+test('the cleaning settings: no mopping without the pads, and none at all with controls: false', async ({ page }) => {
+  await open(page, '&mop=0');
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-settings]').click();
+  await expect(card.locator('.opts [data-option="mopping"]')).toBeDisabled();
+  await expect(card.locator('.opts [data-option="mopping"]')).toHaveAttribute('title', 'Fit the mop pads to mop');
+  await expect(card.locator('.opts [data-option="sweeping"]')).toBeEnabled();
+  await page.evaluate(() => { const { card } = window.demo; card.setConfig({ ...card._config, model: undefined, controls: false }); card.hass = card._hass; });
+  await expect(card.locator('[data-settings]')).toBeHidden();
+});
+
 test('past cleanings: replay one, and show the coverage of the last ones', async ({ page }) => {
   await open(page, '&house=flat');
   const card = page.locator('dreame-vacuum-3d-card');
