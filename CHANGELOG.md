@@ -2,6 +2,13 @@
 
 All notable releases of Dreame Vacuum 3D are listed here. The [Release workflow](.github/workflows/release.yml) prepends each tagged version.
 
+## v0.1.14 - 2026-10-30
+
+- docs(security): the integration has a dashboard card (818dfd8)
+- fix(integration): service names, empty lists, malformed map data, zones for the card (db69d8c)
+- fix(card): keyboard rows, Close, errors, coverage, view, settings button, low cards (be54ff0)
+- fix(scene): labels, tapped names, zone dust, big maps, a leaked buffer, recalibration (b93f1e5)
+
 ## v0.1.13 - 2026-10-30
 
 - test(card): let the dust fade before counting renders (142440d)
