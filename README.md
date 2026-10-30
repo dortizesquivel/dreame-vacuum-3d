@@ -9,7 +9,7 @@
 
 A Home Assistant integration for Dreame robot vacuums: local miIO control, Xiaomi cloud login for maps and fallback, Tasshack-compatible cleaning services, a capability table per model, and a 3D card that draws the robot moving through a 3D model of your house.
 
-[![The card, animated: the camera swings around a textured 3D living room, then follows the robot as it cleans lane by lane and switches to the plan view, leaving the floor wet behind it and finding a sock and shoes](docs/images/demo.gif)](https://dortizesquivel.github.io/dreame-vacuum-3d/)
+[![The card, animated, twice side by side: on the left the camera swings around a textured 3D living room; on the right it switches from 3D to the plan view; in both a robot cleans lane by lane, leaving the floor wet behind it and finding a sock and shoes](docs/images/demo.gif)](https://dortizesquivel.github.io/dreame-vacuum-3d/)
 
 **[Try the live demo](https://dortizesquivel.github.io/dreame-vacuum-3d/)** on the project's page: the card with a simulated robot, in an example living room or a six-room flat.
 
