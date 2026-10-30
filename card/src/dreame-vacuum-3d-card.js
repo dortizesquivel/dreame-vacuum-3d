@@ -74,9 +74,12 @@ const STYLE = `
   ha-card { overflow: hidden; }
   .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
   .title { font-size: 16px; font-weight: 500; color: var(--primary-text-color); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .chip { display: inline-flex; align-items: center; gap: 7px; flex: none; font-size: 12px; font-weight: 500; padding: 6px 10px;
+  /* A block, not a flex box, so a long status ends in an ellipsis on a narrow card instead of pushing the buttons out. */
+  .chip { display: block; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12px; font-weight: 500; padding: 6px 10px;
     border: 1px solid var(--divider-color); border-radius: 999px; color: var(--primary-text-color); font-variant-numeric: tabular-nums; }
-  .chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--secondary-text-color); }
+  .chip::before { content: ""; display: inline-block; vertical-align: 1px; margin-right: 7px; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--secondary-text-color); }
   .chip[data-active="true"]::before { background: var(--primary-color); }
   .viewport { position: relative; border-top: 1px solid var(--divider-color); overflow: hidden; }
   .viewport canvas { display: block; }
@@ -110,7 +113,8 @@ const STYLE = `
   button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
   .panel { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2; display: flex; flex-wrap: wrap; align-items: center;
     justify-content: flex-end; gap: 8px; padding: 8px; border-radius: 10px; border: 1px solid var(--divider-color);
-    background: color-mix(in srgb, var(--card-background-color, #fff) 90%, transparent); backdrop-filter: blur(6px); }
+    background: color-mix(in srgb, var(--card-background-color, #fff) 90%, transparent); backdrop-filter: blur(6px);
+    max-height: calc(100% - 20px); overflow-y: auto; box-sizing: border-box; }
   .panel[hidden] { display: none; }
   .panel .msg { flex: 1 1 160px; font-size: 13px; color: var(--primary-text-color); }
   .panel .msg[data-error="true"] { color: var(--error-color, #db4437); }
@@ -151,7 +155,24 @@ const STYLE = `
   .routines button:disabled { color: var(--disabled-text-color, #bdbdbd); cursor: default; background: none; }
 `;
 
+/** Make node `a` the same as `b`, keeping a's nodes where they have the same shape; where not, b's replace them. */
+function patch(a, b) {
+  if (a.nodeName !== b.nodeName || a.childNodes.length !== b.childNodes.length) {
+    a.replaceWith(b);
+    return;
+  }
+  if (a.nodeType === Node.TEXT_NODE) {
+    if (a.data !== b.data) a.data = b.data;
+    return;
+  }
+  for (const { name } of [...a.attributes]) if (!b.hasAttribute(name)) a.removeAttribute(name);
+  for (const { name, value } of b.attributes) if (a.getAttribute(name) !== value) a.setAttribute(name, value);
+  [...b.childNodes].forEach((c, i) => patch(a.childNodes[i], c));
+}
+
 class DreameVacuum3DCard extends HTMLElement {
+  _seq = 0;   // bumped as the panel changes: an answer that comes after is stale
+
   static getStubConfig(hass) {
     const entity = Object.keys(hass?.states ?? {}).find((id) => id.startsWith('vacuum.'));
     return { entity: entity ?? '' };
@@ -175,10 +196,18 @@ class DreameVacuum3DCard extends HTMLElement {
       && r.rooms.every((x) => typeof x === 'number' || (typeof x === 'string' && x.trim())))) {
       throw new Error('"routines" must be a list, each with the "rooms" to clean: names or numbers');
     }
+    const other = this._config && this._config.entity !== config.entity;
     this._config = {
       ...config, height, dryTime, routines, effects, view: config.view ?? '3d', labels: config.labels !== false, model: normalizeModel(config.model),
     };
     if (this._sub && this._subEntity !== config.entity) this._unsubscribe();
+    if (other) {   // another robot: nothing of the last one's
+      if (this._els) this._pick(null);
+      this._map = this._cleanings = this._coverage = this._relatedOf = null;
+      this._stuck = false;
+      this._repeats = 1;
+      this._scene?.setCoverage(null);
+    }
     if (this._root) this._applyConfig();
   }
 
@@ -190,6 +219,10 @@ class DreameVacuum3DCard extends HTMLElement {
     if (first || this._dark !== !!hass.themes?.darkMode) this._applyTheme();
     this._subscribe();
     this._scene?.setLanguage(this._lang());
+    if (this._shownLang !== this._lang()) {
+      this._shownLang = this._lang();
+      this._renderButtons();
+    }
     this._renderHead();
   }
 
@@ -464,11 +497,13 @@ class DreameVacuum3DCard extends HTMLElement {
     } else {
       rows.push(Object.assign(document.createElement('p'), { className: 'note', textContent: this._t('noSettings') }));
     }
-    // Rebuilt on every state update: keep the focus on the option it was on.
+    // On every state update: the rows are updated in place, so a click halfway through (or the focus) stays on its button;
+    // rebuilt only when they change shape, keeping the focus on the option it was on.
     const focused = this._root.activeElement?.closest?.('[data-option]');
     const where = focused && [focused.closest('[data-key]').dataset.key, focused.dataset.option];
-    opts.replaceChildren(...rows);
-    if (where) opts.querySelector(`[data-key="${where[0]}"] [data-option="${where[1]}"]`)?.focus();
+    if (opts.childNodes.length === rows.length) rows.forEach((row, i) => patch(opts.childNodes[i], row));
+    else opts.replaceChildren(...rows);
+    if (where && !focused.isConnected) opts.querySelector(`[data-key="${where[0]}"] [data-option="${where[1]}"]`)?.focus();
     tune.querySelector('span').textContent = summary.join(' · ') || this._t('settings');
     tune.setAttribute('aria-expanded', String(!opts.hidden));
     tune.setAttribute('aria-label', `${this._t('settings')}: ${summary.join(', ')}`);
@@ -559,6 +594,7 @@ class DreameVacuum3DCard extends HTMLElement {
     const service = cmd === 'toggle' ? (['cleaning', 'returning'].includes(st?.state) ? 'pause' : 'start') : cmd;
     try {
       await this._hass.callService('vacuum', service, {}, { entity_id: this._config.entity });
+      if (service === 'start') this._repeats = 1;   // as after any cleaning started: the passes were for one task
     } catch (err) {
       this._pick(null);
       const { panel, msg, clean, cancel } = this._els;
@@ -579,8 +615,9 @@ class DreameVacuum3DCard extends HTMLElement {
     const entity = this._config?.entity;
     if (this._sub || !entity || !this._hass?.connection || !this.isConnected) return;
     this._subEntity = entity;
+    // A message of the last robot's, on its way out after the entity changed, is not this one's.
     this._sub = this._hass.connection
-      .subscribeMessage((map) => this._onMap(map), { type: `${DOMAIN}/map/subscribe`, entity_id: entity })
+      .subscribeMessage((map) => entity === this._config.entity && this._onMap(map), { type: `${DOMAIN}/map/subscribe`, entity_id: entity })
       .catch((err) => {
         this._sub = null;
         this._status(err?.code === 'unknown_command' ? this._t('noMap') : String(err?.message ?? err));
@@ -690,14 +727,17 @@ class DreameVacuum3DCard extends HTMLElement {
     panel.hidden = false;
     clean.hidden = true;
     cancel.textContent = this._t('close');
+    const seq = this._seq;
     let cleanings;
     try {
       ({ cleanings } = await this._hass.callWS({ type: `${DOMAIN}/history`, entity_id: this._config.entity }));
     } catch (err) {
+      if (seq !== this._seq) return;
       msg.dataset.error = 'true';
       msg.textContent = this._t('noReplay', { error: err?.message ?? String(err) });
       return;
     }
+    if (seq !== this._seq) return;   // the panel closed, or shows something else, meanwhile
     this._cleanings = cleanings;
     msg.textContent = this._t(cleanings.length ? 'lastCleanings' : 'noHistory');
     const rooms = this._map?.rooms ?? {};
@@ -725,14 +765,17 @@ class DreameVacuum3DCard extends HTMLElement {
   async _replay(start) {
     const { msg, list, cancel } = this._els;
     const when = new Date(start * 1000).toLocaleString(this._lang(), { weekday: 'long', hour: '2-digit', minute: '2-digit' });
+    const seq = ++this._seq;   // a later tap, or closing the panel, makes this one stale
     let past;
     try {
       past = await this._path(start);
     } catch (err) {
+      if (seq !== this._seq) return;
       msg.dataset.error = 'true';
       msg.textContent = this._t('noReplay', { error: err?.message ?? String(err) });
       return;
     }
+    if (seq !== this._seq) return;
     if (this._map && past.map_id !== this._map.map_id) {
       msg.dataset.error = 'true';
       msg.textContent = this._t('otherMap');
@@ -777,13 +820,19 @@ class DreameVacuum3DCard extends HTMLElement {
 
   async _toggleCoverage() {
     const { coverage } = this._els;
+    if (this._coverageBusy) return;   // still fetching the last ones: a second tap would fetch them again
     if (this._coverage) {
       this._coverage = null;
       this._scene?.setCoverage(null);
     } else {
       const starts = (this._cleanings ?? []).filter((c) => c.has_map && c.map_id === this._map?.map_id).slice(0, COVERAGE);
       const paths = [];
-      for (const c of starts) paths.push((await this._path(c.start).catch(() => null))?.path ?? []);
+      this._coverageBusy = true;
+      try {
+        for (const c of starts) paths.push((await this._path(c.start).catch(() => null))?.path ?? []);
+      } finally {
+        this._coverageBusy = false;
+      }
       this._coverage = paths;
       this._scene?.setCoverage(paths);
     }
@@ -792,6 +841,7 @@ class DreameVacuum3DCard extends HTMLElement {
 
   /** A tap on a room offers to clean it; a tap elsewhere or Cancel closes the offer (and leaves zone mode). */
   _pick(id) {
+    this._seq++;   // whatever the panel was waiting for is stale now
     this._stopReplay();
     if (this._els) {
       this._els.list.hidden = true;
@@ -855,6 +905,7 @@ class DreameVacuum3DCard extends HTMLElement {
       msg.dataset.error = 'false';
       msg.textContent = this._t('started', { room: name });
       cancel.textContent = this._t('close');
+      this._repeats = 1;   // the passes are for that task: the next one-tap cleaning goes once
       return true;
     } catch (err) {
       msg.dataset.error = 'true';

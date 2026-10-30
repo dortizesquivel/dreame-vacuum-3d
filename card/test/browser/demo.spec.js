@@ -525,3 +525,122 @@ test('the floor effects redraw only around what changed, the same as drawing it 
   // The same but for anti-aliasing where the pieces meet (out of 255).
   expect(Math.max(...result.diff)).toBeLessThan(12);
 });
+
+test('at phone width the header keeps its buttons in the card, the status shortened', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await open(page, '&house=flat');
+  const card = page.locator('dreame-vacuum-3d-card');
+  const box = await card.locator('ha-card').boundingBox();
+  for (const cmd of ['toggle', 'return_to_base']) {
+    const b = await card.locator(`[data-cmd="${cmd}"]`).boundingBox();
+    expect(b.x + b.width).toBeLessThanOrEqual(box.x + box.width);
+  }
+});
+
+test('a click in the settings sheet counts though the robot sends an update in the middle of it', async ({ page }) => {
+  await open(page);
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-settings]').click();
+  const strong = card.locator('.opts [data-key="suction_level"] [data-option="strong"]');
+  const b = await strong.boundingBox();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.down();
+  await page.evaluate(() => window.demo.send());   // a state update between the press and the release
+  await page.mouse.up();
+  await expect(strong).toHaveAttribute('aria-checked', 'true');
+  await expect(strong).toBeFocused();
+});
+
+/** Make the card's history calls answer only after `ms`, as from a slow robot; window.demo.paths counts the path calls. */
+const slowHistory = (page, ms) => page.evaluate((ms) => {
+  const card = window.demo.card, ws = card._hass.callWS;
+  window.demo.paths = 0;
+  card._hass = { ...card._hass, callWS: async (msg) => {
+    if (msg.type.endsWith('/path')) window.demo.paths++;
+    await new Promise((r) => setTimeout(r, ms));
+    return ws(msg);
+  } };
+}, ms);
+
+test('a replay that arrives after Close is not played', async ({ page }) => {
+  await open(page, '&house=flat');
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-history]').click();
+  await card.locator('.panel .list button').first().waitFor();
+  await slowHistory(page, 600);
+  await card.locator('.panel .list button').first().click();
+  await card.locator('.panel .cancel').click();   // Close, before the cleaning comes
+  await page.waitForTimeout(1000);
+  expect(await page.evaluate(() => { const c = window.demo.card; return [c._replaying ?? null, c._scene.map === c._map]; })).toEqual([null, true]);
+});
+
+test('past cleanings that arrive after another panel opened leave that panel alone', async ({ page }) => {
+  await open(page, '&house=flat');
+  const card = page.locator('dreame-vacuum-3d-card');
+  await slowHistory(page, 600);
+  await card.locator('[data-history]').click();
+  await card.locator('[data-settings]').click();   // before the list comes
+  await page.waitForTimeout(1000);
+  await expect(card.locator('.panel .msg')).toHaveText('Cleaning settings');
+  await expect(card.locator('.panel .list')).toBeHidden();
+  await expect(card.locator('.panel .coverage')).toBeHidden();
+});
+
+test('another entity starts from nothing: no map, nothing of the old robot', async ({ page }) => {
+  await open(page);
+  const left = await page.evaluate(() => {
+    const { card } = window.demo;
+    card.setConfig({ ...card._config, model: undefined, entity: 'vacuum.other' });
+    return { map: card._map ?? null, state: card._related('state') };
+  });
+  expect(left).toEqual({ map: null, state: null });
+  await expect(page.locator('dreame-vacuum-3d-card .status')).toHaveText('Waiting for the map…');
+});
+
+test('the settings sheet fits a low card, scrolling', async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => { const { card } = window.demo; card.setConfig({ ...card._config, model: undefined, height: 240 }); });
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-settings]').click();
+  const [view, panel] = [await card.locator('.viewport').boundingBox(), await card.locator('.panel').boundingBox()];
+  expect(panel.y).toBeGreaterThanOrEqual(view.y);
+  expect(panel.y + panel.height).toBeLessThanOrEqual(view.y + view.height);
+  const three = card.locator('.opts [data-key="repeats"] [data-option="3"]');
+  await three.click();
+  await expect(three).toHaveAttribute('aria-checked', 'true');
+});
+
+test('a change of language relabels the buttons', async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => { const { card } = window.demo; card.hass = { ...card._hass, locale: { language: 'es' }, language: 'es' }; });
+  const card = page.locator('dreame-vacuum-3d-card');
+  await expect(card.locator('[data-view="plan"]')).toHaveText('Plano');
+  await expect(card.locator('[data-zoom="in"]')).toHaveAttribute('aria-label', 'Acercar');
+});
+
+test('a double click on Coverage fetches the cleanings once', async ({ page }) => {
+  await open(page, '&house=flat');
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-history]').click();
+  await card.locator('.panel .list button').first().waitFor();
+  await slowHistory(page, 300);
+  await card.locator('.panel .coverage').dblclick();
+  await expect(card.locator('.panel .coverage')).toHaveAttribute('aria-pressed', 'true');
+  await page.waitForTimeout(1500);
+  expect(await page.evaluate(() => [window.demo.paths, window.demo.card._scene.effects.coverage.length])).toEqual([3, 3]);
+  await expect(card.locator('.panel .coverage')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('the passes go back to one once a cleaning starts', async ({ page }) => {
+  await open(page, '&house=flat');
+  const card = page.locator('dreame-vacuum-3d-card');
+  const room = await page.evaluate(() => Number(Object.keys(window.demo.card._map.rooms)[0]));
+  await card.locator('[data-settings]').click();
+  await card.locator('.opts [data-key="repeats"] [data-option="2"]').click();
+  await page.evaluate((id) => window.demo.card._scene.onRoomTap(id), room);   // a tap on the room
+  await card.locator('.panel .clean').click();
+  expect(await page.evaluate(() => window.demo.calls.at(-1).data)).toMatchObject({ repeats: 2 });
+  await page.evaluate((id) => window.demo.card._scene.onRoomTap(id), room);
+  await card.locator('.panel .clean').click();
+  expect(await page.evaluate(() => window.demo.calls.at(-1).data)).not.toHaveProperty('repeats');
+});

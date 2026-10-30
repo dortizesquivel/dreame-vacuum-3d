@@ -106,6 +106,21 @@ def _entry() -> MockConfigEntry:
     return MockConfigEntry(domain=DOMAIN, data=ENTRY_DATA, unique_id=ENTRY_DATA[CONF_DID], title="X10+")
 
 
+async def test_setup_without_a_token_uses_the_cloud(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(domain=DOMAIN, data={**ENTRY_DATA, CONF_HOST: "", CONF_TOKEN: ""}, unique_id="1001")
+    entry.add_to_hass(hass)
+    cloud = _mock_cloud()
+
+    with patch("custom_components.dreame_vacuum_3d.XiaomiCloud", return_value=cloud):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert entry.runtime_data.coordinator.device.channel == "cloud"
+    assert entry.runtime_data.coordinator.device.available
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
 async def test_setup_and_unload(hass: HomeAssistant) -> None:
     entry = _entry()
     entry.add_to_hass(hass)

@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import CONF_COEXIST, DEFAULT_COEXIST, DOMAIN
 from .device.device import DreameDevice
-from .device.enums import ChargingStatus, Status, parse_enum
+from .device.enums import ChargingStatus, Status, TaskStatus, parse_enum
 from .protocol.cloud import CloudAuthError, CloudConnectionError
 from .protocol.miio_codec import MiioError
 
@@ -48,6 +48,37 @@ ACTIVE_STATUSES = frozenset(
         Status.SMART_ARRANGEMENT,
         Status.ZONED_ARRANGEMENT,
         Status.WATER_CHECK,
+    }
+)
+
+# A cleaning task under way, paused or not (a pause or a resume doesn't end it).
+ACTIVE_TASKS = frozenset(
+    {
+        TaskStatus.AUTO_CLEANING,
+        TaskStatus.ZONE_CLEANING,
+        TaskStatus.SEGMENT_CLEANING,
+        TaskStatus.SPOT_CLEANING,
+        TaskStatus.FAST_MAPPING,
+        TaskStatus.CRUISING_PATH,
+        TaskStatus.CRUISING_POINT,
+        TaskStatus.STATION_CLEANING,
+        TaskStatus.AUTO_CLEANING_PAUSED,
+        TaskStatus.ZONE_CLEANING_PAUSED,
+        TaskStatus.SEGMENT_CLEANING_PAUSED,
+        TaskStatus.SPOT_CLEANING_PAUSED,
+        TaskStatus.MAP_CLEANING_PAUSED,
+        TaskStatus.MOPPING_PAUSED,
+        TaskStatus.SEGMENT_MOPPING_PAUSED,
+        TaskStatus.ZONE_MOPPING_PAUSED,
+        TaskStatus.AUTO_MOPPING_PAUSED,
+        TaskStatus.AUTO_DOCKING_PAUSED,
+        TaskStatus.SEGMENT_DOCKING_PAUSED,
+        TaskStatus.ZONE_DOCKING_PAUSED,
+        TaskStatus.CRUISING_PATH_PAUSED,
+        TaskStatus.CRUISING_POINT_PAUSED,
+        TaskStatus.AUTO_CLEANING_WASHING_PAUSED,
+        TaskStatus.AREA_CLEANING_WASHING_PAUSED,
+        TaskStatus.CUSTOM_CLEANING_WASHING_PAUSED,
     }
 )
 
