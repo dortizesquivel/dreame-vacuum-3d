@@ -18,7 +18,7 @@ from custom_components.dreame_vacuum_3d.const import DOMAIN
 from custom_components.dreame_vacuum_3d.device import map as dmap
 from custom_components.dreame_vacuum_3d.device.capabilities import load
 from custom_components.dreame_vacuum_3d.device.enums import Status, TaskStatus
-from custom_components.dreame_vacuum_3d.live_map import FIRST_RETRY, IDLE_EVERY
+from custom_components.dreame_vacuum_3d.live_map import BACKOFF, FIRST_RETRY, IDLE_EVERY
 from custom_components.dreame_vacuum_3d.protocol.cloud import CloudAuthError, CloudConnectionError
 from custom_components.dreame_vacuum_3d.protocol.miio import MiioTimeoutError
 from tests.integration.helpers import setup_fixture_entry
@@ -176,6 +176,30 @@ async def test_each_tick_only_while_a_card_shows_the_map(hass: HomeAssistant, ha
         pass  # the map's messages until then
     assert reply["success"]
     assert await ticks(4) == 2
+
+
+async def test_cloud_errors_back_off(hass: HomeAssistant, hass_ws_client, freezer) -> None:
+    entry, miio = await setup(hass)
+    device = entry.runtime_data.coordinator.device
+    miio.overrides[(4, 1)] = device.values["status"] = Status.CLEANING.value
+    client = await hass_ws_client(hass)  # a card open: a read each tick
+    await client.send_json_auto_id({"type": f"{DOMAIN}/map/subscribe", "entity_id": "vacuum.x10"})
+    assert (await client.receive_json())["success"]
+    miio.cloud.device_data.side_effect = CloudConnectionError("down")
+
+    async def reads(seconds: float) -> int:
+        miio.cloud.device_data.reset_mock()
+        for _ in range(int(seconds / 2.5)):
+            freezer.tick(timedelta(seconds=2.5))
+            async_fire_time_changed(hass)
+            await hass.async_block_till_done(wait_background_tasks=True)
+        return miio.cloud.device_data.await_count
+
+    assert await reads(60) <= 4  # after 10, 20 and 40 s, not 24 times
+    miio.cloud.device_data.side_effect = None
+    miio.cloud.device_data.return_value = []
+    await reads(BACKOFF[1])  # the cloud is back: once the wait is over, each tick again
+    assert await reads(10) >= 4
 
 
 def _map_warnings(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
