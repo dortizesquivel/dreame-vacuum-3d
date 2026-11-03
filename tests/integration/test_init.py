@@ -292,6 +292,38 @@ async def test_login_that_needs_a_person_asks_for_reauth(hass: HomeAssistant) ->
     assert hass.config_entries.flow.async_progress_by_handler(DOMAIN, match_context={"source": SOURCE_REAUTH})
 
 
+async def test_a_refused_password_stops_the_cloud_until_a_reauth(hass: HomeAssistant) -> None:
+    entry, miio, cloud = await _setup_on_cloud(hass)
+    cloud.rpc.side_effect = CloudAuthError("invalid_auth")
+    cloud.login.reset_mock()
+    cloud.login.side_effect = CloudAuthError("invalid_auth")
+
+    coordinator = entry.runtime_data.coordinator
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    calls = cloud.rpc.await_count
+    for _ in range(3):
+        await coordinator.async_refresh()
+
+    cloud.login.assert_awaited_once()  # the password went out once, not on each refresh
+    assert cloud.rpc.await_count == calls  # nor anything else to the cloud
+    assert hass.config_entries.flow.async_progress_by_handler(DOMAIN, match_context={"source": SOURCE_REAUTH})
+
+    # The reauth reloads the entry with the new password: the cloud is back.
+    cloud.rpc.side_effect = _mock_cloud().rpc.side_effect
+    cloud.login.side_effect = None
+    with (
+        patch("custom_components.dreame_vacuum_3d.XiaomiCloud", return_value=cloud),
+        patch("custom_components.dreame_vacuum_3d.MiioClient", return_value=miio),
+    ):
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+    calls = cloud.rpc.await_count
+    await entry.runtime_data.coordinator.async_refresh()
+    assert entry.runtime_data.coordinator.last_update_success
+    assert cloud.rpc.await_count > calls
+
+
 async def test_setup_removes_the_old_dnd_numbers(hass: HomeAssistant) -> None:
     registry = er.async_get(hass)
     entry = _entry()

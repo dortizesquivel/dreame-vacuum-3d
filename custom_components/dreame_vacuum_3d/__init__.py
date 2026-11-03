@@ -28,6 +28,7 @@ from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.util.hass_dict import HassKey
 
 from .const import CONF_AUTH, CONF_DID, DOMAIN
 from .coordinator import DreameDataUpdateCoordinator
@@ -49,6 +50,9 @@ from .protocol.miot import Send
 from .websocket import async_register_websocket
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+# Entries whose saved password the Xiaomi cloud refused: no cloud calls until a reauth reloads them.
+REFUSED: HassKey[set[str]] = HassKey(f"{DOMAIN}_refused")
 
 MAP_FILE_TRIES = 4
 MAP_FILE_WAIT = 1.0  # s between tries
@@ -87,6 +91,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Serve the 3D card and its WebSocket API, once per Home Assistant run."""
     hass.data[MAP_LISTENERS] = {}
     hass.data[MAP_VIEWERS] = {}
+    hass.data[REFUSED] = set()
     async_register_websocket(hass)
     await hass.http.async_register_static_paths([StaticPathConfig(CARD_URL, str(CARD), cache_headers=False)])
     # The content hash in the URL makes browsers fetch the card again after an update.
@@ -104,6 +109,7 @@ def _file_hash(path: Path) -> str:
 
 async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bool:
     """Set up a vacuum from a config entry."""
+    hass.data[REFUSED].discard(entry.entry_id)
     session = async_create_clientsession(hass, cookie_jar=CookieJar(quote_cookie=False))
     cloud = XiaomiCloud(
         session,
@@ -205,7 +211,7 @@ def _persist_auth(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud) -
 def _cloud_sender(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud, did: str) -> Send:
     """Cloud RPC that logs in again with the saved password when the session expires.
 
-    Only a login that needs a person (captcha, two-factor) ends in a reauth.
+    A login that fails (a changed password, a captcha, two-factor) asks the user for a new password instead.
     """
 
     async def send(method: str, params: Any) -> Any:
@@ -273,12 +279,23 @@ def _history_file(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud) -
 async def _with_relogin[T](
     hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud, call: Callable[[], Awaitable[T]]
 ) -> T:
+    """Run a cloud call, logging in again once with the saved password if the session expired.
+
+    If that login fails, ask the user for a new password and make no more cloud calls until the entry reloads with
+    it: sending a refused password again and again gets the Xiaomi account captcha-gated or locked.
+    """
+    if entry.entry_id in hass.data[REFUSED]:
+        raise CloudAuthError("invalid_auth")
     try:
         return await call()
     except CloudAuthError:
+        if entry.entry_id in hass.data[REFUSED]:  # another call's login failed meanwhile
+            raise
         try:
             await cloud.login(entry.data[CONF_USERNAME], entry.data[CONF_PASSWORD])
-        except CloudLoginRequired as err:
+        except (CloudAuthError, CloudLoginRequired) as err:
+            hass.data[REFUSED].add(entry.entry_id)
+            entry.async_start_reauth(hass)
             raise CloudAuthError("invalid_auth") from err
         _persist_auth(hass, entry, cloud)
         return await call()

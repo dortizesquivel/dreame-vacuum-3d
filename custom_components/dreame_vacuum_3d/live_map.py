@@ -37,6 +37,7 @@ UNWATCHED_EVERY = 5  # s between reads while it moves and no card shows the map:
 IDLE_EVERY = 900  # s between frames while it stays put: the map rarely changes then
 FIRST_RETRY = 30  # s: until a first frame comes (a robot just woken may send none), ask again this soon
 WHOLE_EVERY = 60  # s: while it moves, ask it for a whole frame this often (it mostly refuses then)
+BACKOFF = (10, 600)  # s: after the cloud fails, wait the first, then twice as long each time, up to the second
 _ERRORS = (MiioError, MiotError, CloudError, dmap.MapError)
 
 type FileFetcher = Callable[[str], Awaitable[bytes | None]]
@@ -70,6 +71,8 @@ class LiveMap:
         self._saved: tuple[dmap.Grid, bytearray, list[dict[str, Any]]] | None = None  # its grid, open floor, furniture
         self._fetching = False
         self._next = 0.0
+        self._backoff = 0.0  # s to wait after the cloud failed, while it keeps failing
+        self._hold = 0.0  # monotonic time before which nothing is fetched
         self._was_active = False
         self._warned = False
         self._bad_frame = False  # warned about a frame with a bad saved map, until a whole frame is good again
@@ -128,7 +131,7 @@ class LiveMap:
         moving = active and (self._watched() or (now - self._read_at).total_seconds() >= UNWATCHED_EVERY - 1)
         due = moving or (self._was_active and not active) or monotonic() >= self._next
         self._was_active = active
-        if due and not self._fetching:
+        if due and not self._fetching and monotonic() >= self._hold:
             if active:
                 self._read_at = now
             self._fetching = True
@@ -156,6 +159,10 @@ class LiveMap:
         if not frames:
             if self.pose is None:
                 self._next = monotonic() + FIRST_RETRY
+            if isinstance(error, CloudError):  # down, or refusing us: not on every tick
+                self._backoff = min(2 * self._backoff or BACKOFF[0], BACKOFF[1])
+                self._hold = monotonic() + self._backoff
+                self._next = max(self._next, self._hold)
             if error is not None:
                 # Paused mid-task, the robot sends no map, as while it cleans: not worth a warning.
                 if self._warned or parse_enum(Status, self._device.values.get("status")) == Status.PAUSED:
@@ -165,6 +172,7 @@ class LiveMap:
                     self._warned = True
             return
         self._warned = False
+        self._backoff = 0.0
         if not self._loaded and self._store is not None:
             self._known = await self._store.async_load()
             self._loaded = True
