@@ -1,6 +1,6 @@
 # Dreame Vacuum 3D for Home Assistant
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![hacs_badge](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 [![GitHub release](https://img.shields.io/github/v/release/dortizesquivel/dreame-vacuum-3d)](https://github.com/dortizesquivel/dreame-vacuum-3d/releases)
 [![Downloads](https://img.shields.io/github/downloads/dortizesquivel/dreame-vacuum-3d/dreame_vacuum_3d.zip?displayAssetName=false&label=downloads)](https://github.com/dortizesquivel/dreame-vacuum-3d/releases)
 [![CI](https://github.com/dortizesquivel/dreame-vacuum-3d/actions/workflows/ci.yml/badge.svg)](https://github.com/dortizesquivel/dreame-vacuum-3d/actions/workflows/ci.yml)
@@ -29,15 +29,16 @@ A Home Assistant integration for Dreame robot vacuums: local miIO control, Xiaom
 
 ### Via HACS (recommended)
 
-1. In Home Assistant, open **HACS** → the three-dot menu → **Custom repositories**.
-2. Add `https://github.com/dortizesquivel/dreame-vacuum-3d` as category **Integration**.
-3. Search for **Dreame Vacuum 3D**, download it and restart Home Assistant.
+1. In Home Assistant, open **HACS** and search for **Dreame Vacuum 3D**.
+2. Download it and restart Home Assistant.
 
 Or open it in HACS on your own Home Assistant with this button, then select **Download** and restart:
 
 [![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=dortizesquivel&repository=dreame-vacuum-3d&category=integration)
 
 **Updates:** new versions show up in HACS and under **Settings → Updates**.
+
+If the search does not find it, add it as a custom repository: open **HACS** → the three-dot menu → **Custom repositories**, add `https://github.com/dortizesquivel/dreame-vacuum-3d` as category **Integration**, then search again.
 
 ### Manual
 
