@@ -2,6 +2,11 @@
 
 All notable releases of Dreame Vacuum 3D are listed here. The [Release workflow](.github/workflows/release.yml) prepends each tagged version.
 
+## v0.1.15 - 2026-11-04
+
+- fix(integration): a refused password asks for reauth and stops the cloud calls (fa8bb7d)
+- chore(deps): bump the pip group with 2 updates (fb7202e)
+
 ## v0.1.14 - 2026-10-30
 
 - docs(security): the integration has a dashboard card (818dfd8)
