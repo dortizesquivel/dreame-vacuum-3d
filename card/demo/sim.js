@@ -166,11 +166,15 @@ export class Sim {
   }
 
   /** Clean a zone [x0, y0, x1, y1] (mm), then go back to the dock. */
-  cleanZone([x0, y0, x1, y1]) {
-    const [a, b] = [this.toCell([x0, y0]), this.toCell([x1, y1])];
-    this.clean([[a[0], a[1], b[0], b[1]]]);
+  /** Clean a zone [x0, y0, x1, y1] (map mm), or several [[x0, y0, x1, y1], …], in order. */
+  cleanZone(zones) {
+    const rects = Array.isArray(zones[0]) ? zones : [zones];
+    this.clean(rects.map(([x0, y0, x1, y1]) => {
+      const [a, b] = [this.toCell([x0, y0]), this.toCell([x1, y1])];
+      return [a[0], a[1], b[0], b[1]];
+    }));
     this.active = [];
-    this.zones = [[x0, y0, x1, y1]];
+    this.zones = rects;
   }
 
   /** Clean these rooms (or zones, in cells), in order, then go back to the dock. modes: { room: vacuum | mop | both }, else this.mode, else both. */

@@ -40,6 +40,7 @@ async def test_selects_created_and_write(hass: HomeAssistant) -> None:
         "drying_time",
         "mop_wash_level",
         "carpet_cleaning",
+        "carpet_sensitivity",
     } <= set(selects)
 
     # Packed cleaning_mode 204290 → SWEEPING (bits == 2).
@@ -47,6 +48,14 @@ async def test_selects_created_and_write(hass: HomeAssistant) -> None:
     assert hass.states.get(selects["suction_level"].entity_id).state == "strong"
     assert hass.states.get(selects["auto_empty_frequency"].entity_id).state == "3"
     assert hass.states.get(selects["drying_time"].entity_id).state == "2"
+    assert hass.states.get(selects["carpet_sensitivity"].entity_id).state == "medium"
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {ATTR_ENTITY_ID: selects["carpet_sensitivity"].entity_id, "option": "high"},
+        blocking=True,
+    )
+    assert miio.overrides[(4, 28)] == 3
 
     miio.calls.clear()
     await hass.services.async_call(
@@ -93,6 +102,11 @@ async def test_switches_and_numbers(hass: HomeAssistant) -> None:
     times = _by_key(hass, "time")
 
     assert {"carpet_boost", "dnd", "child_lock", "obstacle_avoidance", "self_clean", "resume_cleaning"} <= set(switches)
+    assert hass.states.get(switches["tight_mopping"].entity_id).state == STATE_OFF
+    await hass.services.async_call(
+        "switch", "turn_on", {ATTR_ENTITY_ID: switches["tight_mopping"].entity_id}, blocking=True
+    )
+    assert miio.overrides[(4, 29)] in (1, True)
     assert "auto_mount_mop" not in switches  # answers, but the X10+ doesn't mount its mop
     assert set(numbers) == {"volume"}
     assert set(times) == {"dnd_start", "dnd_end"}

@@ -411,6 +411,15 @@ class MopWashLevel(IntEnum):
     DEEP = 2
 
 
+class CarpetSensitivity(IntEnum):
+    """How readily the robot takes the floor for a carpet."""
+
+    UNKNOWN = -1
+    LOW = 1
+    MEDIUM = 2
+    HIGH = 3
+
+
 class CarpetCleaning(IntEnum):
     """How the robot treats carpets."""
 

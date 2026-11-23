@@ -150,9 +150,10 @@ export class VacuumScene {
     this.inBatch = 0;
     this.lastBatch = 0;
     this.catchUpBy = 0;       // when the robot drawn should have caught up with the last batch
-    this.selected = null;
+    this.selected = [];                // the rooms picked to clean, in the order they were picked
     this.zoneMode = false;
-    this.zoneGroup = new Group();      // the zone being drawn or offered, a rectangle in the map's axes
+    this.zones = [];                   // the zones drawn to clean, rectangles in the map's axes
+    this.zoneGroup = new Group();      // those zones and the one being drawn
     this.scene.add(this.zoneGroup);
     this.onRoomTap = null;     // (room id) => void
     this.onZone = null;        // ([x0, y0, x1, y1] in map mm) => void, when a zone has been drawn
@@ -169,7 +170,7 @@ export class VacuumScene {
     this._onMove = (e) => {
       if (!this.zoneMode || !this._zoneFrom) return;
       const to = this._floorAt(e);
-      if (to) this.showZone(zoneRect(this._zoneFrom, to));
+      if (to) this.showZone(zoneRect(this._zoneFrom, to));   // the zones drawn, and this one as it grows
     };
     this._onUp = (e) => {
       if (!this.zoneMode) { this._tap(e); return; }
@@ -279,7 +280,7 @@ export class VacuumScene {
       this.mapSig = sig;
       this._buildMap();
     }
-    const overlay = `${sig}|${(map.active ?? []).join()}|${this.selected}`;
+    const overlay = `${sig}|${(map.active ?? []).join()}|${this.selected.join()}`;
     if (overlay !== this.overlaySig) {
       this.overlaySig = overlay;
       this._buildOverlay();
@@ -364,8 +365,9 @@ export class VacuumScene {
     if (this.map) this.setMap(this.map);
   }
 
-  select(id) {
-    this.selected = id ?? null;
+  /** The rooms picked to clean: an id, a list of them, or none. */
+  select(ids) {
+    this.selected = (ids == null ? [] : [].concat(ids)).map(String);
     if (this.map) this.setMap(this.map);
   }
 
@@ -502,10 +504,10 @@ export class VacuumScene {
     clearGroup(this.overlayGroup);
     const { cells = {}, active = [] } = this.map;
     const accent = this.theme.accent;
-    const ids = new Set([...active.map(String), ...(this.selected != null ? [String(this.selected)] : [])]);
+    const ids = new Set([...active.map(String), ...this.selected]);
     for (const id of ids) {
       if (!cells[id]) continue;
-      const strong = String(this.selected) === id;
+      const strong = this.selected.includes(id);
       this.overlayGroup.add(this._rectMesh(cells[id], this.xf.floor + LIFT, accent, strong ? 0.45 : 0.22));
     }
   }
@@ -740,20 +742,28 @@ export class VacuumScene {
     this.controls.enableRotate = !on;
     this.renderer.domElement.style.touchAction = on ? 'none' : 'pan-y';
     this.renderer.domElement.style.cursor = on ? 'crosshair' : '';
-    if (!on) this.showZone(null);
+    if (!on) this.setZones([]);
   }
 
-  /** Draw a zone [x0, y0, x1, y1] (map mm) on the floor, or none. */
+  /** The zones [[x0, y0, x1, y1], …] (map mm) drawn on the floor. */
+  setZones(rects) {
+    this.zones = rects ?? [];
+    this.showZone(null);
+  }
+
+  /** Draw the zones, and one more being drawn [x0, y0, x1, y1] (map mm) or none. */
   showZone(rect) {
     clearGroup(this.zoneGroup);
-    if (rect && this.xf && this.theme) {
-      const [x0, y0, x1, y1] = rect, y = this.xf.floor + LIFT * 2.5;
-      const c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, yy]) => { const [X, Z] = this.xf.point(x, yy); return V(X, y, Z); });
-      const fill = new Mesh(new BufferGeometry().setFromPoints([c[0], c[1], c[2], c[0], c[2], c[3]]),
-        new MeshBasicMaterial({ color: this.theme.accent, transparent: true, opacity: 0.25, depthWrite: false, side: DoubleSide }));
-      const edge = new LineSegments(new BufferGeometry().setFromPoints([c[0], c[1], c[1], c[2], c[2], c[3], c[3], c[0]]),
-        new LineBasicMaterial({ color: this.theme.accent }));
-      this.zoneGroup.add(fill, edge);
+    if (this.xf && this.theme) {
+      const y = this.xf.floor + LIFT * 2.5;
+      for (const [x0, y0, x1, y1] of rect ? [...this.zones, rect] : this.zones) {
+        const c = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, yy]) => { const [X, Z] = this.xf.point(x, yy); return V(X, y, Z); });
+        const fill = new Mesh(new BufferGeometry().setFromPoints([c[0], c[1], c[2], c[0], c[2], c[3]]),
+          new MeshBasicMaterial({ color: this.theme.accent, transparent: true, opacity: 0.25, depthWrite: false, side: DoubleSide }));
+        const edge = new LineSegments(new BufferGeometry().setFromPoints([c[0], c[1], c[1], c[2], c[2], c[3], c[3], c[0]]),
+          new LineBasicMaterial({ color: this.theme.accent }));
+        this.zoneGroup.add(fill, edge);
+      }
     }
     this.dirty = true;
   }
