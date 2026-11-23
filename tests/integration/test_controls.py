@@ -13,6 +13,7 @@ import pytest
 from custom_components.dreame_vacuum_3d.const import DOMAIN
 from custom_components.dreame_vacuum_3d.device.enums import CleaningMode, SuctionLevel
 from custom_components.dreame_vacuum_3d.protocol.miot import MiotError
+from tests.integration import helpers
 from tests.integration.helpers import setup_fixture_entry
 
 
@@ -251,6 +252,19 @@ async def test_buttons_reset_wash_dry_empty(hass: HomeAssistant) -> None:
         blocking=True,
     )
     assert ("action", {"did": "call", "siid": 15, "aiid": 1, "in": []}) in miio.calls
+
+
+async def test_dock_buttons_absent_without_a_dock(hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A robot whose dock reports neither auto-empty nor self-wash gets none of the dock's buttons."""
+    rows = helpers.fixture_by_key()
+    for key in ("auto_empty_status", "self_wash_base_status", "warn_status"):
+        rows[key] = {**rows[key], "code": -1, "value": None}
+    monkeypatch.setattr(helpers, "fixture_by_key", lambda: rows)
+    await setup_fixture_entry(hass)
+    buttons = _by_key(hass, "button")
+    for key in ("start_auto_empty", "wash_mop", "stop_washing", "dry_mop", "stop_drying", "clear_warning"):
+        assert key not in buttons
+    assert "reset_main_brush" in buttons
 
 
 async def test_device_cleaning_mode_helpers() -> None:

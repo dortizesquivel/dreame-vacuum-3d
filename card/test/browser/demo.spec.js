@@ -330,6 +330,14 @@ test('the dock: empty the bin, wash or dry the mop, and stop while it washes or 
     card.hass = { ...hass, states: { ...hass.states, 'sensor.demo_state': { ...hass.states['sensor.demo_state'], state: 'drying' } } };
   });
   await expect(actions).toHaveText(['🗑️ Empty the dust bin', '🫧 Wash the mop', '💨 Stop drying the mop']);
+  // And while it washes, washing's stop.
+  await page.evaluate(() => {
+    const card = window.demo.card, hass = card._hass;
+    card.hass = { ...hass, states: { ...hass.states, 'sensor.demo_state': { ...hass.states['sensor.demo_state'], state: 'washing' } } };
+  });
+  await expect(actions).toHaveText(['🗑️ Empty the dust bin', '🫧 Stop washing the mop', '💨 Dry the mop']);
+  await actions.nth(1).click();
+  expect(await page.evaluate(() => window.demo.calls.at(-1).target)).toEqual({ entity_id: 'button.demo_stop_washing' });
   await card.locator('[data-station]').click();
   await expect(card.locator('.panel')).toBeHidden();
   // controls: false hides it, as the settings.

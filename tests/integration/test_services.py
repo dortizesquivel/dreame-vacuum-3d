@@ -206,6 +206,14 @@ async def test_invalid_service_data_rejected(hass: HomeAssistant) -> None:
             blocking=True,
         )
 
+    with pytest.raises(MultipleInvalid):
+        await hass.services.async_call(
+            DOMAIN,
+            "vacuum_dock_action",
+            {ATTR_ENTITY_ID: entity_id, "action": "self_destruct"},
+            blocking=True,
+        )
+
 
 @pytest.mark.parametrize(
     ("service", "data"),
