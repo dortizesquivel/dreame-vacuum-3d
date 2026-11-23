@@ -53,6 +53,10 @@ SWITCHES: tuple[DreameSwitchEntityDescription, ...] = (
         entity_category=EntityCategory.CONFIG,
     ),
     DreameSwitchEntityDescription(
+        key="tight_mopping",
+        entity_category=EntityCategory.CONFIG,
+    ),
+    DreameSwitchEntityDescription(
         key="self_clean",
         entity_category=EntityCategory.CONFIG,
     ),

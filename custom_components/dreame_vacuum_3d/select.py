@@ -1,4 +1,4 @@
-"""Select entities for mode, suction, water, auto-empty, mop drying time and mop wash."""
+"""Select entities for mode, suction, water, auto-empty, mop drying time, mop wash and carpets."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .coordinator import DreameDataUpdateCoordinator
 from .device.enums import (
     CarpetCleaning,
+    CarpetSensitivity,
     CleaningMode,
     MopWashLevel,
     SuctionLevel,
@@ -99,6 +100,12 @@ SELECTS: tuple[DreameSelectEntityDescription, ...] = (
         key="mop_wash_level",
         options=_options(MopWashLevel),
         enum_cls=MopWashLevel,
+        entity_category=EntityCategory.CONFIG,
+    ),
+    DreameSelectEntityDescription(
+        key="carpet_sensitivity",
+        options=_options(CarpetSensitivity),
+        enum_cls=CarpetSensitivity,
         entity_category=EntityCategory.CONFIG,
     ),
     DreameSelectEntityDescription(

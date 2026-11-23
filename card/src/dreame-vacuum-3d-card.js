@@ -6,6 +6,7 @@ const DOMAIN = 'dreame_vacuum_3d';
 const ZOOM_STEP = 1.4;
 const REPLAY_SPEED = 20;     // a past cleaning plays this many times faster than the robot went
 const COVERAGE = 5;          // the coverage shows this many past cleanings
+const MAX_ZONES = 10;        // the robot cleans at most this many zones in one task
 // What the robot does that gets a tag over it, by its state sensor's value (the integration's DreameVacuumState).
 const BADGES = {
   charging: '⚡', smart_charging: '⚡',
@@ -50,8 +51,9 @@ const STRINGS = {
     clean: 'Clean {room}', cancel: 'Cancel', close: 'Close', started: 'Cleaning {room}', failed: 'Could not start: {error}',
     zoomIn: 'Zoom in', zoomOut: 'Zoom out', missing: 'Not on the map: {rooms}',
     start: 'Start', pause: 'Pause', dock: 'Back to the dock', commandFailed: 'The robot did not take it: {error}',
-    zone: 'Draw a zone to clean', drawZone: 'Drag on the floor to draw the zone', zoneSize: 'Zone of {w} × {h} m',
-    cleanZone: 'Clean the zone', theZone: 'the zone',
+    zone: 'Draw zones to clean', drawZone: 'Drag on the floor to draw a zone; draw more to clean them all', zoneSize: 'Zone of {w} × {h} m',
+    cleanZone: 'Clean the zone', theZone: 'the zone', zones: '{n} zones: {sizes}', cleanZones: 'Clean {n} zones', theZones: '{n} zones',
+    undo: 'Undo the last zone', maxZones: 'At most {n} zones', rooms: 'In this order: {rooms}', cleanRooms: 'Clean {n} rooms',
     history: 'Past cleanings', noHistory: 'No cleanings yet', lastCleanings: 'Last cleanings: tap one to watch it again',
     coverage: 'Coverage', live: 'Live', replaying: 'Replaying {when}, ×{speed}', replayed: 'Replayed {when}',
     otherMap: 'That cleaning was on another map', noReplay: 'Could not get that cleaning: {error}', whole: 'the whole house',
@@ -70,8 +72,9 @@ const STRINGS = {
     clean: 'Limpiar {room}', cancel: 'Cancelar', close: 'Cerrar', started: 'Limpiando {room}', failed: 'No se pudo empezar: {error}',
     zoomIn: 'Acercar', zoomOut: 'Alejar', missing: 'No están en el mapa: {rooms}',
     start: 'Empezar', pause: 'Pausar', dock: 'Volver a la base', commandFailed: 'El robot no lo aceptó: {error}',
-    zone: 'Dibujar una zona para limpiar', drawZone: 'Arrastra sobre el suelo para dibujar la zona', zoneSize: 'Zona de {w} × {h} m',
-    cleanZone: 'Limpiar la zona', theZone: 'la zona',
+    zone: 'Dibujar zonas para limpiar', drawZone: 'Arrastra sobre el suelo para dibujar una zona; dibuja más para limpiarlas todas', zoneSize: 'Zona de {w} × {h} m',
+    cleanZone: 'Limpiar la zona', theZone: 'la zona', zones: '{n} zonas: {sizes}', cleanZones: 'Limpiar {n} zonas', theZones: '{n} zonas',
+    undo: 'Deshacer la última zona', maxZones: 'Como mucho {n} zonas', rooms: 'En este orden: {rooms}', cleanRooms: 'Limpiar {n} habitaciones',
     history: 'Limpiezas anteriores', noHistory: 'Aún no hay limpiezas', lastCleanings: 'Últimas limpiezas: toca una para verla otra vez',
     coverage: 'Cobertura', live: 'En directo', replaying: 'Repitiendo {when}, ×{speed}', replayed: 'Repetida {when}',
     otherMap: 'Esa limpieza fue en otro mapa', noReplay: 'No se pudo traer esa limpieza: {error}', whole: 'toda la casa',
@@ -293,6 +296,7 @@ class DreameVacuum3DCard extends HTMLElement {
             <div class="opts" hidden></div>
             <button type="button" class="coverage" hidden></button>
             <button type="button" class="tune" hidden><svg viewBox="0 0 24 24"><path d="${ICONS.settings}"></path></svg><span></span></button>
+            <button type="button" class="undo" hidden></button>
             <button type="button" class="cancel"></button>
             <button type="button" class="primary clean"></button>
           </div>
@@ -303,7 +307,7 @@ class DreameVacuum3DCard extends HTMLElement {
     this._root = root;
     const $ = (s) => root.querySelector(s);
     this._els = { title: $('.title'), chip: $('.chip'), viewport: $('.viewport'), status: $('.status'), panel: $('.panel'),
-      msg: $('.panel .msg'), clean: $('.panel .clean'), cancel: $('.panel .cancel'), routines: $('.routines'),
+      msg: $('.panel .msg'), clean: $('.panel .clean'), cancel: $('.panel .cancel'), undo: $('.panel .undo'), routines: $('.routines'),
       list: $('.panel .list'), coverage: $('.panel .coverage'), opts: $('.panel .opts'), tune: $('.panel .tune'),
       settings: $('[data-settings]'), station: $('[data-station]') };
     root.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
@@ -347,6 +351,7 @@ class DreameVacuum3DCard extends HTMLElement {
     });
     this._els.coverage.addEventListener('click', () => this._toggleCoverage());
     this._els.cancel.addEventListener('click', () => this._pick(null));
+    this._els.undo.addEventListener('click', () => this._undoZone());
     this._els.clean.addEventListener('click', () => this._clean());
     root.querySelectorAll('[data-cmd]').forEach((b) => b.addEventListener('click', () => this._command(b.dataset.cmd)));
     this._els.routines.addEventListener('click', (e) => {
@@ -799,17 +804,49 @@ class DreameVacuum3DCard extends HTMLElement {
     cancel.textContent = this._t('cancel');
   }
 
+  /** A zone drawn joins the others drawn since zone mode began, up to MAX_ZONES. */
   _offerZone(rect) {
-    this._zone = rect;
-    this._scene.showZone(rect);
-    const { panel, msg, clean, cancel } = this._els;
+    const zones = this._zones ?? [];
+    if (zones.length >= MAX_ZONES) {
+      this._scene.setZones(zones);
+      this._els.msg.dataset.error = 'true';
+      this._els.msg.textContent = this._t('maxZones', { n: MAX_ZONES });
+      return;
+    }
+    this._zones = [...zones, rect];
+    this._renderZones();
+  }
+
+  _undoZone() {
+    this._zones = (this._zones ?? []).slice(0, -1);
+    this._renderZones();
+  }
+
+  /** The zones drawn, on the floor and on the panel: their sizes, and the button that cleans them. */
+  _renderZones() {
+    const zones = this._zones ?? [];
+    this._scene?.setZones(zones);
+    const { panel, msg, clean, cancel, undo } = this._els;
     const m = (mm) => (mm / 1000).toLocaleString(this._lang(), { maximumFractionDigits: 1 });
+    const size = (r) => `${m(r[2] - r[0])} × ${m(r[3] - r[1])} m`;
     panel.hidden = false;
     msg.dataset.error = 'false';
-    msg.textContent = this._t('zoneSize', { w: m(rect[2] - rect[0]), h: m(rect[3] - rect[1]) });
-    clean.hidden = false;
-    clean.textContent = this._t('cleanZone');
     cancel.textContent = this._t('cancel');
+    undo.textContent = this._t('undo');
+    undo.hidden = !zones.length;
+    if (!zones.length) {
+      msg.textContent = this._t('drawZone');
+      clean.hidden = true;
+      this._els.tune.hidden = true;
+      this._els.opts.hidden = true;
+      return;
+    }
+    const [one] = zones;
+    msg.textContent = zones.length === 1
+      ? this._t('zoneSize', { w: m(one[2] - one[0]), h: m(one[3] - one[1]) })
+      : this._t('zones', { n: zones.length, sizes: zones.map(size).join(' · ') });
+    clean.hidden = false;
+    clean.textContent = zones.length === 1 ? this._t('cleanZone') : this._t('cleanZones', { n: zones.length });
     this._offerSettings();
   }
 
@@ -947,20 +984,30 @@ class DreameVacuum3DCard extends HTMLElement {
     }
     if (id == null && this._zoneMode) {
       this._zoneMode = false;
-      this._zone = null;
+      this._zones = [];
       this._scene?.setZoneMode(false);
       if (this._root) this._renderButtons();
     }
-    const room = id != null ? this._map?.rooms?.[id] : null;
-    this._picked = room ? id : null;
+    if (this._els) this._els.undo.hidden = true;
+    // A tap on a room adds it to the rooms to clean, or takes it off again; anywhere else clears them.
+    const rooms = this._map?.rooms ?? {};
+    const picked = (this._picked ?? []).filter((r) => rooms[r]);
+    const key = id != null && rooms[id] ? String(id) : null;
+    this._picked = key == null ? [] : picked.includes(key) ? picked.filter((r) => r !== key) : [...picked, key];
     this._scene?.select(this._picked);
     const { panel, msg, clean, cancel } = this._els;
-    panel.hidden = !room;
+    panel.hidden = !this._picked.length;
     msg.dataset.error = 'false';
     msg.textContent = '';
-    if (!room) return;
+    if (!this._picked.length) return;
+    const name = (r) => rooms[r]?.name ?? `#${r}`;
     clean.hidden = false;
-    clean.textContent = this._t('clean', { room: room.name ?? `#${id}` });
+    if (this._picked.length === 1) {
+      clean.textContent = this._t('clean', { room: name(this._picked[0]) });
+    } else {
+      msg.textContent = this._t('rooms', { rooms: this._picked.map(name).join(' → ') });
+      clean.textContent = this._t('cleanRooms', { n: this._picked.length });
+    }
     cancel.textContent = this._t('cancel');
     this._offerSettings();
   }
@@ -973,17 +1020,23 @@ class DreameVacuum3DCard extends HTMLElement {
   }
 
   async _clean() {
-    const id = this._picked, zone = this._zone;
-    if (id == null && !zone) return;
+    const ids = this._picked ?? [], zones = this._zones ?? [];
+    if (!ids.length && !zones.length) return;
     const { clean } = this._els;
     clean.disabled = true;
     try {
       const repeats = (this._repeats ?? 1) > 1 ? { repeats: this._repeats } : {};
-      const started = zone
-        ? await this._start({ zone, ...repeats }, this._t('theZone'), 'vacuum_clean_zone')
-        : await this._start({ segments: [Number(id)], ...repeats }, this._map.rooms[id]?.name ?? `#${id}`);
+      const name = (r) => this._map.rooms[r]?.name ?? `#${r}`;
+      // One call for them all: the robot cleans the rooms in the order they were picked, the zones as drawn.
+      const started = zones.length
+        ? await this._start({ zone: zones, ...repeats }, zones.length === 1 ? this._t('theZone') : this._t('theZones', { n: zones.length }), 'vacuum_clean_zone')
+        : await this._start({ segments: ids.map(Number), ...repeats }, ids.map(name).join(', '));
       if (started) {
+        // That task has its rooms and zones: a tap or a drag now starts a new pick (the zones stay drawn till closed).
+        this._picked = [];
+        this._zones = [];
         clean.hidden = true;
+        this._els.undo.hidden = true;
         this._els.tune.hidden = true;
         this._els.opts.hidden = true;
       }

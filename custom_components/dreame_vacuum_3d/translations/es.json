@@ -646,6 +646,14 @@
           "deep": "Profundo"
         }
       },
+      "carpet_sensitivity": {
+        "name": "Sensibilidad de alfombras",
+        "state": {
+          "low": "Baja",
+          "medium": "Media",
+          "high": "Alta"
+        }
+      },
       "carpet_cleaning": {
         "name": "Limpieza de alfombras",
         "state": {
@@ -717,6 +725,9 @@
       },
       "pet_picture": {
         "name": "Fotos de mascotas"
+      },
+      "tight_mopping": {
+        "name": "Fregado intensivo"
       }
     },
     "number": {

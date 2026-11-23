@@ -646,6 +646,14 @@
           "deep": "Deep"
         }
       },
+      "carpet_sensitivity": {
+        "name": "Carpet sensitivity",
+        "state": {
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High"
+        }
+      },
       "carpet_cleaning": {
         "name": "Carpet cleaning",
         "state": {
@@ -717,6 +725,9 @@
       },
       "pet_picture": {
         "name": "Pet pictures"
+      },
+      "tight_mopping": {
+        "name": "Tight mopping"
       }
     },
     "number": {

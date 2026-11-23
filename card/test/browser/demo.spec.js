@@ -129,7 +129,7 @@ test('a zone drawn on the floor gets cleaned', async ({ page }) => {
   await open(page, '&house=flat&view=plan');
   const card = page.locator('dreame-vacuum-3d-card');
   await card.locator('[data-zone]').click();
-  await expect(card.locator('.panel .msg')).toHaveText('Drag on the floor to draw the zone');
+  await expect(card.locator('.panel .msg')).toHaveText('Drag on the floor to draw a zone; draw more to clean them all');
   const box = await card.locator('canvas').boundingBox();
   const [cx, cy] = [box.x + box.width / 2, box.y + box.height / 2];
   await page.mouse.move(cx - 120, cy - 60);
@@ -343,6 +343,59 @@ test('the dock: empty the bin, wash or dry the mop, and stop while it washes or 
   // controls: false hides it, as the settings.
   await page.evaluate(() => { const { card } = window.demo; card.setConfig({ ...card._config, model: undefined, controls: false }); card.hass = card._hass; });
   await expect(card.locator('[data-station]')).toBeHidden();
+});
+
+test('several rooms: each tap adds a room or takes it off, and they clean in that order in one task', async ({ page }) => {
+  await open(page, '&house=flat');
+  const card = page.locator('dreame-vacuum-3d-card');
+  const ids = await page.evaluate(() => Object.keys(window.demo.card._map.rooms).slice(0, 3));
+  const names = await page.evaluate((ids) => ids.map((r) => window.demo.card._map.rooms[r].name), ids);
+  for (const id of ids) await page.evaluate((id) => window.demo.card._pick(id), id);
+  await expect(card.locator('.panel .clean')).toHaveText('Clean 3 rooms');
+  await expect(card.locator('.panel .msg')).toHaveText(`In this order: ${names.join(' → ')}`);
+  expect(await page.evaluate(() => window.demo.card._scene.selected)).toEqual(ids);
+  // A second tap on a room takes it off.
+  await page.evaluate((id) => window.demo.card._pick(id), ids[1]);
+  await expect(card.locator('.panel .clean')).toHaveText('Clean 2 rooms');
+  await page.evaluate((id) => window.demo.card._pick(id), ids[1]);   // and back, now last
+  await card.locator('.panel .clean').click();
+  const call = await page.evaluate(() => window.demo.calls.at(-1));
+  expect(call).toMatchObject({ service: 'vacuum_clean_segment', data: { segments: [ids[0], ids[2], ids[1]].map(Number) } });
+  // A tap off the rooms clears them.
+  await page.evaluate(() => window.demo.card._pick(null));
+  expect(await page.evaluate(() => window.demo.card._scene.selected)).toEqual([]);
+});
+
+test('several zones: each drag adds one, undo takes the last off, and they clean in one task', async ({ page }) => {
+  await open(page, '&view=plan');
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-zone]').click();
+  const box = await card.locator('canvas').boundingBox();
+  const drag = async (dx, dy) => {
+    const cx = box.x + box.width / 2 + dx, cy = box.y + box.height / 2 + dy;
+    await page.mouse.move(cx - 40, cy - 30);
+    await page.mouse.down();
+    await page.mouse.move(cx + 40, cy + 30, { steps: 6 });
+    await page.mouse.up();
+  };
+  await drag(-120, 0);
+  await expect(card.locator('.panel .clean')).toHaveText('Clean the zone');
+  await expect(card.locator('.panel .undo')).toBeVisible();
+  await drag(0, 0);
+  await drag(120, 0);
+  await expect(card.locator('.panel .clean')).toHaveText('Clean 3 zones');
+  await expect(card.locator('.panel .msg')).toContainText('3 zones:');
+  expect(await page.evaluate(() => window.demo.card._scene.zones.length)).toBe(3);
+  await card.locator('.panel .undo').click();
+  await expect(card.locator('.panel .clean')).toHaveText('Clean 2 zones');
+  expect(await page.evaluate(() => window.demo.card._scene.zones.length)).toBe(2);
+  await card.locator('.panel .clean').click();
+  const call = await page.evaluate(() => window.demo.calls.at(-1));
+  expect(call.service).toBe('vacuum_clean_zone');
+  expect(call.data.zone).toHaveLength(2);
+  // Undo down to none: back to drawing, nothing to clean.
+  await page.evaluate(() => window.demo.card._pick(null));
+  expect(await page.evaluate(() => window.demo.card._scene.zones)).toEqual([]);
 });
 
 test('"controls" must be true or false', async ({ page }) => {
@@ -818,7 +871,7 @@ for (const view of ['3d', 'plan']) {
     for (const { name, x, y } of labels) {
       await page.evaluate(() => window.demo.card._pick(null));
       await page.mouse.click(x, y);
-      expect(await page.evaluate(() => { const c = window.demo.card; return c._map.rooms[c._picked]?.name; })).toBe(name);
+      expect(await page.evaluate(() => { const c = window.demo.card; return c._map.rooms[c._picked.at(-1)]?.name; })).toBe(name);
     }
   });
 }
