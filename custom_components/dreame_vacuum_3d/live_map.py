@@ -38,6 +38,7 @@ IDLE_EVERY = 900  # s between frames while it stays put: the map rarely changes 
 FIRST_RETRY = 30  # s: until a first frame comes (a robot just woken may send none), ask again this soon
 WHOLE_EVERY = 60  # s: while it moves, ask it for a whole frame this often (it mostly refuses then)
 BACKOFF = (10, 600)  # s: after the cloud fails, wait the first, then twice as long each time, up to the second
+SETTLE = 120  # s after it stops moving (docked, say) that it may still send no map: no warning for that
 _ERRORS = (MiioError, MiotError, CloudError, dmap.MapError)
 
 type FileFetcher = Callable[[str], Awaitable[bytes | None]]
@@ -74,6 +75,8 @@ class LiveMap:
         self._backoff = 0.0  # s to wait after the cloud failed, while it keeps failing
         self._hold = 0.0  # monotonic time before which nothing is fetched
         self._was_active = False
+        self._stopped_at = -float(SETTLE)  # monotonic time it last stopped moving
+        self._misses = 0  # reads in a row that got no map
         self._warned = False
         self._bad_frame = False  # warned about a frame with a bad saved map, until a whole frame is good again
         # What the lidar saw on open floor: in the last cleaning, and in the one before this one (the reference for
@@ -129,7 +132,10 @@ class LiveMap:
         # Frames while the robot moves (each tick while a card shows them), and one more when it stops, for the whole
         # path. The second's slack keeps reads on every other tick despite the timer's jitter.
         moving = active and (self._watched() or (now - self._read_at).total_seconds() >= UNWATCHED_EVERY - 1)
-        due = moving or (self._was_active and not active) or monotonic() >= self._next
+        stopped = self._was_active and not active
+        if stopped:
+            self._stopped_at = monotonic()
+        due = moving or stopped or monotonic() >= self._next
         self._was_active = active
         if due and not self._fetching and monotonic() >= self._hold:
             if active:
@@ -157,21 +163,28 @@ class LiveMap:
             self._fetching = False
             self._next = monotonic() + IDLE_EVERY
         if not frames:
-            if self.pose is None:
+            self._misses += 1
+            status = parse_enum(Status, self._device.values.get("status"))
+            # Moving (cleaning or on its way back to the dock), paused mid-task, or just stopped, the robot mostly
+            # refuses a whole map: expected, not worth a warning. Still, one miss could be a hiccup: ask again soon.
+            expected = status in ACTIVE_STATUSES or status == Status.PAUSED or monotonic() - self._stopped_at < SETTLE
+            if self.pose is None or not expected:
                 self._next = monotonic() + FIRST_RETRY
             if isinstance(error, CloudError):  # down, or refusing us: not on every tick
                 self._backoff = min(2 * self._backoff or BACKOFF[0], BACKOFF[1])
                 self._hold = monotonic() + self._backoff
                 self._next = max(self._next, self._hold)
             if error is not None:
-                # Paused mid-task, the robot sends no map, as while it cleans: not worth a warning.
-                if self._warned or parse_enum(Status, self._device.values.get("status")) == Status.PAUSED:
+                # A cloud that fails says so at once; a robot that sends no map, only when it goes on not sending one.
+                quiet = not isinstance(error, CloudError) and (expected or self._misses < 2)
+                if self._warned or quiet:
                     _LOGGER.debug("Couldn't fetch the map: %s", error)
                 else:
                     _LOGGER.warning("Couldn't fetch the map: %s", error)
                     self._warned = True
             return
         self._warned = False
+        self._misses = 0
         self._backoff = 0.0
         if not self._loaded and self._store is not None:
             self._known = await self._store.async_load()
