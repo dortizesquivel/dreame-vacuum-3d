@@ -2,6 +2,16 @@
 
 All notable releases of Dreame Vacuum 3D are listed here. The [Release workflow](.github/workflows/release.yml) prepends each tagged version.
 
+## v0.1.16 - 2026-11-23
+
+- feat: clean several rooms or zones at once, carpet sensitivity and tight mopping (b360b55)
+- test(history): count only the integration's own warnings (26b74e1)
+- fix(integration): find the device by identifier within the entry (a51d21a)
+- fix(map): no warning when the robot sends no map on its way back to the dock (bfc78f6)
+- test: dock commands, no dock, an unknown dock action, and washing's stop in the card (992a7ad)
+- feat: dock actions (empty, wash, dry and stop) in the integration and the card (64eb320)
+- docs(readme): install from the HACS default list, custom repository as fallback (756b7f3)
+
 ## v0.1.15 - 2026-11-04
 
 - fix(integration): a refused password asks for reauth and stops the cloud calls (fa8bb7d)
