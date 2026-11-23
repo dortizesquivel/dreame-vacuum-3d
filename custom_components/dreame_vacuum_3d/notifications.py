@@ -89,7 +89,7 @@ class DreameNotifier:
     def _ids(self) -> tuple[str | None, str | None]:
         did = str(self.entry.data[CONF_DID])
         entity_id = er.async_get(self.hass).async_get_entity_id("vacuum", DOMAIN, f"{did}_vacuum")
-        device = dr.async_get(self.hass).async_get_device({(DOMAIN, did)})
+        device = dr.async_get(self.hass).async_get_device_by_identifier((DOMAIN, did), self.entry.entry_id)
         return entity_id, device.id if device else None
 
     def _fire(self, event_type: str, data: dict[str, Any]) -> None:

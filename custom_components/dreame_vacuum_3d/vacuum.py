@@ -44,6 +44,14 @@ _CONSUMABLES = (
     "roller_mop_filter",
     "water_outlet_filter",
 )
+# vacuum_dock_action: action ↔ (the robot action it needs, the property the dock must report).
+_DOCK_ACTIONS: dict[str, tuple[str, str]] = {
+    "empty": ("start_auto_empty", "auto_empty_status"),
+    "wash": ("start_washing", "self_wash_base_status"),
+    "stop_washing": ("start_washing", "self_wash_base_status"),
+    "dry": ("start_washing", "self_wash_base_status"),
+    "stop_drying": ("start_washing", "self_wash_base_status"),
+}
 
 # Portions of the state map derived from Tasshack/dreame-vacuum (MIT), see NOTICE.
 _STATE_TO_ACTIVITY: dict[DreameVacuumState, VacuumActivity] = {
@@ -200,6 +208,11 @@ def _register_entity_services(platform: entity_platform.EntityPlatform) -> None:
         "vacuum_reset_consumable",
         {vol.Required("consumable"): vol.In(_CONSUMABLES)},
         "async_reset_consumable",
+    )
+    platform.async_register_entity_service(
+        "vacuum_dock_action",
+        {vol.Required("action"): vol.In(tuple(_DOCK_ACTIONS))},
+        "async_dock_action",
     )
 
 
@@ -358,6 +371,26 @@ class DreameVacuumEntity(DreameEntity, StateVacuumEntity):
                 translation_placeholders={"consumable": consumable},
             )
         await self.device.reset_consumable(consumable)
+        await self.coordinator.async_request_refresh()
+
+    @command
+    async def async_dock_action(self, action: str) -> None:
+        """Empty the dust bin, or wash or dry the mop at the dock (or stop washing or drying)."""
+        needs, reports = _DOCK_ACTIONS[action]
+        if needs not in self.device.caps.actions or reports not in self.device.available:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="dock_action_not_supported",
+                translation_placeholders={"action": action},
+            )
+        run = {
+            "empty": self.device.start_auto_empty,
+            "wash": self.device.start_washing,
+            "stop_washing": self.device.stop_washing,
+            "dry": self.device.start_drying,
+            "stop_drying": self.device.stop_drying,
+        }[action]
+        await run()
         await self.coordinator.async_request_refresh()
 
 

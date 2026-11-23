@@ -6,6 +6,7 @@ from datetime import timedelta
 import json
 import logging
 import time
+from time import monotonic
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.core import HomeAssistant
@@ -322,6 +323,55 @@ async def test_no_warning_while_paused(hass: HomeAssistant, caplog: pytest.LogCa
         await entry.runtime_data.map.refresh()
     assert "the robot sent no map" in caplog.text
     assert not _map_warnings(caplog)
+
+
+@pytest.mark.parametrize("status", [Status.BACK_HOME, Status.CLEANING])
+async def test_no_warning_while_it_moves(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, status: Status
+) -> None:
+    """On its way back to the dock, as while it cleans, the robot mostly refuses a whole map: no warning."""
+    monkeypatch.setattr("custom_components.dreame_vacuum_3d.live_map.WHOLE_EVERY", 0)  # ask for one each time
+    entry, _miio = await setup(hass)
+    device = entry.runtime_data.coordinator.device
+    device.values["status"] = status.value
+    device.request_map = AsyncMock(return_value=(None, None))
+    with caplog.at_level(logging.DEBUG):
+        for _ in range(3):
+            await entry.runtime_data.map.refresh()
+    assert "the robot sent no map" in caplog.text
+    assert not _map_warnings(caplog)
+
+
+async def test_no_warning_just_after_docking(hass: HomeAssistant, caplog: pytest.LogCaptureFixture) -> None:
+    """Just docked, it may still send no map: the read it gets when it stops doesn't warn."""
+    entry, _miio = await setup(hass)
+    live_map = entry.runtime_data.map
+    device = entry.runtime_data.coordinator.device
+    device.values["status"] = Status.BACK_HOME.value
+    live_map._schedule()
+    device.values["status"] = Status.CHARGING.value
+    device.request_map = AsyncMock(return_value=(None, None))
+    live_map._schedule()  # it stopped: one more read, for the whole path
+    await hass.async_block_till_done()
+    await live_map.refresh()
+    assert not _map_warnings(caplog)
+
+
+async def test_docked_warns_only_when_no_map_comes_twice(hass: HomeAssistant, caplog: pytest.LogCaptureFixture) -> None:
+    """Docked, one read without a map is a hiccup, asked again soon; two in a row are worth a warning, once."""
+    entry, _miio = await setup(hass)
+    live_map = entry.runtime_data.map
+    device = entry.runtime_data.coordinator.device
+    device.values["status"] = Status.CHARGING.value
+    live_map._stopped_at = -1e9  # long docked
+    device.request_map = AsyncMock(return_value=(None, None))
+    await live_map.refresh()
+    assert not _map_warnings(caplog)
+    assert live_map._next - monotonic() <= FIRST_RETRY
+    await live_map.refresh()
+    assert len(_map_warnings(caplog)) == 1
+    await live_map.refresh()
+    assert len(_map_warnings(caplog)) == 1  # not again while it keeps failing
 
 
 def _with(*things: tuple[int, int], map_id: int = 45) -> str:

@@ -85,6 +85,15 @@
         "warning": "Warnings",
         "error": "Errors"
       }
+    },
+    "dock_action": {
+      "options": {
+        "empty": "Empty the dust bin",
+        "wash": "Wash the mop",
+        "stop_washing": "Stop washing the mop",
+        "dry": "Dry the mop",
+        "stop_drying": "Stop drying the mop"
+      }
     }
   },
   "entity": {
@@ -621,6 +630,14 @@
           "3": "After three cleanings"
         }
       },
+      "drying_time": {
+        "name": "Mop drying time",
+        "state": {
+          "2": "2 hours",
+          "3": "3 hours",
+          "4": "4 hours"
+        }
+      },
       "mop_wash_level": {
         "name": "Mop wash level",
         "state": {
@@ -749,6 +766,15 @@
       },
       "clean_room": {
         "name": "Clean {room}"
+      },
+      "stop_washing": {
+        "name": "Stop washing mop"
+      },
+      "stop_drying": {
+        "name": "Stop drying mop"
+      },
+      "clear_warning": {
+        "name": "Clear warning"
       }
     },
     "time": {
@@ -778,6 +804,9 @@
     },
     "notify_consumable": {
       "message": "{name}: {life}% left"
+    },
+    "dock_action_not_supported": {
+      "message": "This robot's dock can't do {action}"
     }
   },
   "services": {
@@ -892,6 +921,16 @@
         "consumable": {
           "name": "Consumable",
           "description": "The consumable to reset."
+        }
+      }
+    },
+    "vacuum_dock_action": {
+      "name": "Dock action",
+      "description": "Empties the dust bin into the dock, or washes or dries the mop at the dock, or stops washing or drying it.",
+      "fields": {
+        "action": {
+          "name": "Action",
+          "description": "What the dock does."
         }
       }
     }

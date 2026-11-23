@@ -103,7 +103,15 @@ async def test_errors_warn_once_and_keep_going(
     with caplog.at_level(logging.DEBUG):
         await history.refresh()
         await history.refresh()
-    assert len([r for r in caplog.records if r.levelno == logging.WARNING and "history" in r.getMessage()]) == 1
+    # The integration's own warnings: asyncio's slow-callback warning names history.py too, on a busy machine.
+    warnings = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.WARNING
+        and r.name.startswith("custom_components.dreame_vacuum_3d")
+        and "history" in r.getMessage()
+    ]
+    assert len(warnings) == 1
 
     # A cleaning whose log file the cloud doesn't have: no rooms, and no path to replay.
     miio.cloud.device_data.side_effect = lambda *_args, **_kwargs: EVENTS

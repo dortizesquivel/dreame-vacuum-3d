@@ -13,6 +13,7 @@ import pytest
 from custom_components.dreame_vacuum_3d.const import DOMAIN
 from custom_components.dreame_vacuum_3d.device.enums import CleaningMode, SuctionLevel
 from custom_components.dreame_vacuum_3d.protocol.miot import MiotError
+from tests.integration import helpers
 from tests.integration.helpers import setup_fixture_entry
 
 
@@ -36,6 +37,7 @@ async def test_selects_created_and_write(hass: HomeAssistant) -> None:
         "suction_level",
         "water_volume",
         "auto_empty_frequency",
+        "drying_time",
         "mop_wash_level",
         "carpet_cleaning",
     } <= set(selects)
@@ -44,6 +46,16 @@ async def test_selects_created_and_write(hass: HomeAssistant) -> None:
     assert hass.states.get(selects["cleaning_mode"].entity_id).state == "sweeping"
     assert hass.states.get(selects["suction_level"].entity_id).state == "strong"
     assert hass.states.get(selects["auto_empty_frequency"].entity_id).state == "3"
+    assert hass.states.get(selects["drying_time"].entity_id).state == "2"
+
+    miio.calls.clear()
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {ATTR_ENTITY_ID: selects["drying_time"].entity_id, "option": "4"},
+        blocking=True,
+    )
+    assert miio.overrides[(4, 40)] == 4
 
     miio.calls.clear()
     await hass.services.async_call(
@@ -184,6 +196,10 @@ async def test_buttons_reset_wash_dry_empty(hass: HomeAssistant) -> None:
     assert "dry_mop" in buttons
     assert "start_auto_empty" in buttons
     assert buttons["start_auto_empty"].translation_key == "empty"
+    # The dock's actions are everyday controls, not hidden under configuration.
+    for key in ("start_auto_empty", "wash_mop", "stop_washing", "dry_mop", "stop_drying"):
+        assert buttons[key].entity_category is None
+    assert "clear_warning" in buttons
 
     miio.calls.clear()
     await hass.services.async_call(
@@ -215,6 +231,19 @@ async def test_buttons_reset_wash_dry_empty(hass: HomeAssistant) -> None:
     dry = next(c for c in miio.calls if c[0] == "action")[1]
     assert dry["in"][0]["value"] == "3,1"
 
+    for key, value in (("stop_washing", "2,0"), ("stop_drying", "3,0")):
+        miio.calls.clear()
+        await hass.services.async_call("button", "press", {ATTR_ENTITY_ID: buttons[key].entity_id}, blocking=True)
+        stop = next(c for c in miio.calls if c[0] == "action")[1]
+        assert stop["siid"] == 4 and stop["aiid"] == 4
+        assert stop["in"][0]["value"] == value
+
+    miio.calls.clear()
+    await hass.services.async_call(
+        "button", "press", {ATTR_ENTITY_ID: buttons["clear_warning"].entity_id}, blocking=True
+    )
+    assert ("action", {"did": "call", "siid": 4, "aiid": 3, "in": []}) in miio.calls
+
     miio.calls.clear()
     await hass.services.async_call(
         "button",
@@ -223,6 +252,19 @@ async def test_buttons_reset_wash_dry_empty(hass: HomeAssistant) -> None:
         blocking=True,
     )
     assert ("action", {"did": "call", "siid": 15, "aiid": 1, "in": []}) in miio.calls
+
+
+async def test_dock_buttons_absent_without_a_dock(hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A robot whose dock reports neither auto-empty nor self-wash gets none of the dock's buttons."""
+    rows = helpers.fixture_by_key()
+    for key in ("auto_empty_status", "self_wash_base_status", "warn_status"):
+        rows[key] = {**rows[key], "code": -1, "value": None}
+    monkeypatch.setattr(helpers, "fixture_by_key", lambda: rows)
+    await setup_fixture_entry(hass)
+    buttons = _by_key(hass, "button")
+    for key in ("start_auto_empty", "wash_mop", "stop_washing", "dry_mop", "stop_drying", "clear_warning"):
+        assert key not in buttons
+    assert "reset_main_brush" in buttons
 
 
 async def test_device_cleaning_mode_helpers() -> None:

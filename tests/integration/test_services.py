@@ -141,6 +141,43 @@ async def test_reset_a_consumable_the_robot_lacks(hass: HomeAssistant) -> None:
     assert miio.calls == []
 
 
+@pytest.mark.parametrize(
+    ("action", "expected"),
+    [
+        ("empty", {"siid": 15, "aiid": 1, "in": []}),
+        ("wash", {"siid": 4, "aiid": 4, "value": "2,1"}),
+        ("stop_washing", {"siid": 4, "aiid": 4, "value": "2,0"}),
+        ("dry", {"siid": 4, "aiid": 4, "value": "3,1"}),
+        ("stop_drying", {"siid": 4, "aiid": 4, "value": "3,0"}),
+    ],
+)
+async def test_vacuum_dock_action(hass: HomeAssistant, action: str, expected: dict[str, Any]) -> None:
+    _entry, miio = await setup_fixture_entry(hass)
+    miio.calls.clear()
+    await hass.services.async_call(
+        DOMAIN, "vacuum_dock_action", {ATTR_ENTITY_ID: _vacuum_entity_id(hass), "action": action}, blocking=True
+    )
+    payload = _action_payload(miio)
+    assert payload["siid"] == expected["siid"] and payload["aiid"] == expected["aiid"]
+    if "value" in expected:
+        assert payload["in"][0]["value"] == expected["value"]
+    else:
+        assert payload["in"] == expected["in"]
+
+
+async def test_dock_action_the_robot_lacks(hass: HomeAssistant) -> None:
+    entry, miio = await setup_fixture_entry(hass)
+    device = entry.runtime_data.coordinator.device
+    device.available = device.available - {"self_wash_base_status"}
+    miio.calls.clear()
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(
+            DOMAIN, "vacuum_dock_action", {ATTR_ENTITY_ID: _vacuum_entity_id(hass), "action": "dry"}, blocking=True
+        )
+    assert err.value.translation_key == "dock_action_not_supported"
+    assert miio.calls == []
+
+
 async def test_invalid_service_data_rejected(hass: HomeAssistant) -> None:
     _entry, _miio = await setup_fixture_entry(hass)
     entity_id = _vacuum_entity_id(hass)
@@ -166,6 +203,14 @@ async def test_invalid_service_data_rejected(hass: HomeAssistant) -> None:
             DOMAIN,
             "vacuum_clean_zone",
             {ATTR_ENTITY_ID: entity_id, "zone": [1, 2, 3]},
+            blocking=True,
+        )
+
+    with pytest.raises(MultipleInvalid):
+        await hass.services.async_call(
+            DOMAIN,
+            "vacuum_dock_action",
+            {ATTR_ENTITY_ID: entity_id, "action": "self_destruct"},
             blocking=True,
         )
 

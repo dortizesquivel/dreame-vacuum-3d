@@ -153,9 +153,21 @@ class DreameDevice:
         """Wash the mop at the dock (Tasshack start_self_wash_base \"2,1\")."""
         return await self._self_wash("2,1")
 
+    async def stop_washing(self) -> Any:
+        """Stop washing the mop at the dock (Tasshack pause_washing \"2,0\")."""
+        return await self._self_wash("2,0")
+
     async def start_drying(self) -> Any:
         """Dry the mop at the dock (Tasshack start_self_wash_base \"3,1\")."""
         return await self._self_wash("3,1")
+
+    async def stop_drying(self) -> Any:
+        """Stop drying the mop at the dock (Tasshack stop_drying \"3,0\")."""
+        return await self._self_wash("3,0")
+
+    async def clear_warning(self) -> Any:
+        """Dismiss the robot's current warning."""
+        return await self._action("clear_warning")
 
     async def _self_wash(self, parameters: str) -> Any:
         props_piid = self.caps.properties["cleaning_properties"][1]

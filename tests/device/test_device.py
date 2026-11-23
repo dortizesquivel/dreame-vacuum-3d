@@ -184,6 +184,24 @@ async def test_action_commands_payloads(device: DreameDevice) -> None:
         assert local.calls == [("action", {"did": "call", "siid": expected[0], "aiid": expected[1], "in": []})]
 
 
+async def test_dock_commands_payloads(device: DreameDevice) -> None:
+    """Wash and dry the mop, and stop each, as Tasshack's start_self_wash_base parameters on cleaning_properties."""
+    local: FakeSend = device._send_local  # type: ignore[attr-defined]
+    for method, value in [
+        (device.start_washing, "2,1"),
+        (device.stop_washing, "2,0"),
+        (device.start_drying, "3,1"),
+        (device.stop_drying, "3,0"),
+    ]:
+        local.calls.clear()
+        await method()
+        assert local.calls == [("action", {"did": "call", "siid": 4, "aiid": 4, "in": [{"piid": 10, "value": value}]})]
+    for method, expected in [(device.start_auto_empty, (15, 1)), (device.clear_warning, (4, 3))]:
+        local.calls.clear()
+        await method()
+        assert local.calls == [("action", {"did": "call", "siid": expected[0], "aiid": expected[1], "in": []})]
+
+
 async def test_set_and_reset_consumable(device: DreameDevice) -> None:
     local: FakeSend = device._send_local  # type: ignore[attr-defined]
     await device.set("suction_level", 3)
