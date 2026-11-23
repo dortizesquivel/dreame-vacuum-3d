@@ -19,6 +19,7 @@ const ICONS = {   // Material Design Icons
   dock: 'M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z',
   zone: 'M3,3H9V5H5V9H3V3M15,3H21V9H19V5H15V3M3,15H5V19H9V21H3V15M19,15H21V21H15V19H19V15M8,8H16V16H8V8Z',
   settings: 'M3,17V19H9V17H3M3,5V7H13V5H3M13,21V19H21V17H13V15H11V21H13M7,9V11H3V13H7V15H9V9H7M21,13V11H11V13H21M15,9H17V7H21V5H17V3H15V9Z',
+  station: 'M12,20A6,6 0 0,1 6,14C6,10 12,3.25 12,3.25C12,3.25 18,10 18,14A6,6 0 0,1 12,20Z',
   history: 'M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3',
 };
 
@@ -29,6 +30,14 @@ const SETTINGS = [
   { key: 'water_volume', label: 'water', level: true, off: ['sweeping'] },
 ];
 const MOPPING = ['mopping', 'sweeping_and_mopping', 'mopping_after_sweeping'];
+// The dock's actions: the integration's buttons by translation key. While the dock washes or dries, its stop takes the place
+// of its start (by the robot's state sensor's value).
+const STATION = [
+  { key: 'empty', label: 'empty', icon: '🗑️' },
+  { key: 'wash_mop', label: 'wash', icon: '🫧', stop: 'stop_washing', stopLabel: 'stopWash',
+    busy: ['washing', 'washing_paused', 'clean_add_water'] },
+  { key: 'dry_mop', label: 'dry', icon: '💨', stop: 'stop_drying', stopLabel: 'stopDry', busy: ['drying'] },
+];
 
 const STRINGS = {
   en: {
@@ -48,6 +57,8 @@ const STRINGS = {
     otherMap: 'That cleaning was on another map', noReplay: 'Could not get that cleaning: {error}', whole: 'the whole house',
     settings: 'Cleaning settings', mode: 'Mode', suction: 'Suction', water: 'Water', repeats: 'Passes',
     nextCleaning: 'The mode changes on the next cleaning', fitMop: 'Fit the mop pads to mop', noSettings: 'This robot has no cleaning settings to change',
+    station: 'Dock: empty the bin, wash or dry the mop', stationTitle: 'The dock', empty: 'Empty the dust bin', wash: 'Wash the mop',
+    stopWash: 'Stop washing the mop', dry: 'Dry the mop', stopDry: 'Stop drying the mop', sent: '{action}: sent to the dock',
   },
   es: {
     noEntity: 'Pon en "entity" una aspiradora de Dreame Vacuum 3D.',
@@ -66,6 +77,8 @@ const STRINGS = {
     otherMap: 'Esa limpieza fue en otro mapa', noReplay: 'No se pudo traer esa limpieza: {error}', whole: 'toda la casa',
     settings: 'Ajustes de limpieza', mode: 'Modo', suction: 'Succión', water: 'Agua', repeats: 'Pasadas',
     nextCleaning: 'El modo cambia en la próxima limpieza', fitMop: 'Pon las mopas para fregar', noSettings: 'Este robot no tiene ajustes de limpieza que cambiar',
+    station: 'Base: vaciar el depósito, lavar o secar la mopa', stationTitle: 'La base', empty: 'Vaciar el depósito', wash: 'Lavar la mopa',
+    stopWash: 'Parar el lavado de la mopa', dry: 'Secar la mopa', stopDry: 'Parar el secado de la mopa', sent: '{action}: enviado a la base',
   },
 };
 
@@ -271,6 +284,7 @@ class DreameVacuum3DCard extends HTMLElement {
             <button type="button" data-download>⤓</button>
             <button type="button" data-zone><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.zone}"></path></svg></button>
             <button type="button" data-history><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.history}"></path></svg></button>
+            <button type="button" data-station hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.station}"></path></svg></button>
             <button type="button" data-settings hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.settings}"></path></svg></button>
           </div>
           <div class="panel" hidden>
@@ -291,7 +305,7 @@ class DreameVacuum3DCard extends HTMLElement {
     this._els = { title: $('.title'), chip: $('.chip'), viewport: $('.viewport'), status: $('.status'), panel: $('.panel'),
       msg: $('.panel .msg'), clean: $('.panel .clean'), cancel: $('.panel .cancel'), routines: $('.routines'),
       list: $('.panel .list'), coverage: $('.panel .coverage'), opts: $('.panel .opts'), tune: $('.panel .tune'),
-      settings: $('[data-settings]') };
+      settings: $('[data-settings]'), station: $('[data-station]') };
     root.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
       this._view = b.dataset.view;
       this._follow = false;
@@ -312,6 +326,10 @@ class DreameVacuum3DCard extends HTMLElement {
       if (this._els.settings.getAttribute('aria-pressed') === 'true') this._pick(null);
       else this._showSettings();
     });
+    this._els.station.addEventListener('click', () => {
+      if (this._els.station.getAttribute('aria-pressed') === 'true') this._pick(null);
+      else this._showStation();
+    });
     this._els.tune.addEventListener('click', () => {
       this._els.opts.hidden = !this._els.opts.hidden;
       this._renderSettings();
@@ -322,6 +340,8 @@ class DreameVacuum3DCard extends HTMLElement {
     });
     this._els.opts.addEventListener('keydown', (e) => this._arrowKeys(e));
     this._els.list.addEventListener('click', (e) => {
+      const station = e.target.closest('button[data-station-entity]');
+      if (station) { this._stationAction(station); return; }
       const b = e.target.closest('button[data-start]');
       if (b) this._replay(Number(b.dataset.start));
     });
@@ -416,6 +436,8 @@ class DreameVacuum3DCard extends HTMLElement {
     r.querySelector('[data-zone]').setAttribute('aria-label', this._t('zone'));
     r.querySelector('[data-zone]').title = this._t('zone');
     r.querySelector('[data-zone]').setAttribute('aria-pressed', String(!!this._zoneMode));
+    r.querySelector('[data-station]').setAttribute('aria-label', this._t('station'));
+    r.querySelector('[data-station]').title = this._t('station');
     r.querySelector('[data-settings]').setAttribute('aria-label', this._t('settings'));
     r.querySelector('[data-settings]').title = this._t('settings');
     r.querySelector('[data-cmd="return_to_base"]').setAttribute('aria-label', this._t('dock'));
@@ -455,7 +477,64 @@ class DreameVacuum3DCard extends HTMLElement {
     toggle.disabled = !st;
     this._root.querySelector('[data-cmd="return_to_base"]').disabled = !st || st.state === 'docked' || st.state === 'returning';
     this._els.settings.hidden = this._config.controls === false || !SETTINGS.some((x) => this._related(x.key));
+    this._els.station.hidden = this._config.controls === false || !this._stationActions().length;
     this._renderSettings();
+    if (this._stationOpen) this._renderStation();
+  }
+
+  /** The dock's actions this robot has, each as the button entity it presses now (its stop while the dock does it). */
+  _stationActions() {
+    const doing = this._related('state')?.state;
+    return STATION.flatMap((a) => {
+      const stop = a.stop && a.busy.includes(doing) ? this._related(a.stop) : null;
+      const entity = stop ?? this._related(a.key);
+      return entity ? [{ ...a, entity: entity.entity_id, label: stop ? a.stopLabel : a.label }] : [];
+    });
+  }
+
+  /** The dock's actions, from the button in the left column: empty the bin, wash or dry the mop. */
+  _showStation() {
+    this._pick(null);
+    const { panel, msg, clean, cancel } = this._els;
+    panel.hidden = false;
+    clean.hidden = true;
+    msg.textContent = this._t('stationTitle');
+    cancel.textContent = this._t('close');
+    this._els.station.setAttribute('aria-pressed', 'true');
+    this._stationOpen = true;
+    this._renderStation();
+  }
+
+  _renderStation() {
+    const { list } = this._els;
+    const actions = this._stationActions();
+    const shown = [...list.querySelectorAll('button[data-station-entity]')].map((b) => b.dataset.stationEntity).join();
+    if (!list.hidden && shown === actions.map((a) => a.entity).join()) return;   // keep focus on an unchanged list
+    list.replaceChildren(...actions.map((a) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.stationEntity = a.entity;
+      b.dataset.label = a.label;
+      b.textContent = `${a.icon} ${this._t(a.label)}`;
+      return b;
+    }));
+    list.hidden = !actions.length;
+  }
+
+  async _stationAction(button) {
+    const { msg } = this._els;
+    const action = this._t(button.dataset.label);
+    button.disabled = true;
+    try {
+      await this._hass.callService('button', 'press', {}, { entity_id: button.dataset.stationEntity });
+      msg.dataset.error = 'false';
+      msg.textContent = this._t('sent', { action });
+    } catch (err) {
+      msg.dataset.error = 'true';
+      msg.textContent = this._t('commandFailed', { error: err?.message ?? String(err) });
+    } finally {
+      button.disabled = false;
+    }
   }
 
   /** The settings sheet alone, from the button in the left column. */
@@ -863,6 +942,8 @@ class DreameVacuum3DCard extends HTMLElement {
       this._els.opts.hidden = true;
       this._els.tune.hidden = true;
       this._els.settings.setAttribute('aria-pressed', 'false');
+      this._els.station.setAttribute('aria-pressed', 'false');
+      this._stationOpen = false;
     }
     if (id == null && this._zoneMode) {
       this._zoneMode = false;

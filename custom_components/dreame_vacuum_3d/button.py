@@ -1,4 +1,4 @@
-"""Buttons: reset consumables, empty dust bag, wash mop, dry mop, and clean each room."""
+"""Buttons: reset consumables, empty dust bag, wash/dry the mop (and stop), clear a warning, and clean each room."""
 
 from __future__ import annotations
 
@@ -54,32 +54,48 @@ def _make_reset(name: str) -> DreameButtonEntityDescription:
     )
 
 
+def _has_auto_empty(device: DreameDevice) -> bool:
+    return "start_auto_empty" in device.caps.actions and "auto_empty_status" in device.available
+
+
+def _has_self_wash(device: DreameDevice) -> bool:
+    return "start_washing" in device.caps.actions and "self_wash_base_status" in device.available
+
+
+# The dock's own actions are everyday controls, not configuration: they show on the device page and dashboards.
 BUTTONS: tuple[DreameButtonEntityDescription, ...] = (
     *(_make_reset(name) for name in _RESET_REQUIRES),
     DreameButtonEntityDescription(
         key="start_auto_empty",
         translation_key="empty",
-        entity_category=EntityCategory.CONFIG,
         press_fn=lambda device: device.start_auto_empty(),
-        available_fn=lambda device: (
-            "start_auto_empty" in device.caps.actions and "auto_empty_status" in device.available
-        ),
+        available_fn=_has_auto_empty,
     ),
     DreameButtonEntityDescription(
         key="wash_mop",
-        entity_category=EntityCategory.CONFIG,
         press_fn=lambda device: device.start_washing(),
-        available_fn=lambda device: (
-            "start_washing" in device.caps.actions and "self_wash_base_status" in device.available
-        ),
+        available_fn=_has_self_wash,
+    ),
+    DreameButtonEntityDescription(
+        key="stop_washing",
+        press_fn=lambda device: device.stop_washing(),
+        available_fn=_has_self_wash,
     ),
     DreameButtonEntityDescription(
         key="dry_mop",
-        entity_category=EntityCategory.CONFIG,
         press_fn=lambda device: device.start_drying(),
-        available_fn=lambda device: (
-            "start_washing" in device.caps.actions and "self_wash_base_status" in device.available
-        ),
+        available_fn=_has_self_wash,
+    ),
+    DreameButtonEntityDescription(
+        key="stop_drying",
+        press_fn=lambda device: device.stop_drying(),
+        available_fn=_has_self_wash,
+    ),
+    DreameButtonEntityDescription(
+        key="clear_warning",
+        entity_category=EntityCategory.CONFIG,
+        press_fn=lambda device: device.clear_warning(),
+        available_fn=lambda device: "clear_warning" in device.caps.actions and "warn_status" in device.available,
     ),
 )
 

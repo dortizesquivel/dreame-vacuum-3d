@@ -1,4 +1,4 @@
-"""Select entities for mode, suction, water, auto-empty and mop wash."""
+"""Select entities for mode, suction, water, auto-empty, mop drying time and mop wash."""
 
 from __future__ import annotations
 
@@ -85,6 +85,15 @@ SELECTS: tuple[DreameSelectEntityDescription, ...] = (
             str(v) if isinstance((v := c.device.values.get("auto_empty_frequency")), int) and 1 <= v <= 3 else None
         ),
         select_fn=lambda c, option: c.device.set("auto_empty_frequency", int(option)),
+    ),
+    DreameSelectEntityDescription(
+        key="drying_time",
+        options=["2", "3", "4"],
+        entity_category=EntityCategory.CONFIG,
+        current_fn=lambda c: (
+            str(v) if isinstance((v := c.device.values.get("drying_time")), int) and 2 <= v <= 4 else None
+        ),
+        select_fn=lambda c, option: c.device.set("drying_time", int(option)),
     ),
     DreameSelectEntityDescription(
         key="mop_wash_level",

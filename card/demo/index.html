@@ -74,6 +74,8 @@
       washing: 'Lavando las mopas', returning_to_wash: 'Volviendo a lavar las mopas', robot_stuck: 'Robot atascado' },
   };
   const entity = (entity_id, translation_key) => ({ entity_id, device_id: 'demo', platform: 'dreame_vacuum_3d', translation_key });
+  // The dock's buttons, as the integration has them on a robot with a self-emptying, mop-washing dock.
+  const DOCK = ['empty', 'wash_mop', 'stop_washing', 'dry_mop', 'stop_drying'];
   // The robot's cleaning settings, as the integration's select entities have them (?mop=0: the mop pads are off).
   const SETTINGS = {
     cleaning_mode: ['sweeping', 'mopping', 'sweeping_and_mopping'],
@@ -112,10 +114,12 @@
       ...Object.fromEntries(Object.entries(SETTINGS).map(([k, options]) => [`select.demo_${k}`,
         { entity_id: `select.demo_${k}`, state: settings[k], attributes: { options } }])),
       'binary_sensor.demo_mop': { entity_id: 'binary_sensor.demo_mop', state: q.get('mop') === '0' ? 'off' : 'on', attributes: {} },
+      ...Object.fromEntries(DOCK.map((k) => [`button.demo_${k}`, { entity_id: `button.demo_${k}`, state: 'unknown', attributes: {} }])),
     },
     entities: { 'vacuum.demo': entity('vacuum.demo'), 'sensor.demo_state': entity('sensor.demo_state', 'state'), 'sensor.demo_error': entity('sensor.demo_error', 'error'),
       ...Object.fromEntries(Object.keys(SETTINGS).map((k) => [`select.demo_${k}`, entity(`select.demo_${k}`, k)])),
-      'binary_sensor.demo_mop': entity('binary_sensor.demo_mop', 'mop_attached') },
+      'binary_sensor.demo_mop': entity('binary_sensor.demo_mop', 'mop_attached'),
+      ...Object.fromEntries(DOCK.map((k) => [`button.demo_${k}`, entity(`button.demo_${k}`, k)])) },
     themes: { darkMode: dark },
     locale: { language: lang },
     language: lang,
@@ -134,11 +138,12 @@
       return { start: found.start, map_id: found.map_id, path: found.path, rooms: found.rooms };
     },
     async callService(domain, service, data, target = {}) {
-      calls.push({ domain, service, data });
+      calls.push({ domain, service, data, target });
       sim.mode = SIM_MODE[settings.cleaning_mode];
       if (domain === 'select' && service === 'select_option') settings[Object.keys(SETTINGS).find((k) => target.entity_id === `select.demo_${k}`)] = data.option;
       else if (service === 'vacuum_clean_segment') sim.clean([].concat(data.segments));
       else if (service === 'vacuum_clean_zone') sim.cleanZone(data.zone);
+      else if (domain === 'button' && service === 'press' && DOCK.some((k) => target.entity_id === `button.demo_${k}`)) { /* the dock's: nothing to show */ }
       else if (domain === 'vacuum' && service === 'start') sim.start(() => sim.clean(Object.keys(map.rooms).map(Number)));
       else if (domain === 'vacuum' && service === 'pause') sim.pause();
       else if (domain === 'vacuum' && service === 'return_to_base') sim.goHome();

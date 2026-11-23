@@ -184,3 +184,21 @@ vacuum_reset_consumable:
             - "fluffing_roller"
             - "roller_mop_filter"
             - "water_outlet_filter"
+
+vacuum_dock_action:
+  target:
+    entity:
+      integration: dreame_vacuum_3d
+      domain: vacuum
+  fields:
+    action:
+      required: true
+      selector:
+        select:
+          translation_key: dock_action
+          options:
+            - "empty"
+            - "wash"
+            - "stop_washing"
+            - "dry"
+            - "stop_drying"

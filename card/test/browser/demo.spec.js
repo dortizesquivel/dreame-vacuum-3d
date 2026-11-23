@@ -312,6 +312,31 @@ test('the cleaning settings: passes go with the task, arrow keys move along a ro
   expect(call).toMatchObject({ service: 'vacuum_clean_zone', data: { repeats: 2 } });
 });
 
+test('the dock: empty the bin, wash or dry the mop, and stop while it washes or dries', async ({ page }) => {
+  await open(page);
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-station]').click();
+  await expect(card.locator('[data-station]')).toHaveAttribute('aria-pressed', 'true');
+  const actions = card.locator('.panel .list button');
+  await expect(actions).toHaveText(['🗑️ Empty the dust bin', '🫧 Wash the mop', '💨 Dry the mop']);
+  await actions.nth(2).click();
+  expect(await page.evaluate(() => window.demo.calls.at(-1))).toMatchObject({
+    domain: 'button', service: 'press', target: { entity_id: 'button.demo_dry_mop' },
+  });
+  await expect(card.locator('.panel .msg')).toHaveText('Dry the mop: sent to the dock');
+  // While the dock dries the mop, its stop takes the place of its start.
+  await page.evaluate(() => {
+    const card = window.demo.card, hass = card._hass;
+    card.hass = { ...hass, states: { ...hass.states, 'sensor.demo_state': { ...hass.states['sensor.demo_state'], state: 'drying' } } };
+  });
+  await expect(actions).toHaveText(['🗑️ Empty the dust bin', '🫧 Wash the mop', '💨 Stop drying the mop']);
+  await card.locator('[data-station]').click();
+  await expect(card.locator('.panel')).toBeHidden();
+  // controls: false hides it, as the settings.
+  await page.evaluate(() => { const { card } = window.demo; card.setConfig({ ...card._config, model: undefined, controls: false }); card.hass = card._hass; });
+  await expect(card.locator('[data-station]')).toBeHidden();
+});
+
 test('"controls" must be true or false', async ({ page }) => {
   await open(page);
   const message = await page.evaluate(() => {

@@ -85,6 +85,15 @@
         "warning": "Avisos",
         "error": "Errores"
       }
+    },
+    "dock_action": {
+      "options": {
+        "empty": "Vaciar el depósito",
+        "wash": "Lavar la mopa",
+        "stop_washing": "Parar el lavado de la mopa",
+        "dry": "Secar la mopa",
+        "stop_drying": "Parar el secado de la mopa"
+      }
     }
   },
   "entity": {
@@ -621,6 +630,14 @@
           "3": "Tras tres limpiezas"
         }
       },
+      "drying_time": {
+        "name": "Tiempo de secado de la mopa",
+        "state": {
+          "2": "2 horas",
+          "3": "3 horas",
+          "4": "4 horas"
+        }
+      },
       "mop_wash_level": {
         "name": "Nivel de lavado de mopa",
         "state": {
@@ -749,6 +766,15 @@
       },
       "clean_room": {
         "name": "Limpiar {room}"
+      },
+      "stop_washing": {
+        "name": "Parar lavado de mopa"
+      },
+      "stop_drying": {
+        "name": "Parar secado de mopa"
+      },
+      "clear_warning": {
+        "name": "Borrar aviso"
       }
     },
     "time": {
@@ -778,6 +804,9 @@
     },
     "notify_consumable": {
       "message": "{name}: queda un {life} %"
+    },
+    "dock_action_not_supported": {
+      "message": "La base de este robot no puede hacer {action}"
     }
   },
   "services": {
@@ -892,6 +921,16 @@
         "consumable": {
           "name": "Consumible",
           "description": "El consumible que reiniciar."
+        }
+      }
+    },
+    "vacuum_dock_action": {
+      "name": "Acción de la base",
+      "description": "Vacía el depósito en la base, o lava o seca la mopa en la base, o para el lavado o el secado.",
+      "fields": {
+        "action": {
+          "name": "Acción",
+          "description": "Lo que hace la base."
         }
       }
     }
