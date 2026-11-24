@@ -683,14 +683,14 @@ test('another entity starts from nothing: no map, nothing of the old robot', asy
   await expect(page.locator('dreame-vacuum-3d-card .status')).toHaveText('Waiting for the map…');
 });
 
-test('the settings sheet fits a low card, scrolling', async ({ page }) => {
+test('on a low card the settings open under the map, leaving the map and its buttons in view', async ({ page }) => {
   await open(page);
   await page.evaluate(() => { const { card } = window.demo; card.setConfig({ ...card._config, model: undefined, height: 240 }); });
   const card = page.locator('dreame-vacuum-3d-card');
   await card.locator('[data-settings]').click();
   const [view, panel] = [await card.locator('.viewport').boundingBox(), await card.locator('.panel').boundingBox()];
-  expect(panel.y).toBeGreaterThanOrEqual(view.y);
-  expect(panel.y + panel.height).toBeLessThanOrEqual(view.y + view.height);
+  expect(panel.y).toBeGreaterThanOrEqual(view.y + view.height - 1);
+  await expect(card.locator('[data-settings]')).toHaveAttribute('aria-pressed', 'true');
   const three = card.locator('.opts [data-key="repeats"] [data-option="3"]');
   await three.click();
   await expect(three).toHaveAttribute('aria-checked', 'true');
@@ -842,8 +842,7 @@ test('at the lowest height the left column fits the card, and the settings open 
   }
   await card.locator('[data-settings]').click();
   const panel = await card.locator('.panel').boundingBox();
-  expect(panel.y).toBeGreaterThanOrEqual(view.y);
-  expect(panel.y + panel.height).toBeLessThanOrEqual(view.y + view.height);
+  expect(panel.y).toBeGreaterThanOrEqual(view.y + view.height - 1);   // under the map, not over it
   const three = card.locator('.opts [data-key="repeats"] [data-option="3"]');
   await three.click();
   await expect(three).toHaveAttribute('aria-checked', 'true');
@@ -933,4 +932,59 @@ test('after a calibration the robot is at its new place at once, it does not gli
     const s = window.demo.card._scene, [x, z] = s.xf.point(...s.map.robot), p = s.robot.position;
     return { gliding: !!s.glide, queued: s.queue.length, off: Math.hypot(p.x - x, p.z - z) < 1e-6 };
   })).toEqual({ gliding: false, queued: 0, off: true });
+});
+
+test('a spot: tap the floor, then clean around it or send the robot there', async ({ page }) => {
+  await open(page, '&view=plan');
+  const card = page.locator('dreame-vacuum-3d-card');
+  await card.locator('[data-point]').click();
+  await expect(card.locator('[data-point]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(card.locator('.panel .msg')).toHaveText('Tap the floor to pick a spot');
+  await expect(card.locator('.panel .clean')).toBeHidden();
+  const box = await card.locator('canvas').boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(card.locator('.panel .msg')).toHaveText(/^A spot (in .+|on the floor)$/);
+  await expect(card.locator('.panel .clean')).toHaveText('Clean around it');
+  await expect(card.locator('.panel .second')).toHaveText('Go here');
+  const point = await page.evaluate(() => window.demo.card._scene.point);
+  expect(point).toHaveLength(2);
+
+  await card.locator('.panel .second').click();
+  expect(await page.evaluate(() => window.demo.calls.at(-1))).toMatchObject({
+    domain: 'dreame_vacuum_3d', service: 'vacuum_goto', data: { x: point[0], y: point[1] },
+  });
+  await expect(card.locator('.panel .msg')).toHaveText('On its way to the spot');
+
+  await card.locator('.panel .clean').click();
+  expect(await page.evaluate(() => window.demo.calls.at(-1))).toMatchObject({
+    service: 'vacuum_clean_spot', data: { points: [point] },
+  });
+  await expect(card.locator('.panel .msg')).toHaveText('Cleaning around the spot');
+  // Cancel leaves point mode: a tap picks rooms again.
+  await card.locator('.panel .cancel').click();
+  await expect(card.locator('[data-point]')).toHaveAttribute('aria-pressed', 'false');
+  expect(await page.evaluate(() => window.demo.card._scene.point)).toBeNull();
+});
+
+test('an obstacle: tap its tag to have the robot ignore it, and again to avoid it', async ({ page }) => {
+  await open(page, '&view=plan');
+  const card = page.locator('dreame-vacuum-3d-card');
+  // Let the robot find what is on the floor.
+  await page.evaluate(() => { const { sim, card } = window.demo; sim.clean(Object.keys(card._map.rooms).map(Number)); });
+  await run(page, 600);
+  const tag = card.locator('.thing').first();
+  await expect(tag).toBeVisible();
+  const name = await tag.textContent();
+  const r = await tag.boundingBox();
+  await page.mouse.click(r.x + r.width / 2, r.y + r.height / 2);
+  await expect(card.locator('.panel .msg')).toHaveText(`${name}: the robot avoids it`);
+  await expect(card.locator('.panel .clean')).toHaveText('Ignore it');
+  await card.locator('.panel .clean').click();
+  const call = await page.evaluate(() => window.demo.calls.at(-1));
+  expect(call).toMatchObject({ service: 'vacuum_set_obstacle_ignore', data: { obstacle_ignored: true } });
+  await expect(card.locator('.panel .msg')).toHaveText(`${name}: the robot goes over it`);
+  await expect(card.locator('.panel .clean')).toHaveText('Avoid it again');
+  await expect(card.locator('.thing[data-ignored="true"]')).toHaveCount(1);
+  await card.locator('.panel .clean').click();
+  expect(await page.evaluate(() => window.demo.calls.at(-1).data.obstacle_ignored)).toBe(false);
 });

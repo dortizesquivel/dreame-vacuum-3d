@@ -185,10 +185,10 @@ def test_obstacles_as_the_app_shows_them() -> None:
         )
     )
     assert dmap.obstacles(f) == [
-        {"x": -4673, "y": 6269, "type": "shoes", "confidence": 99, "source": "camera"},
-        {"x": 300, "y": 400, "type": "obstacle", "confidence": 80, "source": "camera"},
-        {"x": 500, "y": 600, "type": "obstacle", "confidence": 100, "source": "lidar"},
-        {"x": 700, "y": 800, "type": "pet_waste", "confidence": 60, "source": "lidar"},
+        {"x": -4672, "y": 6268, "type": "shoes", "code": 133, "confidence": 99, "source": "camera", "ignored": False},
+        {"x": 300, "y": 400, "type": "obstacle", "code": 999, "confidence": 80, "source": "camera", "ignored": False},
+        {"x": 500, "y": 600, "type": "obstacle", "code": 142, "confidence": 100, "source": "lidar", "ignored": False},
+        {"x": 700, "y": 800, "type": "pet_waste", "code": 135, "confidence": 60, "source": "lidar", "ignored": False},
     ]
     assert dmap.obstacles(dmap.decode(frame([[0]], {"ai_obstacle": "nope"}))) == []
 
@@ -247,3 +247,20 @@ def test_partial_frames_add_their_cells_as_differences() -> None:
     assert not dmap.merge(whole.grid, cells, dmap.Frame(**{**partial.__dict__, "grid": dmap.Grid(LEFT, TOP, 25, 2, 1)}))
     outside = dmap.Frame(**{**partial.__dict__, "grid": dmap.Grid(LEFT + 3 * SIZE, TOP + 5 * SIZE, SIZE, 2, 1)})
     assert not dmap.merge(whole.grid, cells, outside)
+
+
+def test_rooms_own_settings() -> None:
+    """cleanset: suction, water + 1, passes, order (and more the app keeps), per room."""
+
+    def settings(value: object) -> object:
+        return dmap.room_settings(dmap.decode(frame([[0]], {"cleanset": value})))
+
+    assert settings({"1": [3, 4, 2, 1, 2], "2": [0, 2, 1]}) == {
+        "1": {"suction": 3, "water": 3, "repeats": 2, "order": 1},
+        "2": {"suction": 0, "water": 1, "repeats": 1, "order": 0},
+    }
+    assert settings('{"3": [1, 3, 1, 0]}') == {"3": {"suction": 1, "water": 2, "repeats": 1, "order": 0}}
+    assert settings({"1": [1, 2], "2": "x", "3": [None, 2, 1]}) == {}
+    assert settings("not json") is None
+    assert settings([1, 2]) is None
+    assert dmap.room_settings(dmap.decode(frame([[0]], {}))) is None

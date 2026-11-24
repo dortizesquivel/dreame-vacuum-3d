@@ -317,7 +317,7 @@ export class Sim {
       room: this.map.rooms[id] ? id : null,
       active: this.active.slice(),
       zones: this.zones.slice(),
-      obstacles: this.found.slice(),
+      obstacles: this.found.map((t) => ({ code: 142, ignored: false, ...t })),   // code: the robot's, to ignore it by
       new_cells: this.newCells.slice(),
     };
     const sent = this.sent;

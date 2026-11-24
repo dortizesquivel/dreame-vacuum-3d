@@ -5,7 +5,7 @@ What the project plans to do over the next year, until the end of 2027, and what
 ## Planned
 
 - **More models marked tested**: only the X10+ (`dreame.vacuum.p2114a`) is tested today. Others are added from the diagnostics their owners send, as [CONTRIBUTING.md](CONTRIBUTING.md#adding-a-model-via-diagnostics) explains.
-- **Map-edit services**: restricted zones, and merging, splitting and renaming rooms, under the same names as Tasshack's.
+- **Map-edit services**: restricted zones, and merging and splitting rooms, under the same names as Tasshack's (renaming rooms, their own settings and order, and the saved maps are done).
 - **Upkeep**: keep up with Home Assistant, Xiaomi's cloud login and three.js releases, keep the dependencies current, and keep the OpenSSF Scorecard checks.
 
 ## Ideas, not decided

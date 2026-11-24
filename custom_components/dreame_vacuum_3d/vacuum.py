@@ -18,13 +18,15 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 import voluptuous as vol
 
 from .const import DOMAIN
-from .coordinator import DreameDataUpdateCoordinator
-from .device.enums import DreameVacuumState, SuctionLevel, TaskStatus, parse_enum
+from .coordinator import ACTIVE_STATUSES, DreameDataUpdateCoordinator
+from .device.enums import DreameVacuumState, Status, SuctionLevel, TaskStatus, parse_enum
 from .entity import DreameEntity, command
+from .text import MAX_NAME
 
 # Portions of service schemas derived from Tasshack/dreame-vacuum (MIT), see NOTICE.
 _NOT_EMPTY = vol.Length(min=1)  # an empty list would reach the robot as a task with nothing in it
 _OPTIONAL_INT_OR_LIST = vol.Any(vol.Coerce(int), vol.All([vol.Coerce(int)], _NOT_EMPTY))
+_INT_LIST = vol.Any(vol.All([vol.Coerce(int)], _NOT_EMPTY), vol.All(vol.Coerce(int), lambda v: [v]))
 _CONSUMABLES = (
     "main_brush",
     "side_brush",
@@ -209,6 +211,60 @@ def _register_entity_services(platform: entity_platform.EntityPlatform) -> None:
         {vol.Required("consumable"): vol.In(_CONSUMABLES)},
         "async_reset_consumable",
     )
+    platform.async_register_entity_service("vacuum_request_map", None, "async_request_map")
+    platform.async_register_entity_service("vacuum_start_fast_mapping", None, "async_start_fast_mapping")
+    platform.async_register_entity_service("vacuum_start_mapping", None, "async_start_mapping")
+    platform.async_register_entity_service(
+        "vacuum_rename_segment",
+        {
+            vol.Required("segment_id"): vol.All(vol.Coerce(int), vol.Range(min=1, max=63)),
+            vol.Required("segment_name"): vol.All(cv.string, vol.Strip, vol.Length(min=1, max=MAX_NAME)),
+        },
+        "async_rename_segment",
+    )
+    platform.async_register_entity_service(
+        "vacuum_set_cleaning_sequence",
+        {vol.Required("cleaning_sequence"): vol.Any(vol.All([vol.Coerce(int)]), vol.All(str, vol.Length(max=0)))},
+        "async_set_cleaning_sequence",
+    )
+    platform.async_register_entity_service(
+        "vacuum_set_custom_cleaning",
+        {
+            vol.Required("segment_id"): _INT_LIST,
+            vol.Required("suction_level"): _INT_LIST,
+            vol.Required("water_volume"): _INT_LIST,
+            vol.Required("repeats"): _INT_LIST,
+        },
+        "async_set_custom_cleaning",
+    )
+    platform.async_register_entity_service(
+        "vacuum_rename_map",
+        {vol.Required("map_id"): cv.positive_int, vol.Required("map_name"): vol.All(cv.string, vol.Strip)},
+        "async_rename_map",
+    )
+    platform.async_register_entity_service(
+        "vacuum_delete_map", {vol.Optional("map_id"): cv.positive_int}, "async_delete_map"
+    )
+    platform.async_register_entity_service(
+        "vacuum_backup_map", {vol.Optional("map_id"): cv.positive_int}, "async_backup_map"
+    )
+    platform.async_register_entity_service(
+        "vacuum_restore_map",
+        {
+            vol.Required("recovery_map_index"): vol.All(vol.Coerce(int), vol.Range(min=1, max=4)),
+            vol.Optional("map_id"): cv.positive_int,
+        },
+        "async_restore_map",
+    )
+    platform.async_register_entity_service(
+        "vacuum_set_obstacle_ignore",
+        {
+            vol.Required("x"): vol.Coerce(int),
+            vol.Required("y"): vol.Coerce(int),
+            vol.Required("obstacle_ignored"): cv.boolean,
+        },
+        "async_set_obstacle_ignore",
+    )
     platform.async_register_entity_service(
         "vacuum_dock_action",
         {vol.Required("action"): vol.In(tuple(_DOCK_ACTIONS))},
@@ -392,6 +448,187 @@ class DreameVacuumEntity(DreameEntity, StateVacuumEntity):
         }[action]
         await run()
         await self.coordinator.async_request_refresh()
+
+    # Map: fetch it, make a new one, name its rooms and the order and settings it cleans them with, and its copies.
+
+    def _not_supported(self, feature: str) -> ServiceValidationError:
+        return ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="not_supported",
+            translation_placeholders={"feature": feature},
+        )
+
+    def _check(self, feature: str, action: str = "update_map_data") -> None:
+        if action not in self.device.caps.actions:
+            raise self._not_supported(feature)
+
+    def _idle(self) -> None:
+        """Map edits wait for the robot to finish: it saves the map at the end of a task."""
+        if parse_enum(Status, self.device.values.get("status")) in ACTIVE_STATUSES:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="busy")
+
+    @property
+    def _runtime(self) -> Any:
+        return self.coordinator.config_entry.runtime_data
+
+    def _map_id(self, map_id: int | None) -> int:
+        """The map a call names, or the one the robot uses now."""
+        if map_id is not None:
+            return map_id
+        message = self._runtime.map.message
+        current = self._runtime.maps.current
+        if current is not None:
+            return int(current)
+        if message is not None:
+            return int(message["map_id"])
+        raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_map")
+
+    def _rooms(self) -> dict[str, dict[str, Any]]:
+        rooms = self._runtime.map.rooms
+        if not rooms:
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="no_map")
+        return rooms
+
+    def _room(self, room: int) -> str:
+        if str(room) not in self._rooms():
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="no_room", translation_placeholders={"room": str(room)}
+            )
+        return str(room)
+
+    @command
+    async def async_request_map(self) -> None:
+        """Fetch the map again now."""
+        self._check("request_map", "request_map")
+        await self._runtime.map.fetch_now()
+        await self._runtime.maps.refresh(force=True)
+
+    @command
+    async def async_start_fast_mapping(self) -> None:
+        """Map the house without cleaning it."""
+        self._check("start_fast_mapping", "start_custom")
+        self._idle()
+        await self.device.start_fast_mapping()
+        await self.coordinator.async_request_refresh()
+
+    @command
+    async def async_start_mapping(self) -> None:
+        """Clean the whole house, making a new map as it goes."""
+        self._check("start_mapping", "start_custom")
+        self._idle()
+        await self.device.start_mapping()
+        await self.coordinator.async_request_refresh()
+
+    @command
+    async def async_rename_segment(self, segment_id: int, segment_name: str) -> None:
+        """Give a room its own name."""
+        self._check("rename_segment")
+        room = self._room(segment_id)
+        map_id = int(self._runtime.map.message["map_id"])
+        await self.device.rename_segment(map_id, segment_id, segment_name)
+        self._runtime.map.set_room_name(room, segment_name)
+        self._runtime.map.refresh_soon()
+
+    @command
+    async def async_set_cleaning_sequence(self, cleaning_sequence: list[int] | str) -> None:
+        """The order to clean the rooms in; an empty list, the robot's own."""
+        self._check("set_cleaning_sequence")
+        self._idle()
+        order = list(cleaning_sequence) if isinstance(cleaning_sequence, list) else []
+        for room in order:
+            self._room(room)
+        if len(set(order)) != len(order):
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="repeated_room")
+        await self.device.set_cleaning_sequence(order)
+        self._runtime.map.refresh_soon()
+
+    @command
+    async def async_set_custom_cleaning(
+        self, segment_id: list[int], suction_level: list[int], water_volume: list[int], repeats: list[int]
+    ) -> None:
+        """Rooms' own suction, water and passes (the others keep theirs)."""
+        self._check("set_custom_cleaning")
+        self._idle()
+        if not len(segment_id) == len(suction_level) == len(water_volume) == len(repeats):
+            raise ServiceValidationError(translation_domain=DOMAIN, translation_key="count_mismatch")
+        ranges = {"suction_level": (suction_level, 0), "water_volume": (water_volume, 1), "repeats": (repeats, 1)}
+        for name, (values, low) in ranges.items():
+            if any(not low <= v <= 3 for v in values):
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN, translation_key="out_of_range", translation_placeholders={"field": name}
+                )
+        rooms = self._rooms()
+        settings = {
+            int(room): (meta.get("suction", 1), meta.get("water", 2), meta.get("repeats", 1))
+            for room, meta in rooms.items()
+        }
+        for room, suction, water, passes in zip(segment_id, suction_level, water_volume, repeats, strict=True):
+            settings[int(self._room(room))] = (suction, water, passes)
+        await self.device.set_custom_cleaning(settings)
+        for room, suction, water, passes in zip(segment_id, suction_level, water_volume, repeats, strict=True):
+            self._runtime.map.set_room_settings(str(room), {"suction": suction, "water": water, "repeats": passes})
+        self._runtime.map.refresh_soon()
+
+    @command
+    async def async_rename_map(self, map_id: int, map_name: str) -> None:
+        """Name a saved map."""
+        self._check("rename_map")
+        await self.device.rename_map(map_id, map_name)
+        await self._runtime.maps.refresh(force=True)
+
+    @command
+    async def async_delete_map(self, map_id: int | None = None) -> None:
+        """Delete a saved map (the current one if none is named)."""
+        self._check("delete_map")
+        self._idle()
+        await self.device.delete_map(self._map_id(map_id))
+        self._runtime.map.refresh_soon()
+        await self.coordinator.async_request_refresh()
+
+    @command
+    async def async_backup_map(self, map_id: int | None = None) -> None:
+        """Save a copy of a map in the cloud."""
+        self._check("backup_map", "backup_map")
+        self._idle()
+        await self.device.backup_map(self._map_id(map_id))
+        await self.coordinator.async_request_refresh()
+
+    @command
+    async def async_restore_map(self, recovery_map_index: int, map_id: int | None = None) -> None:
+        """Put back a copy of a map: 1 is the newest."""
+        if "map_recovery" not in self.device.caps.properties:
+            raise self._not_supported("restore_map")
+        self._idle()
+        target = self._map_id(map_id)
+        maps = self._runtime.maps
+        await maps.refresh(force=True)
+        try:
+            await maps.restore(target, recovery_map_index)
+        except LookupError as err:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="no_backup",
+                translation_placeholders={"index": str(recovery_map_index), "map": str(target)},
+            ) from err
+        self._runtime.map.refresh_soon(15)
+        await self.coordinator.async_request_refresh()
+
+    @command
+    async def async_set_obstacle_ignore(self, x: int, y: int, obstacle_ignored: bool) -> None:
+        """Have the robot go over an obstacle it found (or avoid it again)."""
+        self._check("set_obstacle_ignore")
+        self._idle()
+        obstacles = (self._runtime.map.pose or {}).get("obstacles") or []
+        found = next((o for o in obstacles if o["x"] == x and o["y"] == y), None)
+        if found is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="no_obstacle",
+                translation_placeholders={"x": str(x), "y": str(y)},
+            )
+        await self.device.set_obstacle_ignore(x, y, found["code"], obstacle_ignored)
+        found["ignored"] = obstacle_ignored
+        self._runtime.map.refresh_soon()
 
 
 def _cleaning_kwargs(

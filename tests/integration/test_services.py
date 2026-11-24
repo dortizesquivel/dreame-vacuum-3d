@@ -243,6 +243,7 @@ def test_every_service_and_field_has_a_name_and_a_description(file: str) -> None
     assert set(texts) == set(services)
     for service, schema in services.items():
         assert texts[service]["name"] and texts[service]["description"]
-        assert set(texts[service]["fields"]) == set(schema["fields"])
-        for field in texts[service]["fields"].values():
+        # A service with no fields (request_map, say) has none in either.
+        assert set(texts[service].get("fields", {})) == set((schema or {}).get("fields", {}))
+        for field in texts[service].get("fields", {}).values():
             assert field["name"] and field["description"]

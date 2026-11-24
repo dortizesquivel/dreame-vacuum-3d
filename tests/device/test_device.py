@@ -381,3 +381,36 @@ async def test_remote_control_prompt_override(device: DreameDevice) -> None:
     with patch("custom_components.dreame_vacuum_3d.device.device.randrange", return_value=2):
         await device.remote_control_move_step(prompt=True)
     assert '"audio":"true"' in local.calls[-1][1][0]["value"]
+
+
+async def test_map_edit_payloads(device: DreameDevice) -> None:
+    """Map edits go to update_map_data (6.2) as Tasshack sends them, on map_extend_data (6.4)."""
+    local: FakeSend = device._send_local  # type: ignore[attr-defined]
+
+    def sent() -> object:
+        method, params = local.calls[-1]
+        assert method == "action" and (params["siid"], params["aiid"]) == (6, 2)
+        return json.loads(params["in"][0]["value"])
+
+    await device.set_custom_cleaning({2: (0, 1, 3), 1: (3, 3, 1)})
+    assert sent() == {"customeClean": [[1, 3, 4, 1], [2, 0, 2, 3]]}
+    await device.set_cleaning_sequence([3, 1])
+    assert sent() == {"cleanOrder": [3, 1]}
+    await device.rename_segment(45, 2, "Baño")
+    assert sent() == {"nsr": {"2": {"name": "QmHDsW8=", "type": 0, "index": 0}}, "mapid": 45}
+    await device.rename_map(45, "")
+    assert sent() == {"nrism": {"45": {"name": None}}}
+    await device.delete_map(45)
+    assert sent() == {"cm": {}, "mapid": 45}
+    await device.set_obstacle_ignore(-700, 12, 134, False)
+    assert sent() == {"obstacleignore": [-700, 12, 134, 0]}
+
+    await device.backup_map(45)
+    assert local.calls[-1] == ("action", {"did": "call", "siid": 6, "aiid": 3, "in": [{"piid": 4, "value": "45"}]})
+    await device.restore_map(45, "https://example.com/m")
+    assert local.calls[-1] == (
+        "set_properties",
+        [{"did": "set", "siid": 6, "piid": 10, "value": '{"map_id":45,"map_url":"https://example.com/m"}'}],
+    )
+    await device.start_fast_mapping()
+    assert local.calls[-1] == ("action", {"did": "call", "siid": 4, "aiid": 1, "in": [{"piid": 1, "value": 21}]})

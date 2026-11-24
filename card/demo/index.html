@@ -143,6 +143,14 @@
       if (domain === 'select' && service === 'select_option') settings[Object.keys(SETTINGS).find((k) => target.entity_id === `select.demo_${k}`)] = data.option;
       else if (service === 'vacuum_clean_segment') sim.clean([].concat(data.segments));
       else if (service === 'vacuum_clean_zone') sim.cleanZone(data.zone);
+      // A spot is a square round it, as the robot cleans; going there is a small one.
+      else if (service === 'vacuum_clean_spot') sim.cleanZone(data.points.map(([x, y]) => [x - 750, y - 750, x + 750, y + 750]));
+      else if (service === 'vacuum_goto') sim.cleanZone([data.x - 150, data.y - 150, data.x + 150, data.y + 150]);
+      else if (service === 'vacuum_set_obstacle_ignore') {
+        const t = sim.found.find((o) => Math.trunc(o.x) === data.x && Math.trunc(o.y) === data.y);
+        if (!t) throw new Error(`no obstacle at ${data.x}, ${data.y}`);
+        t.ignored = data.obstacle_ignored;
+      }
       else if (domain === 'button' && service === 'press' && DOCK.some((k) => target.entity_id === `button.demo_${k}`)) { /* the dock's: nothing to show */ }
       else if (domain === 'vacuum' && service === 'start') sim.start(() => sim.clean(Object.keys(map.rooms).map(Number)));
       else if (domain === 'vacuum' && service === 'pause') sim.pause();

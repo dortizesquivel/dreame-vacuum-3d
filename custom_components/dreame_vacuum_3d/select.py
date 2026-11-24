@@ -1,4 +1,4 @@
-"""Select entities for mode, suction, water, auto-empty, mop drying time, mop wash and carpets."""
+"""Select entities for mode, suction, water, auto-empty, mop drying time, mop wash, carpets, the map and each room."""
 
 from __future__ import annotations
 
@@ -24,6 +24,9 @@ from .device.enums import (
     parse_enum,
 )
 from .entity import DreameEntity, command
+from .live_map import LiveMap
+from .maps import SavedMaps
+from .rooms import DreameRoomEntity, track_rooms
 
 
 def _options(enum_cls: type[IntEnum]) -> list[str]:
@@ -128,6 +131,19 @@ async def async_setup_entry(
     async_add_entities(
         DreameSelectEntity(coordinator, description) for description in SELECTS if description.key in available
     )
+    if "map_list" in available and "update_map_data" in coordinator.device.caps.actions:
+        async_add_entities([DreameMapSelect(coordinator, entry.runtime_data.maps)])
+
+    # Each room's own suction, water and passes, when the robot keeps them (customized cleaning).
+    if "customized_cleaning" in available and "update_map_data" in coordinator.device.caps.actions:
+        live_map: LiveMap = entry.runtime_data.map
+        track_rooms(
+            entry,
+            async_add_entities,
+            lambda map_id, room: [
+                DreameRoomSelect(coordinator, live_map, map_id, room, setting) for setting in ROOM_SETTINGS
+            ],
+        )
 
 
 class DreameSelectEntity(DreameEntity, SelectEntity):
@@ -168,3 +184,104 @@ class DreameSelectEntity(DreameEntity, SelectEntity):
         self._attr_current_option = option
         self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
+
+
+class DreameMapSelect(DreameEntity, SelectEntity):
+    """Which saved map (floor) the robot uses, by name."""
+
+    entity_description: SelectEntityDescription
+
+    def __init__(self, coordinator: DreameDataUpdateCoordinator, maps: SavedMaps) -> None:
+        super().__init__(coordinator, SelectEntityDescription(key="selected_map"))
+        self._maps = maps
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._maps.listen(self.async_write_ha_state))
+
+    def _labels(self) -> dict[str, int]:
+        labels: dict[str, int] = {}
+        for map_id in sorted(self._maps.maps):
+            label = self._maps.name(map_id)
+            labels[label if label not in labels else f"{label} (#{map_id})"] = map_id
+        return labels
+
+    @property
+    def available(self) -> bool:
+        return super().available and bool(self._maps.maps)
+
+    @property
+    def options(self) -> list[str]:
+        return list(self._labels())
+
+    @property
+    def current_option(self) -> str | None:
+        return next((label for label, i in self._labels().items() if i == self._maps.current), None)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, object]:
+        return {
+            "maps": {str(i): self._maps.maps[i] for i in sorted(self._maps.maps)},
+            "map_id": self._maps.current,
+            "backups": {str(i): len(c) for i, c in sorted(self._maps.recovery.items())},
+        }
+
+    @command
+    async def async_select_option(self, option: str) -> None:
+        map_id = self._labels()[option]
+        await self.device.select_map(map_id)
+        self._maps.current = map_id
+        self.async_write_ha_state()
+        self.coordinator.config_entry.runtime_data.map.refresh_soon()
+        await self.coordinator.async_request_refresh()
+
+
+# Room setting → (its options, the value of each).
+ROOM_SETTINGS: dict[str, dict[str, int]] = {
+    "suction": {m.name.lower(): m.value for m in SuctionLevel if m is not SuctionLevel.UNKNOWN},
+    "water": {m.name.lower(): m.value for m in WaterVolume if m is not WaterVolume.UNKNOWN},
+    "repeats": {"1": 1, "2": 2, "3": 3},
+}
+
+
+class DreameRoomSelect(DreameRoomEntity, SelectEntity):
+    """One of a room's own settings: the robot uses them when it cleans the room, with customized cleaning on."""
+
+    entity_description: SelectEntityDescription
+
+    def __init__(
+        self, coordinator: DreameDataUpdateCoordinator, live_map: LiveMap, map_id: int, room: str, setting: str
+    ) -> None:
+        description = SelectEntityDescription(
+            key=f"room_{map_id}_{room}_{setting}",
+            translation_key=f"room_{setting}",
+            entity_category=EntityCategory.CONFIG,
+        )
+        super().__init__(coordinator, live_map, map_id, room, description)
+        self._setting = setting
+        self._attr_options = list(ROOM_SETTINGS[setting])
+
+    @property
+    def available(self) -> bool:
+        room = self._map.rooms.get(self._room)
+        return super().available and room is not None and self._setting in room
+
+    @property
+    def current_option(self) -> str | None:
+        value = (self._map.rooms.get(self._room) or {}).get(self._setting)
+        return next((o for o, v in ROOM_SETTINGS[self._setting].items() if v == value), None)
+
+    @command
+    async def async_select_option(self, option: str) -> None:
+        # The robot takes every room's settings at once: the others as the map has them.
+        rooms = {
+            int(room): (meta["suction"], meta["water"], meta["repeats"])
+            for room, meta in self._map.rooms.items()
+            if all(k in meta for k in ROOM_SETTINGS)
+        }
+        current = dict(zip(ROOM_SETTINGS, rooms[int(self._room)], strict=True))
+        current[self._setting] = ROOM_SETTINGS[self._setting][option]
+        rooms[int(self._room)] = (current["suction"], current["water"], current["repeats"])
+        await self.device.set_custom_cleaning(rooms)
+        self._map.set_room_settings(self._room, current)
+        self._map.refresh_soon()

@@ -666,6 +666,29 @@
           "ignore": "Ignorar",
           "cross": "Cruzar"
         }
+      },
+      "selected_map": {
+        "name": "Mapa"
+      },
+      "room_suction": {
+        "name": "Succión de {room}",
+        "state": {
+          "quiet": "Silencio",
+          "standard": "Estándar",
+          "strong": "Fuerte",
+          "turbo": "Turbo"
+        }
+      },
+      "room_water": {
+        "name": "Agua de {room}",
+        "state": {
+          "low": "Baja",
+          "medium": "Media",
+          "high": "Alta"
+        }
+      },
+      "room_repeats": {
+        "name": "Pasadas de {room}"
       }
     },
     "switch": {
@@ -786,6 +809,12 @@
       },
       "clear_warning": {
         "name": "Borrar aviso"
+      },
+      "request_map": {
+        "name": "Actualizar el mapa"
+      },
+      "start_fast_mapping": {
+        "name": "Mapeo rápido"
       }
     },
     "time": {
@@ -794,6 +823,16 @@
       },
       "dnd_end": {
         "name": "Fin de no molestar"
+      }
+    },
+    "text": {
+      "room_name": {
+        "name": "Nombre de {room}"
+      }
+    },
+    "image": {
+      "map": {
+        "name": "Mapa"
       }
     }
   },
@@ -818,6 +857,33 @@
     },
     "dock_action_not_supported": {
       "message": "La base de este robot no puede hacer {action}"
+    },
+    "not_supported": {
+      "message": "Este robot no puede hacer {feature}"
+    },
+    "busy": {
+      "message": "El robot está ocupado: prueba otra vez cuando termine"
+    },
+    "no_map": {
+      "message": "Aún no hay mapa"
+    },
+    "no_room": {
+      "message": "La habitación {room} no está en el mapa"
+    },
+    "repeated_room": {
+      "message": "Una habitación está dos veces en el orden"
+    },
+    "count_mismatch": {
+      "message": "Pon tantos valores de cada ajuste como habitaciones"
+    },
+    "out_of_range": {
+      "message": "Un valor de {field} está fuera de rango"
+    },
+    "no_backup": {
+      "message": "El mapa {map} no tiene la copia {index}"
+    },
+    "no_obstacle": {
+      "message": "No hay ningún obstáculo en {x}, {y}"
     }
   },
   "services": {
@@ -942,6 +1008,130 @@
         "action": {
           "name": "Acción",
           "description": "Lo que hace la base."
+        }
+      }
+    },
+    "vacuum_request_map": {
+      "name": "Actualizar el mapa",
+      "description": "Vuelve a traer ahora el mapa del robot y sus mapas guardados."
+    },
+    "vacuum_start_fast_mapping": {
+      "name": "Mapeo rápido",
+      "description": "El robot recorre la casa para hacer el mapa, sin limpiar."
+    },
+    "vacuum_start_mapping": {
+      "name": "Mapear limpiando",
+      "description": "El robot limpia toda la casa y hace un mapa nuevo mientras."
+    },
+    "vacuum_rename_segment": {
+      "name": "Renombrar una habitación",
+      "description": "Pone a una habitación del mapa su propio nombre.",
+      "fields": {
+        "segment_id": {
+          "name": "Habitación",
+          "description": "El id de segmento de la habitación."
+        },
+        "segment_name": {
+          "name": "Nombre",
+          "description": "Su nuevo nombre, de hasta 20 caracteres."
+        }
+      }
+    },
+    "vacuum_set_cleaning_sequence": {
+      "name": "Fijar el orden de limpieza",
+      "description": "El orden en que el robot limpia las habitaciones cuando las limpia todas.",
+      "fields": {
+        "cleaning_sequence": {
+          "name": "Orden",
+          "description": "Los ids de segmento de las habitaciones en orden; una lista vacía, el orden del propio robot."
+        }
+      }
+    },
+    "vacuum_set_custom_cleaning": {
+      "name": "Fijar los ajustes de cada habitación",
+      "description": "La succión, el agua y las pasadas de cada habitación, que se usan con la limpieza personalizada activada. Las demás habitaciones mantienen los suyos.",
+      "fields": {
+        "segment_id": {
+          "name": "Habitaciones",
+          "description": "Los ids de segmento de las habitaciones."
+        },
+        "suction_level": {
+          "name": "Nivel de succión",
+          "description": "De 0 (silencio) a 3 (turbo), uno por habitación."
+        },
+        "water_volume": {
+          "name": "Cantidad de agua",
+          "description": "De 1 (baja) a 3 (alta), uno por habitación."
+        },
+        "repeats": {
+          "name": "Pasadas",
+          "description": "De 1 a 3, uno por habitación."
+        }
+      }
+    },
+    "vacuum_rename_map": {
+      "name": "Renombrar un mapa",
+      "description": "Pone nombre a uno de los mapas guardados del robot.",
+      "fields": {
+        "map_id": {
+          "name": "Mapa",
+          "description": "El id del mapa."
+        },
+        "map_name": {
+          "name": "Nombre",
+          "description": "Su nuevo nombre; vacío, el del propio robot."
+        }
+      }
+    },
+    "vacuum_delete_map": {
+      "name": "Borrar un mapa",
+      "description": "Borra uno de los mapas guardados del robot. No se puede deshacer, salvo que el mapa tenga una copia para restaurar.",
+      "fields": {
+        "map_id": {
+          "name": "Mapa",
+          "description": "El id del mapa. Sin él, el mapa que usa el robot ahora."
+        }
+      }
+    },
+    "vacuum_backup_map": {
+      "name": "Hacer copia de un mapa",
+      "description": "Guarda una copia de un mapa en la nube, para restaurarlo después.",
+      "fields": {
+        "map_id": {
+          "name": "Mapa",
+          "description": "El id del mapa. Sin él, el mapa que usa el robot ahora."
+        }
+      }
+    },
+    "vacuum_restore_map": {
+      "name": "Restaurar un mapa",
+      "description": "Vuelve a poner una de las copias que el robot guarda de un mapa.",
+      "fields": {
+        "recovery_map_index": {
+          "name": "Copia",
+          "description": "Qué copia: 1 es la más reciente."
+        },
+        "map_id": {
+          "name": "Mapa",
+          "description": "El id del mapa. Sin él, el mapa que usa el robot ahora."
+        }
+      }
+    },
+    "vacuum_set_obstacle_ignore": {
+      "name": "Ignorar un obstáculo",
+      "description": "Hace que el robot pase por encima de un obstáculo que encontró, o que vuelva a evitarlo.",
+      "fields": {
+        "x": {
+          "name": "X",
+          "description": "X del obstáculo, en mm del mapa."
+        },
+        "y": {
+          "name": "Y",
+          "description": "Y del obstáculo, en mm del mapa."
+        },
+        "obstacle_ignored": {
+          "name": "Ignorado",
+          "description": "Activado, el robot pasa por encima; desactivado, lo evita."
         }
       }
     }

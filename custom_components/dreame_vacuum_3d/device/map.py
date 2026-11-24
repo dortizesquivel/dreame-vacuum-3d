@@ -265,16 +265,42 @@ def obstacles(frame: Frame) -> list[dict[str, Any]]:
             if not isinstance(o, list) or len(o) < 3:
                 continue
             try:
-                x, y, kind = round(float(o[0])), round(float(o[1])), int(o[2])
+                # Truncated as Tasshack does: set_obstacle_ignore names the obstacle by these.
+                x, y, kind = int(float(o[0])), int(float(o[1])), int(o[2])
                 confidence = round(float(o[3]) * 100) if len(o) > 3 and str(o[3]).strip() else 100
             except TypeError, ValueError, OverflowError:
                 continue
             # The app hides "small objects", and anything it is less than half sure of.
             small = len(o) > 17 and str(o[17]) == "1" and (128 <= kind <= 138 or kind == 142)
-            if kind in _NOT_OBSTACLES or small or confidence < 50 or _ignore_status(o) in _IGNORED:
+            status = _ignore_status(o)
+            if kind in _NOT_OBSTACLES or small or confidence < 50 or status in _IGNORED:
                 continue
-            out.append({"x": x, "y": y, "type": _OBSTACLES.get(kind, "obstacle"),
-                        "confidence": confidence, "source": source})  # fmt: skip
+            out.append({"x": x, "y": y, "type": _OBSTACLES.get(kind, "obstacle"), "code": kind,
+                        "confidence": confidence, "source": source, "ignored": status == 1})  # fmt: skip
+    return out
+
+
+def room_settings(frame: Frame) -> dict[str, dict[str, int]] | None:
+    """Each room's own cleaning settings (`cleanset`): suction 0-3, water 1-3, passes 1-3 and its place in the
+    cleaning order (0: none), or None if the frame has none. The robot keeps water one higher there."""
+    raw = frame.data.get("cleanset")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except ValueError:
+            return None
+    if not isinstance(raw, dict):
+        return None
+    out: dict[str, dict[str, int]] = {}
+    for room, values in raw.items():
+        if not isinstance(values, list) or len(values) < 3:
+            continue
+        try:
+            suction, water, repeats = int(values[0]), int(values[1]) - 1, int(values[2])
+            order = int(values[3]) if len(values) > 3 else 0
+        except TypeError, ValueError, OverflowError:
+            continue
+        out[str(room)] = {"suction": suction, "water": water, "repeats": repeats, "order": order}
     return out
 
 

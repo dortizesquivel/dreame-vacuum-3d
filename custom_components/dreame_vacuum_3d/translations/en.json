@@ -666,6 +666,29 @@
           "ignore": "Ignore",
           "cross": "Cross"
         }
+      },
+      "selected_map": {
+        "name": "Map"
+      },
+      "room_suction": {
+        "name": "{room} suction",
+        "state": {
+          "quiet": "Quiet",
+          "standard": "Standard",
+          "strong": "Strong",
+          "turbo": "Turbo"
+        }
+      },
+      "room_water": {
+        "name": "{room} water",
+        "state": {
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High"
+        }
+      },
+      "room_repeats": {
+        "name": "{room} passes"
       }
     },
     "switch": {
@@ -786,6 +809,12 @@
       },
       "clear_warning": {
         "name": "Clear warning"
+      },
+      "request_map": {
+        "name": "Refresh the map"
+      },
+      "start_fast_mapping": {
+        "name": "Fast mapping"
       }
     },
     "time": {
@@ -794,6 +823,16 @@
       },
       "dnd_end": {
         "name": "Do not disturb end"
+      }
+    },
+    "text": {
+      "room_name": {
+        "name": "{room} name"
+      }
+    },
+    "image": {
+      "map": {
+        "name": "Map"
       }
     }
   },
@@ -818,6 +857,33 @@
     },
     "dock_action_not_supported": {
       "message": "This robot's dock can't do {action}"
+    },
+    "not_supported": {
+      "message": "This robot can't do {feature}"
+    },
+    "busy": {
+      "message": "The robot is busy: try again once it finishes"
+    },
+    "no_map": {
+      "message": "There's no map yet"
+    },
+    "no_room": {
+      "message": "Room {room} isn't on the map"
+    },
+    "repeated_room": {
+      "message": "A room is in the order twice"
+    },
+    "count_mismatch": {
+      "message": "Give as many values of each setting as rooms"
+    },
+    "out_of_range": {
+      "message": "A value of {field} is out of range"
+    },
+    "no_backup": {
+      "message": "Map {map} has no copy {index}"
+    },
+    "no_obstacle": {
+      "message": "There's no obstacle at {x}, {y}"
     }
   },
   "services": {
@@ -942,6 +1008,130 @@
         "action": {
           "name": "Action",
           "description": "What the dock does."
+        }
+      }
+    },
+    "vacuum_request_map": {
+      "name": "Refresh the map",
+      "description": "Fetches the robot's map, and its saved maps, again now."
+    },
+    "vacuum_start_fast_mapping": {
+      "name": "Fast mapping",
+      "description": "The robot drives round the house to map it, without cleaning."
+    },
+    "vacuum_start_mapping": {
+      "name": "Map while cleaning",
+      "description": "The robot cleans the whole house, making a new map as it goes."
+    },
+    "vacuum_rename_segment": {
+      "name": "Rename a room",
+      "description": "Gives a room of the map its own name.",
+      "fields": {
+        "segment_id": {
+          "name": "Room",
+          "description": "The room's segment id."
+        },
+        "segment_name": {
+          "name": "Name",
+          "description": "Its new name, up to 20 characters."
+        }
+      }
+    },
+    "vacuum_set_cleaning_sequence": {
+      "name": "Set the cleaning order",
+      "description": "The order the robot cleans the rooms in, when it cleans them all.",
+      "fields": {
+        "cleaning_sequence": {
+          "name": "Order",
+          "description": "The rooms' segment ids in order; an empty list, the robot's own order."
+        }
+      }
+    },
+    "vacuum_set_custom_cleaning": {
+      "name": "Set rooms' own settings",
+      "description": "Each room's own suction, water and passes, used with customized cleaning on. Other rooms keep theirs.",
+      "fields": {
+        "segment_id": {
+          "name": "Rooms",
+          "description": "The rooms' segment ids."
+        },
+        "suction_level": {
+          "name": "Suction level",
+          "description": "From 0 (quiet) to 3 (turbo), one per room."
+        },
+        "water_volume": {
+          "name": "Water volume",
+          "description": "From 1 (low) to 3 (high), one per room."
+        },
+        "repeats": {
+          "name": "Passes",
+          "description": "From 1 to 3, one per room."
+        }
+      }
+    },
+    "vacuum_rename_map": {
+      "name": "Rename a map",
+      "description": "Names one of the robot's saved maps.",
+      "fields": {
+        "map_id": {
+          "name": "Map",
+          "description": "The map's id."
+        },
+        "map_name": {
+          "name": "Name",
+          "description": "Its new name; empty, the robot's own."
+        }
+      }
+    },
+    "vacuum_delete_map": {
+      "name": "Delete a map",
+      "description": "Deletes one of the robot's saved maps. It can't be undone, unless the map has a copy to restore.",
+      "fields": {
+        "map_id": {
+          "name": "Map",
+          "description": "The map's id. Without it, the map the robot uses now."
+        }
+      }
+    },
+    "vacuum_backup_map": {
+      "name": "Back up a map",
+      "description": "Saves a copy of a map in the cloud, to restore it later.",
+      "fields": {
+        "map_id": {
+          "name": "Map",
+          "description": "The map's id. Without it, the map the robot uses now."
+        }
+      }
+    },
+    "vacuum_restore_map": {
+      "name": "Restore a map",
+      "description": "Puts back one of the copies the robot keeps of a map.",
+      "fields": {
+        "recovery_map_index": {
+          "name": "Copy",
+          "description": "Which copy: 1 is the newest."
+        },
+        "map_id": {
+          "name": "Map",
+          "description": "The map's id. Without it, the map the robot uses now."
+        }
+      }
+    },
+    "vacuum_set_obstacle_ignore": {
+      "name": "Ignore an obstacle",
+      "description": "Has the robot go over an obstacle it found, or avoid it again.",
+      "fields": {
+        "x": {
+          "name": "X",
+          "description": "X of the obstacle, in the map's mm."
+        },
+        "y": {
+          "name": "Y",
+          "description": "Y of the obstacle, in the map's mm."
+        },
+        "obstacle_ignored": {
+          "name": "Ignored",
+          "description": "On, the robot goes over it; off, it avoids it."
         }
       }
     }

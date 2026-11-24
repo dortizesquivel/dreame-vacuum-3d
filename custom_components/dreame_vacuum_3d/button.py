@@ -8,13 +8,14 @@ from dataclasses import dataclass
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import DreameDataUpdateCoordinator
 from .device.device import DreameDevice
 from .entity import DreameEntity, command
 from .live_map import LiveMap
+from .rooms import DreameRoomEntity, track_rooms
 
 # reset_<name> action ↔ property that must be available for the button to appear.
 _RESET_REQUIRES: dict[str, str] = {
@@ -37,6 +38,7 @@ class DreameButtonEntityDescription(ButtonEntityDescription):
 
     press_fn: Callable[[DreameDevice], Awaitable[object]]
     available_fn: Callable[[DreameDevice], bool]
+    reads_map: bool = False  # the press fetches the map again, for the card and the map's entities
 
 
 def _make_reset(name: str) -> DreameButtonEntityDescription:
@@ -92,6 +94,19 @@ BUTTONS: tuple[DreameButtonEntityDescription, ...] = (
         available_fn=_has_self_wash,
     ),
     DreameButtonEntityDescription(
+        key="request_map",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        press_fn=lambda device: device.request_map(),
+        reads_map=True,
+        available_fn=lambda device: "request_map" in device.caps.actions and "frame_info" in device.caps.properties,
+    ),
+    DreameButtonEntityDescription(
+        key="start_fast_mapping",
+        entity_category=EntityCategory.CONFIG,
+        press_fn=lambda device: device.start_fast_mapping(),
+        available_fn=lambda device: "start_custom" in device.caps.actions and "status" in device.available,
+    ),
+    DreameButtonEntityDescription(
         key="clear_warning",
         entity_category=EntityCategory.CONFIG,
         press_fn=lambda device: device.clear_warning(),
@@ -114,20 +129,11 @@ async def async_setup_entry(
 
     # One "Clean <room>" button per room on the robot's map, added as the map arrives.
     live_map: LiveMap = entry.runtime_data.map
-    seen: set[str] = set()
-
-    @callback
-    def add_rooms(_message: object = None) -> None:
-        message = live_map.message
-        if message is None:
-            return
-        new = [room for room in live_map.rooms if f"{message['map_id']}_{room}" not in seen]
-        seen.update(f"{message['map_id']}_{room}" for room in new)
-        if new:
-            async_add_entities(DreameRoomButton(coordinator, live_map, message["map_id"], room) for room in new)
-
-    add_rooms()
-    entry.async_on_unload(live_map.listen(add_rooms))
+    track_rooms(
+        entry,
+        async_add_entities,
+        lambda map_id, room: [DreameRoomButton(coordinator, live_map, map_id, room)],
+    )
 
 
 class DreameButtonEntity(DreameEntity, ButtonEntity):
@@ -137,26 +143,22 @@ class DreameButtonEntity(DreameEntity, ButtonEntity):
 
     @command
     async def async_press(self) -> None:
+        if self.entity_description.reads_map:
+            live_map: LiveMap = self.coordinator.config_entry.runtime_data.map
+            await live_map.fetch_now()
+            return
         await self.entity_description.press_fn(self.device)
         await self.coordinator.async_request_refresh()
 
 
-class DreameRoomButton(DreameEntity, ButtonEntity):
+class DreameRoomButton(DreameRoomEntity, ButtonEntity):
     """Clean one room of the robot's map."""
 
     entity_description: ButtonEntityDescription
 
     def __init__(self, coordinator: DreameDataUpdateCoordinator, live_map: LiveMap, map_id: int, room: str) -> None:
         description = ButtonEntityDescription(key=f"clean_room_{map_id}_{room}", translation_key="clean_room")
-        super().__init__(coordinator, description)
-        self._map, self._map_id, self._room = live_map, map_id, room
-        self._attr_translation_placeholders = {"room": live_map.rooms[room].get("name") or f"#{room}"}
-
-    @property
-    def available(self) -> bool:
-        message = self._map.message
-        on_map = message is not None and message["map_id"] == self._map_id and self._room in self._map.rooms
-        return super().available and on_map
+        super().__init__(coordinator, live_map, map_id, room, description)
 
     @command
     async def async_press(self) -> None:

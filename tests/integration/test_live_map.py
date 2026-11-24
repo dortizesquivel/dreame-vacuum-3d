@@ -406,7 +406,9 @@ async def test_obstacles_furniture_and_what_is_new_since_the_last_cleaning(
     status(Status.CLEANING)
     assert await frame_with((7, 0)) == [7, 0, 1]  # the robot finds a box
     pose = entry.runtime_data.map.pose
-    assert pose["obstacles"] == [{"x": -925, "y": -425, "type": "shoes", "confidence": 99, "source": "camera"}]
+    assert pose["obstacles"] == [
+        {"x": -925, "y": -425, "type": "shoes", "code": 133, "confidence": 99, "source": "camera", "ignored": False}
+    ]
     assert pose["furniture"][0]["type"] == "two_seat_sofa"
     status(Status.IDLE)
     assert await frame_with((7, 0)) == [7, 0, 1]  # still new after the cleaning
@@ -466,7 +468,9 @@ async def test_partial_frames_from_the_cloud_log_while_cleaning(hass: HomeAssist
     pose = live_map.pose
     assert pose["frame_id"] == 3 and pose["robot"] == [-700, -400, 45] and pose["room"] == 2
     assert pose["active"] == [2]
-    assert pose["obstacles"] == [{"x": -700, "y": -400, "type": "sock", "confidence": 90, "source": "camera"}]
+    assert pose["obstacles"] == [
+        {"x": -700, "y": -400, "type": "sock", "code": 134, "confidence": 90, "source": "camera", "ignored": False}
+    ]
     # The live frame's path was M-900,-450 L50,0 L0,50 then S…, M…; each P continues the last stroke.
     assert pose["path"][-1]["points"][-3:] == [[-800, -400], [-800, -400], [-800, -350]]
     assert len(sent) == 2 and "cells" not in sent[0]

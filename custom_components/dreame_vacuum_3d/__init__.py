@@ -22,7 +22,7 @@ from homeassistant.const import (
     CONF_TOKEN,
     CONF_USERNAME,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv, device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
@@ -36,6 +36,7 @@ from .device.capabilities import load
 from .device.device import DreameDevice
 from .history import CleaningHistory, EventFetcher
 from .live_map import MAP_LISTENERS, MAP_VIEWERS, FileFetcher, HistoryFetcher, LiveMap
+from .maps import SavedMaps
 from .notifications import DreameNotifier
 from .protocol.cloud import (
     CloudAuth,
@@ -62,6 +63,8 @@ CARD_URL = f"/{DOMAIN}/{CARD.name}"
 
 PLATFORMS: list[str] = [
     "vacuum",
+    "image",
+    "text",
     "sensor",
     "binary_sensor",
     "select",
@@ -82,6 +85,7 @@ class RuntimeData:
     notifier: DreameNotifier
     map: LiveMap
     history: CleaningHistory
+    maps: SavedMaps
 
 
 type DreameConfigEntry = ConfigEntry[RuntimeData]
@@ -164,8 +168,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bo
         _history_file(hass, entry, cloud),
         _history_store(hass, entry),
     )
+    maps = SavedMaps(
+        device, _map_file(hass, entry, cloud), _history_file(hass, entry, cloud), _file_url(hass, entry, cloud)
+    )
     entry.runtime_data = RuntimeData(
-        coordinator=coordinator, cloud=cloud, miio=miio, notifier=notifier, map=live_map, history=history
+        coordinator=coordinator,
+        cloud=cloud,
+        miio=miio,
+        notifier=notifier,
+        map=live_map,
+        history=history,
+        maps=maps,
     )
     _async_register_device(hass, entry, info)
     _async_remove_dnd_numbers(hass, did)
@@ -175,6 +188,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: DreameConfigEntry) -> bo
     await notifier.async_setup()
     entry.async_on_unload(live_map.start())
     entry.async_on_unload(history.start(coordinator))
+
+    # The saved maps: read now, and again when the robot names a new map list.
+    @callback
+    def read_maps() -> None:
+        entry.async_create_background_task(hass, maps.refresh(), "dreame_vacuum_3d maps")
+
+    entry.async_on_unload(coordinator.async_add_listener(read_maps))
+    entry.async_create_background_task(hass, maps.refresh(), "dreame_vacuum_3d maps")
     return True
 
 
@@ -274,6 +295,16 @@ def _history_file(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud) -
         return await _with_relogin(hass, entry, cloud, download)
 
     return fetch
+
+
+def _file_url(hass: HomeAssistant, entry: ConfigEntry, cloud: XiaomiCloud) -> Callable[[str], Awaitable[str | None]]:
+    """A stored file's download URL, for the robot to fetch it itself (a map copy to restore)."""
+    model = entry.data[CONF_MODEL]
+
+    async def url(object_name: str) -> str | None:
+        return await _with_relogin(hass, entry, cloud, lambda: cloud.file_url(object_name, model=model))
+
+    return url
 
 
 async def _with_relogin[T](

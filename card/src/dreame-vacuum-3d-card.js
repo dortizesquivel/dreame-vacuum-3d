@@ -1,6 +1,7 @@
-import { appendPath, normalizeModel, routineRooms } from './model.js';
+import { appendPath, normalizeModel, roomAt, routineRooms } from './model.js';
 import { VacuumScene } from './scene.js';
 import { readTheme } from './theme.js';
+import { thingLabel } from './things.js';
 
 const DOMAIN = 'dreame_vacuum_3d';
 const ZOOM_STEP = 1.4;
@@ -19,6 +20,7 @@ const ICONS = {   // Material Design Icons
   pause: 'M14,19H18V5H14M6,19H10V5H6V19Z',
   dock: 'M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z',
   zone: 'M3,3H9V5H5V9H3V3M15,3H21V9H19V5H15V3M3,15H5V19H9V21H3V15M19,15H21V21H15V19H19V15M8,8H16V16H8V8Z',
+  point: 'M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8M3.05,13H1V11H3.05C3.5,6.83 6.83,3.5 11,3.05V1H13V3.05C17.17,3.5 20.5,6.83 20.95,11H23V13H20.95C20.5,17.17 17.17,20.5 13,20.95V23H11V20.95C6.83,20.5 3.5,17.17 3.05,13M12,5A7,7 0 0,0 5,12A7,7 0 0,0 12,19A7,7 0 0,0 19,12A7,7 0 0,0 12,5Z',
   settings: 'M3,17V19H9V17H3M3,5V7H13V5H3M13,21V19H21V17H13V15H11V21H13M7,9V11H3V13H7V15H9V9H7M21,13V11H11V13H21M15,9H17V7H21V5H17V3H15V9Z',
   station: 'M12,20A6,6 0 0,1 6,14C6,10 12,3.25 12,3.25C12,3.25 18,10 18,14A6,6 0 0,1 12,20Z',
   history: 'M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3',
@@ -61,6 +63,10 @@ const STRINGS = {
     nextCleaning: 'The mode changes on the next cleaning', fitMop: 'Fit the mop pads to mop', noSettings: 'This robot has no cleaning settings to change',
     station: 'Dock: empty the bin, wash or dry the mop', stationTitle: 'The dock', empty: 'Empty the dust bin', wash: 'Wash the mop',
     stopWash: 'Stop washing the mop', dry: 'Dry the mop', stopDry: 'Stop drying the mop', sent: '{action}: sent to the dock',
+    point: 'Pick a spot: clean around it or send the robot there', pickPoint: 'Tap the floor to pick a spot',
+    spotPicked: 'A spot in {room}', spotFloor: 'A spot on the floor', spot: 'Clean around it', goHere: 'Go here',
+    theSpot: 'around the spot', going: 'On its way to the spot',
+    ignore: 'Ignore it', avoid: 'Avoid it again', ignored: '{thing}: the robot goes over it', avoided: '{thing}: the robot avoids it',
   },
   es: {
     noEntity: 'Pon en "entity" una aspiradora de Dreame Vacuum 3D.',
@@ -82,6 +88,10 @@ const STRINGS = {
     nextCleaning: 'El modo cambia en la próxima limpieza', fitMop: 'Pon las mopas para fregar', noSettings: 'Este robot no tiene ajustes de limpieza que cambiar',
     station: 'Base: vaciar el depósito, lavar o secar la mopa', stationTitle: 'La base', empty: 'Vaciar el depósito', wash: 'Lavar la mopa',
     stopWash: 'Parar el lavado de la mopa', dry: 'Secar la mopa', stopDry: 'Parar el secado de la mopa', sent: '{action}: enviado a la base',
+    point: 'Elegir un punto: limpiar alrededor o mandar el robot allí', pickPoint: 'Toca el suelo para elegir un punto',
+    spotPicked: 'Un punto en {room}', spotFloor: 'Un punto del suelo', spot: 'Limpiar alrededor', goHere: 'Ir aquí',
+    theSpot: 'alrededor del punto', going: 'De camino al punto',
+    ignore: 'Ignorarlo', avoid: 'Volver a evitarlo', ignored: '{thing}: el robot pasa por encima', avoided: '{thing}: el robot lo evita',
   },
 };
 
@@ -106,6 +116,7 @@ const STYLE = `
   .thing { font-size: 11px; font-weight: 500; padding: 2px 6px; border-radius: 6px; white-space: nowrap; color: #1a1a1a;
     background: color-mix(in srgb, var(--warning-color, #ffa600) 85%, white); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
   .thing[data-warn="true"] { color: #fff; background: var(--error-color, #db4437); }
+  .thing[data-ignored="true"] { opacity: .55; text-decoration: line-through; }
   .badge[data-warn="false"] { color: var(--primary-text-color); background: color-mix(in srgb, var(--card-background-color, #fff) 92%, transparent); }
   .ctl { display: flex; gap: 2px; flex: none; }
   .ctl button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
@@ -128,42 +139,75 @@ const STYLE = `
   .seg button:hover { color: var(--primary-text-color); background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
   .seg button[aria-pressed="true"] { color: var(--text-primary-color, #fff); background: var(--primary-color); }
   button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
-  .panel { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2; display: flex; flex-wrap: wrap; align-items: center;
-    justify-content: flex-end; gap: 8px; padding: 8px; border-radius: 10px; border: 1px solid var(--divider-color);
-    background: color-mix(in srgb, var(--card-background-color, #fff) 90%, transparent); backdrop-filter: blur(6px);
-    max-height: calc(100% - 20px); overflow-y: auto; box-sizing: border-box; }
+  /* The drawer: opens under the map, so the map and its buttons stay in view. One surface, tinted with the theme's
+     colour; its rows are settings, not cards. */
+  .panel { --dv-track: color-mix(in srgb, var(--primary-text-color) 7%, transparent);
+    --dv-tray: color-mix(in srgb, var(--primary-color) 5%, var(--card-background-color, #fff));
+    container-type: inline-size; display: grid; gap: 14px; padding: 16px; border-top: 1px solid var(--divider-color);
+    background: var(--dv-tray); animation: dv-open .2s cubic-bezier(.2, .8, .2, 1); }
   .panel[hidden] { display: none; }
-  .panel .msg { flex: 1 1 160px; font-size: 13px; color: var(--primary-text-color); }
-  .panel .msg[data-error="true"] { color: var(--error-color, #db4437); }
-  .panel button { font: inherit; font-size: 13px; font-weight: 500; color: var(--primary-text-color); background: none;
-    border: 1px solid var(--divider-color); border-radius: 8px; padding: 8px 12px; min-height: 36px; cursor: pointer; }
-  .panel button.primary { color: var(--text-primary-color, #fff); background: var(--primary-color); border-color: transparent; }
-  .panel button[hidden] { display: none; }
-  .panel .list { flex: 1 1 100%; display: grid; gap: 4px; max-height: 168px; overflow-y: auto; }
+  @keyframes dv-open { from { opacity: 0; transform: translateY(-6px); } }
+  .panel .msg { font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--primary-text-color); }
+  .panel .msg:empty { display: none; }
+  .panel .msg[data-error="true"] { font-size: 13px; font-weight: 500; color: var(--error-color, #db4437); padding: 8px 12px; border-radius: 10px;
+    background: color-mix(in srgb, var(--error-color, #db4437) 10%, transparent); }
+  .panel button { font: inherit; font-size: 13px; font-weight: 500; color: var(--primary-text-color); background: none; cursor: pointer;
+    border: 0; border-radius: 999px; padding: 0 16px; min-height: 40px; transition: background-color .15s, color .15s; }
+  .panel [hidden] { display: none !important; }
+  .panel button:hover { background: var(--dv-track); }
+  .panel .actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+  .panel .actions button { color: var(--secondary-text-color); }
+  .panel .actions button:hover { color: var(--primary-text-color); }
+  .panel .actions button.primary { min-height: 44px; padding: 0 22px; font-size: 14px; font-weight: 600; color: var(--text-primary-color, #fff);
+    background: var(--primary-color); box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color) 35%, transparent); }
+  .panel .actions button.primary:hover { background: color-mix(in srgb, var(--primary-color) 88%, var(--primary-text-color)); }
+  .panel .actions button.primary:disabled { opacity: .6; cursor: default; }
+  @container (max-width: 420px) { .panel .actions button.primary { flex: 1 1 0; } }
+  .panel .list { display: grid; gap: 2px; max-height: 220px; overflow-y: auto; margin: 0 -8px; }
   .panel .list[hidden] { display: none; }
-  .panel .list button { text-align: left; font-weight: 400; border-color: transparent; padding: 6px 10px; min-height: 32px; }
-  .panel .list button:hover { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
+  .panel .list button { display: grid; gap: 2px; text-align: left; border-radius: 12px; padding: 10px 12px; min-height: 48px; }
   .panel .list button:disabled { color: var(--secondary-text-color); cursor: default; background: none; }
-  .panel button[aria-pressed="true"] { color: var(--text-primary-color, #fff); background: var(--primary-color); border-color: transparent; }
-  .panel .opts { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; max-height: 300px; overflow-y: auto; }
+  .panel .list .when { font-weight: 600; }
+  .panel .list .what { font-size: 12px; color: var(--secondary-text-color); }
+  /* The dock's actions: tiles to tap, the icon above what it does. */
+  .panel .list:has([data-station-entity]) { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 0; max-height: none; }
+  .panel .list [data-station-entity] { justify-items: center; align-content: center; gap: 6px; text-align: center; min-height: 84px;
+    padding: 12px; border-radius: 16px; background: var(--card-background-color, #fff); border: 1px solid var(--divider-color); }
+  .panel .list [data-station-entity]:hover { border-color: var(--primary-color); background: var(--card-background-color, #fff); }
+  .panel .list [data-station-entity][data-busy] { color: var(--primary-color); border-color: var(--primary-color); }
+  .panel .list .ico { font-size: 24px; line-height: 1; }
+  .panel button.coverage, .panel button.tune { justify-self: start; display: inline-flex; align-items: center; gap: 8px; min-height: 36px;
+    padding: 0 14px; background: var(--dv-track); }
+  .panel button[aria-pressed="true"] { color: var(--text-primary-color, #fff); background: var(--primary-color); }
+  .panel .tune svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
+  .panel .tune[aria-expanded="true"] { color: var(--primary-color); }
+  .panel .opts { display: grid; gap: 14px; }
   .panel .opts[hidden] { display: none; }
-  /* One setting a line: its label beside its options, or above them when the card is narrow. */
-  .opts .field { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
-  .opts .name { flex: 0 0 72px; font-size: 13px; color: var(--secondary-text-color); }
-  .opts .row { flex: 1 1 260px; display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: color-mix(in srgb, var(--primary-text-color) 6%, transparent); }
-  .opts .row button { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-    min-width: 0; min-height: 44px; padding: 6px 8px; border: 0; border-radius: 8px; font-weight: 500; color: var(--secondary-text-color); }
-  .opts .row button[aria-checked="true"] { color: var(--text-primary-color, #fff); background: var(--primary-color); }
+  /* A setting: its name over its options, beside them when the card is wide. */
+  .opts .field { display: grid; gap: 6px; }
+  @container (min-width: 520px) { .opts .field { grid-template-columns: 88px 1fr; align-items: center; gap: 12px; } }
+  .opts .name { font-size: 12px; font-weight: 500; color: var(--secondary-text-color); }
+  /* The options: a track with a thumb that slides to the one picked, as on a dial. */
+  .opts .row { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 4px; border-radius: 14px;
+    background: var(--dv-track); isolation: isolate; }
+  .opts .row::before { content: ""; position: absolute; z-index: -1; top: 4px; bottom: 4px; border-radius: 10px; background: var(--primary-color);
+    width: calc((100% - 8px) / var(--n, 1)); left: calc(4px + (100% - 8px) / var(--n, 1) * var(--i, 0));
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--primary-color) 35%, transparent);
+    transition: left .28s cubic-bezier(.3, 1.2, .4, 1); }
+  .opts .row:not([style*="--i"])::before { opacity: 0; }
+  .opts .row button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; min-height: 48px;
+    padding: 6px 4px; border-radius: 10px; font-weight: 500; color: var(--secondary-text-color); background: none; }
+  .opts .row button:hover { background: none; }
+  .opts .row button[aria-checked="true"] { color: var(--text-primary-color, #fff); font-weight: 600; }
   .opts .row button:disabled { opacity: .4; cursor: default; }
   .opts .row button:not(:disabled):not([aria-checked="true"]):hover { color: var(--primary-text-color); }
-  .opts .row span { line-height: 1.2; text-align: center; }
+  .opts .row span { line-height: 1.2; text-align: center; overflow-wrap: anywhere; }
   /* The level meter: one bar per step up to this one, rising, so the steps read at a glance from across the room. */
-  .opts .meter { display: flex; align-items: flex-end; gap: 3px; height: 18px; }
-  .opts .meter i { width: 5px; border-radius: 1.5px; background: currentColor; opacity: .25; }
+  .opts .meter { display: flex; align-items: flex-end; gap: 3px; height: 16px; }
+  .opts .meter i { width: 4px; border-radius: 2px; background: currentColor; opacity: .28; }
   .opts .meter i[data-on] { opacity: 1; }
-  .opts .note { flex: 1 1 100%; margin: 0; font-size: 12px; color: var(--secondary-text-color); }
-  .panel .tune { display: inline-flex; align-items: center; gap: 6px; }
-  .panel .tune svg { width: 18px; height: 18px; fill: currentColor; }
+  .opts .note { margin: 0; font-size: 12px; color: var(--secondary-text-color); }
+  @media (prefers-reduced-motion: reduce) { .panel { animation: none; } .opts .row::before { transition: none; } }
   .routines { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 12px; border-top: 1px solid var(--divider-color); }
   .routines[hidden] { display: none; }
   .routines button { font: inherit; font-size: 13px; font-weight: 500; color: var(--primary-text-color); background: none;
@@ -286,21 +330,25 @@ class DreameVacuum3DCard extends HTMLElement {
             <button type="button" data-zoom="out">−</button>
             <button type="button" data-download>⤓</button>
             <button type="button" data-zone><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.zone}"></path></svg></button>
+            <button type="button" data-point><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.point}"></path></svg></button>
             <button type="button" data-history><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.history}"></path></svg></button>
             <button type="button" data-station hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.station}"></path></svg></button>
             <button type="button" data-settings hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.settings}"></path></svg></button>
           </div>
-          <div class="panel" hidden>
-            <div class="msg" aria-live="polite"></div>
-            <div class="list" hidden></div>
-            <div class="opts" hidden></div>
-            <button type="button" class="coverage" hidden></button>
-            <button type="button" class="tune" hidden><svg viewBox="0 0 24 24"><path d="${ICONS.settings}"></path></svg><span></span></button>
+          <div class="status"></div>
+        </div>
+        <div class="panel" hidden>
+          <div class="msg" aria-live="polite"></div>
+          <div class="list" hidden></div>
+          <button type="button" class="tune" hidden><svg viewBox="0 0 24 24"><path d="${ICONS.settings}"></path></svg><span></span></button>
+          <div class="opts" hidden></div>
+          <button type="button" class="coverage" hidden></button>
+          <div class="actions">
             <button type="button" class="undo" hidden></button>
             <button type="button" class="cancel"></button>
+            <button type="button" class="second" hidden></button>
             <button type="button" class="primary clean"></button>
           </div>
-          <div class="status"></div>
         </div>
         <div class="routines" hidden></div>
       </ha-card>`;
@@ -309,7 +357,7 @@ class DreameVacuum3DCard extends HTMLElement {
     this._els = { title: $('.title'), chip: $('.chip'), viewport: $('.viewport'), status: $('.status'), panel: $('.panel'),
       msg: $('.panel .msg'), clean: $('.panel .clean'), cancel: $('.panel .cancel'), undo: $('.panel .undo'), routines: $('.routines'),
       list: $('.panel .list'), coverage: $('.panel .coverage'), opts: $('.panel .opts'), tune: $('.panel .tune'),
-      settings: $('[data-settings]'), station: $('[data-station]') };
+      settings: $('[data-settings]'), station: $('[data-station]'), second: $('.panel .second') };
     root.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
       this._view = b.dataset.view;
       this._follow = false;
@@ -325,6 +373,8 @@ class DreameVacuum3DCard extends HTMLElement {
     root.querySelectorAll('[data-zoom]').forEach((b) => b.addEventListener('click', () => this._scene?.zoom(b.dataset.zoom === 'in' ? ZOOM_STEP : 1 / ZOOM_STEP)));
     root.querySelector('[data-download]').addEventListener('click', () => this._download());
     root.querySelector('[data-zone]').addEventListener('click', () => this._setZoneMode(!this._zoneMode));
+    root.querySelector('[data-point]').addEventListener('click', () => this._setPointMode(!this._pointMode));
+    this._els.second.addEventListener('click', () => this._second?.());
     root.querySelector('[data-history]').addEventListener('click', () => this._showHistory());
     this._els.settings.addEventListener('click', () => {
       if (this._els.settings.getAttribute('aria-pressed') === 'true') this._pick(null);
@@ -375,6 +425,8 @@ class DreameVacuum3DCard extends HTMLElement {
     const s = this._scene;
     s.onRoomTap = (id) => this._pick(id);
     s.onZone = (rect) => this._offerZone(rect);
+    s.onPoint = (at) => this._offerPoint(at);
+    s.onObstacleTap = (o) => this._offerObstacle(o);
     s.onModelError = (err) => this._status(this._t('modelError', { error: err.message }));
     this._configureScene();
     s.setView(this._view, true);
@@ -441,6 +493,9 @@ class DreameVacuum3DCard extends HTMLElement {
     r.querySelector('[data-zone]').setAttribute('aria-label', this._t('zone'));
     r.querySelector('[data-zone]').title = this._t('zone');
     r.querySelector('[data-zone]').setAttribute('aria-pressed', String(!!this._zoneMode));
+    r.querySelector('[data-point]').setAttribute('aria-label', this._t('point'));
+    r.querySelector('[data-point]').title = this._t('point');
+    r.querySelector('[data-point]').setAttribute('aria-pressed', String(!!this._pointMode));
     r.querySelector('[data-station]').setAttribute('aria-label', this._t('station'));
     r.querySelector('[data-station]').title = this._t('station');
     r.querySelector('[data-settings]').setAttribute('aria-label', this._t('settings'));
@@ -493,7 +548,7 @@ class DreameVacuum3DCard extends HTMLElement {
     return STATION.flatMap((a) => {
       const stop = a.stop && a.busy.includes(doing) ? this._related(a.stop) : null;
       const entity = stop ?? this._related(a.key);
-      return entity ? [{ ...a, entity: entity.entity_id, label: stop ? a.stopLabel : a.label }] : [];
+      return entity ? [{ ...a, entity: entity.entity_id, label: stop ? a.stopLabel : a.label, running: !!stop }] : [];
     });
   }
 
@@ -520,7 +575,10 @@ class DreameVacuum3DCard extends HTMLElement {
       b.type = 'button';
       b.dataset.stationEntity = a.entity;
       b.dataset.label = a.label;
-      b.textContent = `${a.icon} ${this._t(a.label)}`;
+      const icon = Object.assign(document.createElement('span'), { className: 'ico', textContent: a.icon });
+      icon.setAttribute('aria-hidden', 'true');
+      b.append(icon, ' ', Object.assign(document.createElement('span'), { textContent: this._t(a.label) }));
+      if (a.running) b.dataset.busy = '';
       return b;
     }));
     list.hidden = !actions.length;
@@ -610,6 +668,10 @@ class DreameVacuum3DCard extends HTMLElement {
     row.setAttribute('aria-labelledby', id);
     // The row's one Tab stop: the picked option, or the first that can be picked when that one can't.
     const stop = (options.find((o) => o.value === value && !o.disabled) ?? options.find((o) => !o.disabled))?.value;
+    // The thumb under the picked option: --i of --n.
+    const at = options.findIndex((o) => o.value === value);
+    row.style.setProperty('--n', String(options.length));
+    if (at >= 0) row.style.setProperty('--i', String(at));
     row.append(...options.map((o) => {
       const b = document.createElement('button');
       b.type = 'button';
@@ -804,6 +866,89 @@ class DreameVacuum3DCard extends HTMLElement {
     cancel.textContent = this._t('cancel');
   }
 
+  /** In point mode a tap on the floor picks a spot: to clean around it, or to send the robot there. */
+  _setPointMode(on) {
+    this._pick(null);
+    this._pointMode = on;
+    this._scene?.setPointMode(on);
+    this._renderButtons();
+    if (!on) return;
+    const { panel, msg, clean, cancel } = this._els;
+    panel.hidden = false;
+    clean.hidden = true;
+    msg.textContent = this._t('pickPoint');
+    cancel.textContent = this._t('cancel');
+  }
+
+  _offerPoint(at) {
+    this._point = at;
+    this._scene?.showPoint(at);
+    const { msg, clean, cancel, second } = this._els;
+    const room = this._map?.rooms?.[roomAt(this._map, ...at)]?.name;
+    msg.dataset.error = 'false';
+    msg.textContent = room ? this._t('spotPicked', { room }) : this._t('spotFloor');
+    cancel.textContent = this._t('cancel');
+    clean.hidden = false;
+    clean.textContent = this._t('spot');
+    second.hidden = false;
+    second.textContent = this._t('goHere');
+    this._second = () => this._goHere();
+    this._offerSettings();
+  }
+
+  async _goHere() {
+    if (!this._point) return;
+    const [x, y] = this._point;
+    const { msg, cancel, second } = this._els;
+    second.disabled = true;
+    try {
+      await this._hass.callService(DOMAIN, 'vacuum_goto', { x, y }, { entity_id: this._config.entity });
+      msg.dataset.error = 'false';
+      msg.textContent = this._t('going');
+      cancel.textContent = this._t('close');
+    } catch (err) {
+      msg.dataset.error = 'true';
+      msg.textContent = this._t('failed', { error: err?.message ?? String(err) });
+    } finally {
+      second.disabled = false;
+    }
+  }
+
+  /** A tap on an obstacle the robot found: have it go over it from now on, or avoid it again. */
+  _offerObstacle(o) {
+    this._pick(null);
+    const { panel, msg, clean, cancel } = this._els;
+    const name = thingLabel(o.type, this._lang());
+    panel.hidden = false;
+    msg.dataset.error = 'false';
+    msg.textContent = this._t(o.ignored ? 'ignored' : 'avoided', { thing: name });
+    cancel.textContent = this._t('close');
+    clean.hidden = false;
+    clean.textContent = this._t(o.ignored ? 'avoid' : 'ignore');
+    this._obstacle = o;
+  }
+
+  async _ignoreObstacle() {
+    const o = this._obstacle;
+    if (!o) return;
+    const { msg, clean } = this._els;
+    clean.disabled = true;
+    try {
+      await this._hass.callService(DOMAIN, 'vacuum_set_obstacle_ignore', { x: Math.trunc(o.x), y: Math.trunc(o.y), obstacle_ignored: !o.ignored },
+        { entity_id: this._config.entity });
+      o.ignored = !o.ignored;
+      msg.dataset.error = 'false';
+      msg.textContent = this._t(o.ignored ? 'ignored' : 'avoided', { thing: thingLabel(o.type, this._lang()) });
+      clean.textContent = this._t(o.ignored ? 'avoid' : 'ignore');
+      if (this._map) this._scene?.setMap({ ...this._map, obstacles: [...(this._map.obstacles ?? [])] });
+    } catch (err) {
+      msg.dataset.error = 'true';
+      msg.textContent = this._t('commandFailed', { error: err?.message ?? String(err) });
+    } finally {
+      clean.disabled = false;
+    }
+  }
+
   /** A zone drawn joins the others drawn since zone mode began, up to MAX_ZONES. */
   _offerZone(rect) {
     const zones = this._zones ?? [];
@@ -878,7 +1023,10 @@ class DreameVacuum3DCard extends HTMLElement {
       b.dataset.start = String(c.start);
       b.disabled = !c.has_map;
       const where = c.rooms.length ? c.rooms.map((r) => rooms[r]?.name ?? `#${r}`).join(', ') : this._t('whole');
-      b.textContent = [when(c.start), c.duration != null && `${c.duration} min`, c.area != null && `${c.area} m²`, where].filter(Boolean).join(' · ');
+      // When on the first line; how long, how much and where under it.
+      const what = [c.duration != null && `${c.duration} min`, c.area != null && `${c.area} m²`, where].filter(Boolean).join(', ');
+      b.append(Object.assign(document.createElement('span'), { className: 'when', textContent: when(c.start) }), ' ',
+        Object.assign(document.createElement('span'), { className: 'what', textContent: what }));
       return b;
     }));
     list.hidden = !cleanings.length;
@@ -988,7 +1136,18 @@ class DreameVacuum3DCard extends HTMLElement {
       this._scene?.setZoneMode(false);
       if (this._root) this._renderButtons();
     }
-    if (this._els) this._els.undo.hidden = true;
+    if (id == null && this._pointMode) {
+      this._pointMode = false;
+      this._point = null;
+      this._scene?.setPointMode(false);
+      if (this._root) this._renderButtons();
+    }
+    this._second = null;
+    this._obstacle = null;
+    if (this._els) {
+      this._els.undo.hidden = true;
+      this._els.second.hidden = true;
+    }
     // A tap on a room adds it to the rooms to clean, or takes it off again; anywhere else clears them.
     const rooms = this._map?.rooms ?? {};
     const picked = (this._picked ?? []).filter((r) => rooms[r]);
@@ -1020,6 +1179,8 @@ class DreameVacuum3DCard extends HTMLElement {
   }
 
   async _clean() {
+    if (this._obstacle) { await this._ignoreObstacle(); return; }
+    if (this._point) { await this._cleanSpot(); return; }
     const ids = this._picked ?? [], zones = this._zones ?? [];
     if (!ids.length && !zones.length) return;
     const { clean } = this._els;
@@ -1037,6 +1198,22 @@ class DreameVacuum3DCard extends HTMLElement {
         this._zones = [];
         clean.hidden = true;
         this._els.undo.hidden = true;
+        this._els.tune.hidden = true;
+        this._els.opts.hidden = true;
+      }
+    } finally {
+      clean.disabled = false;
+    }
+  }
+
+  async _cleanSpot() {
+    const { clean, second } = this._els;
+    clean.disabled = true;
+    try {
+      const repeats = (this._repeats ?? 1) > 1 ? { repeats: this._repeats } : {};
+      if (await this._start({ points: [this._point], ...repeats }, this._t('theSpot'), 'vacuum_clean_spot')) {
+        clean.hidden = true;
+        second.hidden = true;
         this._els.tune.hidden = true;
         this._els.opts.hidden = true;
       }

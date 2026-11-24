@@ -38,6 +38,7 @@ IDLE_EVERY = 900  # s between frames while it stays put: the map rarely changes 
 FIRST_RETRY = 30  # s: until a first frame comes (a robot just woken may send none), ask again this soon
 WHOLE_EVERY = 60  # s: while it moves, ask it for a whole frame this often (it mostly refuses then)
 BACKOFF = (10, 600)  # s: after the cloud fails, wait the first, then twice as long each time, up to the second
+EDITED_WAIT = 3  # s after a change to the map before asking for it: the robot saves it first
 SETTLE = 120  # s after it stops moving (docked, say) that it may still send no map: no warning for that
 _ERRORS = (MiioError, MiotError, CloudError, dmap.MapError)
 
@@ -100,6 +101,7 @@ class LiveMap:
         self._live: tuple[dmap.Frame, bytearray] | None = None
         self._merged = 0
         self.pose: dict[str, Any] | None = None  # robot, dock, path, room, active of the latest frame
+        self._settings: dict[str, dict[str, int]] | None = None  # each room's own settings, as the robot last sent
 
     @property
     def message(self) -> dict[str, Any] | None:
@@ -111,6 +113,11 @@ class LiveMap:
     @property
     def rooms(self) -> dict[str, dict[str, Any]]:
         return self._rooms[1]["rooms"] if self._rooms else {}
+
+    @callback
+    def refresh_soon(self, delay: float = EDITED_WAIT) -> None:
+        """Fetch a frame in a moment: after a change to the map, to show it."""
+        self._next = min(self._next, monotonic() + delay)
 
     @callback
     def listen(self, cb: Listener) -> CALLBACK_TYPE:
@@ -142,6 +149,13 @@ class LiveMap:
                 self._read_at = now
             self._fetching = True
             self._hass.async_create_background_task(self.refresh(), "dreame_vacuum_3d map")
+
+    async def fetch_now(self) -> None:
+        """Fetch a frame now (unless one is on its way)."""
+        if self._fetching:
+            return
+        self._fetching = True
+        await self.refresh()
 
     async def refresh(self) -> None:
         frames: list[dmap.Frame] = []
@@ -264,9 +278,11 @@ class LiveMap:
             cells, info = dmap.rooms(base, saved=saved is not None)
             self._rooms = (source, {"map_id": base.map_id, "grid": asdict(base.grid), "cells": cells, "rooms": info})
             self._saved = (saved.grid, dmap.floor_mask(saved), dmap.furniture(saved)) if saved else None
+            self._settings = None
             changed = True
         else:
             changed = False
+        changed = self._apply_settings(frame) or changed
         last = self.pose or {}
         dock = frame.dock or (tuple(last["dock"]) if last.get("dock") else None)
         # Docked ("oc"), the robot is on the dock; with no pose at all, it stays where it was last seen.
@@ -325,6 +341,7 @@ class LiveMap:
             update["active"] = active
         if "ai_obstacle" in frame.data or "laser_obstacle" in frame.data:
             update["obstacles"] = dmap.obstacles(frame)
+        settled = self._rooms is not None and self._apply_settings(frame)
         tail = dmap.path(frame)
         path = [{**s, "points": list(s["points"])} for s in self.pose.get("path", [])]  # earlier messages keep theirs
         for stroke in tail:
@@ -334,8 +351,45 @@ class LiveMap:
                 path.append({k: v for k, v in stroke.items() if k != "joins"})
         self.pose = {**self.pose, **update, "path": path}
         message = {**update, "path_tail": tail} if tail else update
+        if settled and self._rooms:  # not in the pose: the rooms are the map's
+            message = {**message, "rooms": self._rooms[1]["rooms"]}
         for cb in list(self._listeners):
             cb(message)
+
+    @callback
+    def set_room_settings(self, room: str, values: dict[str, int]) -> None:
+        """What a room's settings were just changed to, until the robot's next frame says what it took."""
+        if self._rooms is None or room not in self._rooms[1]["rooms"]:
+            return
+        rooms = dict(self._rooms[1]["rooms"])
+        rooms[room] = {**rooms[room], **values}
+        self._rooms[1]["rooms"] = rooms
+        self._settings = None  # the next frame's settings, whatever they are, apply
+        for cb in list(self._listeners):
+            cb({"rooms": rooms})
+
+    @callback
+    def set_room_name(self, room: str, name: str) -> None:
+        """A room's new name, until the robot's next map has it."""
+        if self._rooms is None or room not in self._rooms[1]["rooms"]:
+            return
+        rooms = dict(self._rooms[1]["rooms"])
+        rooms[room] = {**rooms[room], "name": name}
+        self._rooms[1]["rooms"] = rooms
+        for cb in list(self._listeners):
+            cb({"rooms": rooms})
+
+    def _apply_settings(self, frame: dmap.Frame) -> bool:
+        """Each room's own settings, from a frame that has them, into its rooms; True if they changed."""
+        settings = dmap.room_settings(frame)
+        if settings is None or settings == self._settings or self._rooms is None:
+            return False
+        self._settings = settings
+        info = self._rooms[1]
+        info["rooms"] = {
+            room: {**meta, **settings[room]} if room in settings else meta for room, meta in info["rooms"].items()
+        }
+        return True
 
     def _check_merge(self, frame: dmap.Frame) -> None:
         """How well the partial frames rebuilt the map, against the whole frame that follows them, for diagnostics."""

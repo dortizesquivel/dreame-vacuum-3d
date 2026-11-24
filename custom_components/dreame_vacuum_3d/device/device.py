@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 from random import randrange
@@ -210,14 +211,24 @@ class DreameDevice:
             value = mode
         await self.set("cleaning_mode", value)
 
-    async def _start_custom(self, status: int, parameters: str) -> Any:
+    async def _start_custom(self, status: int, parameters: str | None = None) -> Any:
         status_piid = self.caps.properties["status"][1]
-        props_piid = self.caps.properties["cleaning_properties"][1]
-        payload: list[dict] = [
-            {"piid": status_piid, "value": status},
-            {"piid": props_piid, "value": parameters},
-        ]
+        payload: list[dict] = [{"piid": status_piid, "value": status}]
+        if parameters is not None:
+            payload.append({"piid": self.caps.properties["cleaning_properties"][1], "value": parameters})
         return await self._action("start_custom", payload)
+
+    async def start_fast_mapping(self) -> Any:
+        """Drive round the house to map it, without cleaning (Tasshack start_fast_mapping)."""
+        result = await self._start_custom(Status.FAST_MAPPING.value)
+        self.segments, self.zones = None, None
+        return result
+
+    async def start_mapping(self) -> Any:
+        """Clean the whole house to make a new map (Tasshack start_mapping: start_custom CLEANING "3")."""
+        result = await self._start_custom(Status.CLEANING.value, "3")
+        self.segments, self.zones = None, None
+        return result
 
     def _levels(self) -> tuple[int, int]:
         """Current suction and water settings, the defaults for room/zone/spot cleaning (as in the app)."""
@@ -350,3 +361,48 @@ class DreameDevice:
         piid = self.caps.properties["map_extend_data"][1]
         value = json.dumps({"sm": {}, "mapid": map_id}, separators=(",", ":"))
         return await self._action("update_map_data", [{"piid": piid, "value": value}])
+
+    async def update_map_data(self, value: dict[str, Any]) -> Any:
+        """Change something on the saved map (Tasshack update_map_data): rooms, their settings, the map's name..."""
+        piid = self.caps.properties["map_extend_data"][1]
+        return await self._action(
+            "update_map_data", [{"piid": piid, "value": json.dumps(value, separators=(",", ":"))}]
+        )
+
+    async def set_custom_cleaning(self, rooms: dict[int, tuple[int, int, int]]) -> Any:
+        """Each room's own suction (0-3), water (1-3) and passes (1-3), for every room of the map (Tasshack
+        set_custom_cleaning "customeClean": the robot keeps water one higher there)."""
+        cleanset = [[room, suction, water + 1, repeats] for room, (suction, water, repeats) in sorted(rooms.items())]
+        return await self.update_map_data({"customeClean": cleanset})
+
+    async def set_cleaning_sequence(self, rooms: list[int]) -> Any:
+        """The order the robot cleans the rooms in; an empty list, its own order (Tasshack "cleanOrder")."""
+        return await self.update_map_data({"cleanOrder": [int(r) for r in rooms]})
+
+    async def rename_segment(self, map_id: int, room: int, name: str) -> Any:
+        """Give a room its own name (Tasshack set_segment_name "nsr", custom type 0)."""
+        encoded = base64.b64encode(name.encode()).decode()
+        return await self.update_map_data(
+            {"nsr": {str(room): {"name": encoded, "type": 0, "index": 0}}, "mapid": map_id}
+        )
+
+    async def rename_map(self, map_id: int, name: str) -> Any:
+        """Name a saved map (Tasshack rename_map "nrism"); an empty name, the robot's own."""
+        return await self.update_map_data({"nrism": {str(map_id): {"name": name or None}}})
+
+    async def delete_map(self, map_id: int) -> Any:
+        """Delete a saved map (Tasshack delete_map "cm")."""
+        return await self.update_map_data({"cm": {}, "mapid": map_id})
+
+    async def backup_map(self, map_id: int) -> Any:
+        """Save a copy of a map in the cloud, to restore it later (Tasshack backup_map)."""
+        piid = self.caps.properties["map_extend_data"][1]
+        return await self._action("backup_map", [{"piid": piid, "value": str(map_id)}])
+
+    async def restore_map(self, map_id: int, url: str) -> None:
+        """Put back a copy of a map from its file in the cloud (Tasshack restore_map_from_file)."""
+        await self.set("map_recovery", json.dumps({"map_id": map_id, "map_url": url}, separators=(",", ":")))
+
+    async def set_obstacle_ignore(self, x: int, y: int, code: int, ignored: bool) -> Any:
+        """Have the robot go over an obstacle it found, or avoid it again (Tasshack set_obstacle_ignore)."""
+        return await self.update_map_data({"obstacleignore": [int(x), int(y), int(code), 1 if ignored else 0]})

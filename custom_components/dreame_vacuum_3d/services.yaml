@@ -1,6 +1,6 @@
 # Portions derived from Tasshack/dreame-vacuum (MIT), see NOTICE.
 # Schemas and field names match Tasshack for Node-RED migration
-# (dreame_vacuum.* → dreame_vacuum_3d.*). Map-edit services are phase 4.
+# (dreame_vacuum.* → dreame_vacuum_3d.*).
 
 vacuum_clean_segment:
   target:
@@ -202,3 +202,168 @@ vacuum_dock_action:
             - "stop_washing"
             - "dry"
             - "stop_drying"
+
+vacuum_request_map:
+  target:
+    entity:
+      integration: dreame_vacuum_3d
+      domain: vacuum
+
+vacuum_start_fast_mapping:
+  target:
+    entity:
+      integration: dreame_vacuum_3d
+      domain: vacuum
+
+vacuum_start_mapping:
+  target:
+    entity:
+      integration: dreame_vacuum_3d
+      domain: vacuum
+
+vacuum_rename_segment:
+  target:
+    entity:
+      integration: dreame_vacuum_3d
+      domain: vacuum
+  fields:
+    segment_id:
+      example: "3"
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 63
+          mode: box
+    segment_name:
+      example: "Playroom"
+      required: true
+      selector:
+        text:
+
+vacuum_set_cleaning_sequence:
+  target:
+    entity:
+      integration: dreame_vacuum_3d
+      domain: vacuum
+  fields:
+    cleaning_sequence:
+      example: "[5,3,2,1,4] or []"
+      required: true
+      selector:
+        object:
+
+vacuum_set_custom_cleaning:
+  target:
+    entity:
+      integration: dreame_vacuum_3d
+      domain: vacuum
+  fields:
+    segment_id:
+      example: "[1,2,3]"
+      required: true
+      selector:
+        object:
+    suction_level:
+      example: "[0,2,3]"
+      required: true
+      selector:
+        object:
+    water_volume:
+      example: "[1,2,3]"
+      required: true
+      selector:
+        object:
+    repeats:
+      example: "[2,1,1]"
+      required: true
+      selector:
+        object:
+
+vacuum_rename_map:
+  target:
+    entity:
+      integration: dreame_vacuum_3d
+      domain: vacuum
+  fields:
+    map_id:
+      example: "14"
+      required: true
+      selector:
+        number:
+          mode: box
+    map_name:
+      example: "Ground Floor"
+      required: true
+      selector:
+        text:
+
+vacuum_delete_map:
+  target:
+    entity:
+      integration: dreame_vacuum_3d
+      domain: vacuum
+  fields:
+    map_id:
+      example: 14
+      required: false
+      selector:
+        number:
+          mode: box
+
+vacuum_backup_map:
+  target:
+    entity:
+      integration: dreame_vacuum_3d
+      domain: vacuum
+  fields:
+    map_id:
+      example: 14
+      required: false
+      selector:
+        number:
+          mode: box
+
+vacuum_restore_map:
+  target:
+    entity:
+      integration: dreame_vacuum_3d
+      domain: vacuum
+  fields:
+    recovery_map_index:
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          mode: box
+    map_id:
+      example: 14
+      required: false
+      selector:
+        number:
+          mode: box
+
+vacuum_set_obstacle_ignore:
+  target:
+    entity:
+      integration: dreame_vacuum_3d
+      domain: vacuum
+  fields:
+    x:
+      example: 819
+      required: true
+      selector:
+        number:
+          mode: box
+    y:
+      example: -263
+      required: true
+      selector:
+        number:
+          mode: box
+    obstacle_ignored:
+      example: "false"
+      required: true
+      selector:
+        boolean:

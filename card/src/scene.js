@@ -157,6 +157,10 @@ export class VacuumScene {
     this.scene.add(this.zoneGroup);
     this.onRoomTap = null;     // (room id) => void
     this.onZone = null;        // ([x0, y0, x1, y1] in map mm) => void, when a zone has been drawn
+    this.onPoint = null;       // ([x, y] in map mm) => void, a tap on the floor in point mode
+    this.onObstacleTap = null; // (obstacle) => void, a tap on an obstacle's tag
+    this.pointMode = false;
+    this.point = null;         // the point picked, drawn as a target on the floor
     this.onModelError = null;  // (error) => void
 
     this.raycaster = new Raycaster();
@@ -464,10 +468,12 @@ export class VacuumScene {
       const el = document.createElement('div');
       el.className = 'thing';
       el.dataset.warn = String(!!kind.warn);
+      el.dataset.ignored = String(!!o.ignored);
       el.textContent = thingLabel(o.type, this.lang);
       el.title = `${el.textContent} · ${o.confidence} %`;
       const tag = new CSS2DObject(el);
       tag.position.set(X, floor + Math.max(0.25, h + 0.15), Z);
+      if (o.code != null) tag.userData.obstacle = o;   // one the robot can be told to ignore
       this.thingGroup.add(mesh, ring, tag);
     }
     if (fresh.length && grid) {
@@ -718,6 +724,20 @@ export class VacuumScene {
       const r = element.getBoundingClientRect();
       return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
     });
+    // An obstacle's tag: what to do about the obstacle.
+    const thing = this.thingGroup.children.find((o) => o.isCSS2DObject && o.userData.obstacle && (() => {
+      const r = o.element.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+    })());
+    if (thing && !this.pointMode) {
+      this.onObstacleTap?.(thing.userData.obstacle);
+      return;
+    }
+    if (this.pointMode) {
+      const at = this._floorAt(e);
+      if (at) this.onPoint?.(at.map(Math.round));
+      return;
+    }
     if (label) {
       this.onRoomTap?.(label.userData.id);
       return;
@@ -745,6 +765,19 @@ export class VacuumScene {
     if (!on) this.setZones([]);
   }
 
+  /** While on, a tap on the floor picks a point (to clean around, or to send the robot to) instead of a room. */
+  setPointMode(on) {
+    this.pointMode = on;
+    this.renderer.domElement.style.cursor = on ? 'crosshair' : '';
+    if (!on) this.showPoint(null);
+  }
+
+  /** A target on the floor at [x, y] (map mm), or none. */
+  showPoint(point) {
+    this.point = point;
+    this.showZone(null);
+  }
+
   /** The zones [[x0, y0, x1, y1], …] (map mm) drawn on the floor. */
   setZones(rects) {
     this.zones = rects ?? [];
@@ -763,6 +796,16 @@ export class VacuumScene {
         const edge = new LineSegments(new BufferGeometry().setFromPoints([c[0], c[1], c[1], c[2], c[2], c[3], c[3], c[0]]),
           new LineBasicMaterial({ color: this.theme.accent }));
         this.zoneGroup.add(fill, edge);
+      }
+      if (this.point) {
+        const [X, Z] = this.xf.point(...this.point);
+        for (const [inner, outer, opacity] of [[0, 0.07, 1], [0.22, 0.27, 0.9], [0.27, 0.5, 0.18]]) {
+          const ring = new Mesh(inner ? new RingGeometry(inner, outer, 48) : new CircleGeometry(outer, 32),
+            new MeshBasicMaterial({ color: this.theme.accent, transparent: true, opacity, depthWrite: false }));
+          ring.rotation.x = -Math.PI / 2;
+          ring.position.set(X, y, Z);
+          this.zoneGroup.add(ring);
+        }
       }
     }
     this.dirty = true;
