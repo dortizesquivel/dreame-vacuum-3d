@@ -833,10 +833,10 @@ test('the settings button closes the sheet it opened', async ({ page }) => {
 test('at the lowest height the left column fits the card, and the settings open from it', async ({ page }) => {
   await open(page);
   const card = page.locator('dreame-vacuum-3d-card');
-  expect((await card.locator('[data-settings]').boundingBox()).height).toBe(32);   // at a normal height, as ever
+  expect((await card.locator('[data-settings]').boundingBox()).height).toBe(40);   // at a normal height, as ever
   await page.evaluate(() => { const { card } = window.demo; card.setConfig({ ...card._config, model: undefined, height: 200 }); });
   const view = await card.locator('.viewport').boundingBox();
-  for (const b of await card.locator('.zoom button').all()) {
+  for (const b of await card.locator('.viewport .seg button').all()) {
     const box = await b.boundingBox();
     expect(box.y).toBeGreaterThanOrEqual(view.y);
     expect(box.y + box.height).toBeLessThanOrEqual(view.y + view.height);

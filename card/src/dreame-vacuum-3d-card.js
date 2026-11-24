@@ -22,9 +22,15 @@ const ICONS = {   // Material Design Icons
   zone: 'M3,3H9V5H5V9H3V3M15,3H21V9H19V5H15V3M3,15H5V19H9V21H3V15M19,15H21V21H15V19H19V15M8,8H16V16H8V8Z',
   point: 'M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8M3.05,13H1V11H3.05C3.5,6.83 6.83,3.5 11,3.05V1H13V3.05C17.17,3.5 20.5,6.83 20.95,11H23V13H20.95C20.5,17.17 17.17,20.5 13,20.95V23H11V20.95C6.83,20.5 3.5,17.17 3.05,13M12,5A7,7 0 0,0 5,12A7,7 0 0,0 12,19A7,7 0 0,0 19,12A7,7 0 0,0 12,5Z',
   settings: 'M3,17V19H9V17H3M3,5V7H13V5H3M13,21V19H21V17H13V15H11V21H13M7,9V11H3V13H7V15H9V9H7M21,13V11H11V13H21M15,9H17V7H21V5H17V3H15V9Z',
-  station: 'M12,20A6,6 0 0,1 6,14C6,10 12,3.25 12,3.25C12,3.25 18,10 18,14A6,6 0 0,1 12,20Z',
+  station: 'M8,2H16A2,2 0 0,1 18,4V11.5H6V4A2,2 0 0,1 8,2M10,5V7H14V5H10M12,13A4.5,4.5 0 0,1 16.5,17.5A4.5,4.5 0 0,1 12,22A4.5,4.5 0 0,1 7.5,17.5A4.5,4.5 0 0,1 12,13Z',   // the dock's tower, the robot at its foot
+  plus: 'M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z',
+  minus: 'M19,13H5V11H19V13Z',
+  download: 'M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z',
   history: 'M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3',
 };
+const svg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[name]}"></path></svg>`;
+// A disc with a play triangle cut out of it, as a CSS mask: the disc takes the theme's accent.
+const PLAY = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12,2A10,10 0 1,0 12,22A10,10 0 1,0 12,2ZM10,8V16L16,12Z'/%3E%3C/svg%3E")`;
 
 // The cleaning settings: the robot's select entities by translation key. A level row draws a meter, its options in order.
 const SETTINGS = [
@@ -96,124 +102,215 @@ const STRINGS = {
 };
 
 const STYLE = `
-  :host { display: block; }
+  /* Every colour comes from the Home Assistant theme: a surface, two neutral fills, a tint of the accent and a glass for
+     what floats over the map. */
+  :host { display: block;
+    --dv-surface: var(--ha-card-background, var(--card-background-color, #fff));
+    --dv-fill: color-mix(in srgb, var(--primary-text-color) 7%, transparent);
+    --dv-fill-hover: color-mix(in srgb, var(--primary-text-color) 12%, transparent);
+    --dv-tonal: color-mix(in srgb, var(--primary-color) 16%, transparent);
+    --dv-glass: color-mix(in srgb, var(--dv-surface) 80%, transparent);
+    --dv-ease: cubic-bezier(.2, .8, .2, 1); --dv-play: ${PLAY}; }
   ha-card { overflow: hidden; }
-  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
-  .title { font-size: 16px; font-weight: 500; color: var(--primary-text-color); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button { -webkit-tap-highlight-color: transparent; }
+  button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  /* The header: who and how it is on the left, what to tell it on the right. */
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 12px 12px 16px; min-height: 40px; }
+  .about { display: grid; gap: 2px; min-width: 0; }
+  .title { font-size: 16px; font-weight: 500; line-height: 1.3; color: var(--primary-text-color); min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
   /* A block, not a flex box, so a long status ends in an ellipsis on a narrow card instead of pushing the buttons out. */
-  .chip { display: block; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font-size: 12px; font-weight: 500; padding: 6px 10px;
-    border: 1px solid var(--divider-color); border-radius: 999px; color: var(--primary-text-color); font-variant-numeric: tabular-nums; }
-  .chip::before { content: ""; display: inline-block; vertical-align: 1px; margin-right: 7px; width: 7px; height: 7px; border-radius: 50%;
-    background: var(--secondary-text-color); }
-  .chip[data-active="true"]::before { background: var(--primary-color); }
+  .chip { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 1.4;
+    color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
+  .chip:empty { display: none; }
+  .chip::before { content: ""; display: inline-block; vertical-align: 1px; margin-right: 7px; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--secondary-text-color); opacity: .6; }
+  .chip[data-active="true"]::before { background: var(--primary-color); opacity: 1; animation: dv-pulse 2s ease-out infinite; }
+  .chip[data-warn="true"] { color: var(--error-color, #db4437); }
+  .chip[data-warn="true"]::before { background: var(--error-color, #db4437); opacity: 1; animation: none; }
+  @keyframes dv-pulse { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary-color) 55%, transparent); }
+    70%, to { box-shadow: 0 0 0 6px transparent; } }
+  .ctl { display: flex; gap: 8px; flex: none; }
+  .ctl button { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+    color: var(--primary-text-color); background: var(--dv-fill); transition: background-color .15s, transform .15s var(--dv-ease); }
+  .ctl button:hover { background: var(--dv-fill-hover); }
+  /* Start or pause is the one thing most people come for: the filled button. */
+  .ctl [data-cmd="toggle"] { color: var(--text-primary-color, #fff); background: var(--primary-color); }
+  .ctl [data-cmd="toggle"]:hover { background: color-mix(in srgb, var(--primary-color) 88%, var(--primary-text-color)); }
+  .ctl button:active { transform: scale(.94); }
+  .ctl button:disabled { color: var(--disabled-text-color, #bdbdbd); cursor: default; background: var(--dv-fill); transform: none; }
+  .ctl svg { width: 22px; height: 22px; fill: currentColor; }
+
+  /* The map, and what floats over it. */
   .viewport { position: relative; border-top: 1px solid var(--divider-color); overflow: hidden; }
   .viewport canvas { display: block; }
   .labels { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
-  .room { font-size: 11px; font-weight: 500; padding: 2px 6px; border-radius: 6px; white-space: nowrap; color: var(--primary-text-color);
-    background: color-mix(in srgb, var(--card-background-color, #fff) 80%, transparent); }
+  .room { font-size: 11px; font-weight: 500; line-height: 1.3; padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+    color: var(--primary-text-color); background: var(--dv-glass); box-shadow: 0 1px 3px rgba(0, 0, 0, .18); }
   .room[data-current="true"] { color: var(--text-primary-color, #fff); background: var(--primary-color); }
-  .thing { font-size: 11px; font-weight: 500; padding: 2px 6px; border-radius: 6px; white-space: nowrap; color: #1a1a1a;
+  .thing { font-size: 11px; font-weight: 500; line-height: 1.3; padding: 3px 8px; border-radius: 999px; white-space: nowrap; color: #1a1a1a;
     background: color-mix(in srgb, var(--warning-color, #ffa600) 85%, white); box-shadow: 0 1px 3px rgba(0, 0, 0, .3); }
   .thing[data-warn="true"] { color: #fff; background: var(--error-color, #db4437); }
   .thing[data-ignored="true"] { opacity: .55; text-decoration: line-through; }
-  .badge[data-warn="false"] { color: var(--primary-text-color); background: color-mix(in srgb, var(--card-background-color, #fff) 92%, transparent); }
-  .ctl { display: flex; gap: 2px; flex: none; }
-  .ctl button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
-    color: var(--primary-text-color); background: none; }
-  .ctl button:hover { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
-  .ctl button:disabled { color: var(--disabled-text-color, #bdbdbd); cursor: default; background: none; }
-  .ctl svg { width: 22px; height: 22px; fill: currentColor; }
-  .head .right { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .status[hidden] { display: none; }
-  .status { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; padding: 24px; text-align: center;
-    color: var(--secondary-text-color); background: color-mix(in srgb, var(--card-background-color, #fff) 82%, transparent); }
-  .seg { position: absolute; z-index: 2; display: flex; gap: 2px; padding: 3px; border-radius: 8px; border: 1px solid var(--divider-color);
-    background: color-mix(in srgb, var(--card-background-color, #fff) 85%, transparent); backdrop-filter: blur(6px); }
-  .views { top: 10px; right: 10px; }
-  /* On a low card its buttons give up some height, so all of them stay in the card. */
-  .zoom { top: 10px; left: 10px; flex-direction: column; box-sizing: border-box; max-height: calc(100% - 20px); }
-  .seg button { font: inherit; font-size: 12px; font-weight: 500; color: var(--secondary-text-color); background: none; border: 0;
-    border-radius: 6px; padding: 8px 10px; min-height: 32px; min-width: 32px; cursor: pointer; }
-  .zoom button { font-size: 18px; line-height: 1; padding: 0; flex: 0 1 32px; min-height: 0; }
-  .seg button:hover { color: var(--primary-text-color); background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
+  .badge[data-warn="false"] { color: var(--primary-text-color); background: color-mix(in srgb, var(--dv-surface) 92%, transparent); }
+  .status { position: absolute; inset: 0; z-index: 3; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 24px;
+    text-align: center; font-size: 14px; line-height: 1.4; color: var(--secondary-text-color);
+    background: color-mix(in srgb, var(--dv-surface) 86%, transparent); }
+  .status[data-wait="true"]::before { content: ""; width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--dv-fill-hover);
+    border-top-color: var(--primary-color); animation: dv-spin .9s linear infinite; }
+  @keyframes dv-spin { to { transform: rotate(1turn); } }
+  .seg { position: absolute; z-index: 2; display: flex; gap: 2px; padding: 4px; border-radius: 14px; box-sizing: border-box;
+    border: 1px solid var(--divider-color); background: var(--dv-glass); backdrop-filter: blur(12px) saturate(1.4);
+    -webkit-backdrop-filter: blur(12px) saturate(1.4); box-shadow: 0 2px 8px rgba(0, 0, 0, .12); }
+  .seg button { position: relative; display: grid; place-items: center; font: inherit; font-size: 13px; font-weight: 500; line-height: 1;
+    color: var(--primary-text-color); background: none; border: 0; border-radius: 10px; padding: 0 12px; min-height: 36px; min-width: 36px;
+    cursor: pointer; transition: background-color .15s, color .15s; }
+  .seg button:hover { background: var(--dv-fill-hover); }
   .seg button[aria-pressed="true"] { color: var(--text-primary-color, #fff); background: var(--primary-color); }
-  button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
-  /* The drawer: opens under the map, so the map and its buttons stay in view. One surface, tinted with the theme's
-     colour; its rows are settings, not cards. */
-  .panel { --dv-track: color-mix(in srgb, var(--primary-text-color) 7%, transparent);
-    --dv-tray: color-mix(in srgb, var(--primary-color) 5%, var(--card-background-color, #fff));
-    container-type: inline-size; display: grid; gap: 14px; padding: 16px; border-top: 1px solid var(--divider-color);
-    background: var(--dv-tray); animation: dv-open .2s cubic-bezier(.2, .8, .2, 1); }
-  .panel[hidden] { display: none; }
+  .seg svg { width: 20px; height: 20px; fill: currentColor; }
+  .views { top: 10px; right: 10px; }
+  /* The tools, down the left: what to do on the map. On a low card they give up some height, so all stay in the card. */
+  .tools { top: 10px; left: 10px; flex-direction: column; max-height: calc(100% - 20px); }
+  .tools button { padding: 0; width: 40px; flex: 0 1 40px; min-height: 0; }
+  /* Moving about the map: small, in the far corner. */
+  .zoom { bottom: 10px; right: 10px; }
+  .zoom button { padding: 0; width: 36px; color: var(--secondary-text-color); }
+  .zoom button:hover { color: var(--primary-text-color); }
+  /* What a tool is for, beside it: for a mouse over it or the keyboard on it. */
+  .tools button::after, .zoom button::after { content: attr(aria-label); position: absolute; top: 50%; z-index: 1; width: max-content;
+    max-width: 200px; padding: 6px 10px; border-radius: 8px; font-size: 12px; font-weight: 500; line-height: 1.35; text-align: left;
+    color: var(--dv-surface); background: var(--primary-text-color); box-shadow: 0 2px 8px rgba(0, 0, 0, .2);
+    pointer-events: none; opacity: 0; visibility: hidden; transform: translateY(-50%); transition: opacity .12s .25s, visibility 0s .25s; }
+  .tools button::after { left: calc(100% + 12px); }
+  .zoom button::after { top: auto; bottom: calc(100% + 12px); right: 0; transform: none; }
+  .seg button[aria-pressed="true"]::after { display: none; }   /* its drawer says it now */
+  .tools button:focus-visible::after, .zoom button:focus-visible::after { opacity: 1; visibility: visible; }
+  @media (hover: hover) { .tools button:hover::after, .zoom button:hover::after { opacity: 1; visibility: visible; } }
+
+  /* The drawer: opens under the map, so the map and its buttons stay in view. Its head says what it is and closes it;
+     an offer to clean has its buttons at the foot, the one that starts it filled. */
+  .panel { container-type: inline-size; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center;
+    padding: 14px 16px 16px; border-top: 1px solid var(--divider-color);
+    background: color-mix(in srgb, var(--primary-color) 4%, var(--dv-surface)); animation: dv-open .22s var(--dv-ease); }
+  .panel > * { grid-column: 1 / -1; min-width: 0; }
   @keyframes dv-open { from { opacity: 0; transform: translateY(-6px); } }
-  .panel .msg { font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--primary-text-color); }
+  .panel .msg { font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--primary-text-color); text-wrap: pretty; }
   .panel .msg:empty { display: none; }
-  .panel .msg[data-error="true"] { font-size: 13px; font-weight: 500; color: var(--error-color, #db4437); padding: 8px 12px; border-radius: 10px;
-    background: color-mix(in srgb, var(--error-color, #db4437) 10%, transparent); }
-  .panel button { font: inherit; font-size: 13px; font-weight: 500; color: var(--primary-text-color); background: none; cursor: pointer;
-    border: 0; border-radius: 999px; padding: 0 16px; min-height: 40px; transition: background-color .15s, color .15s; }
-  .panel [hidden] { display: none !important; }
-  .panel button:hover { background: var(--dv-track); }
+  .panel .msg[data-error="true"] { display: flex; gap: 8px; font-size: 13px; font-weight: 500; color: var(--error-color, #db4437);
+    padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--error-color, #db4437) 10%, transparent); }
+  .panel .msg[data-error="true"]::before { content: "!"; flex: none; display: grid; place-items: center; width: 18px; height: 18px;
+    border-radius: 50%; font-size: 12px; font-weight: 700; color: var(--dv-surface); background: var(--error-color, #db4437); }
+  .panel button { font: inherit; font-size: 14px; font-weight: 500; color: var(--primary-text-color); background: none; cursor: pointer;
+    border: 0; border-radius: 999px; padding: 0 16px; min-height: 40px; transition: background-color .15s, color .15s, transform .15s var(--dv-ease); }
+  .panel button:hover { background: var(--dv-fill); }
   .panel .actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
-  .panel .actions button { color: var(--secondary-text-color); }
-  .panel .actions button:hover { color: var(--primary-text-color); }
-  .panel .actions button.primary { min-height: 44px; padding: 0 22px; font-size: 14px; font-weight: 600; color: var(--text-primary-color, #fff);
-    background: var(--primary-color); box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-color) 35%, transparent); }
+  .panel .actions button { background: var(--dv-fill); }
+  .panel .actions button:hover { background: var(--dv-fill-hover); }
+  .panel .actions .undo { margin-right: auto; padding: 0 12px; color: var(--secondary-text-color); background: none; }
+  .panel .actions .second { color: var(--primary-text-color); background: var(--dv-tonal); }
+  .panel .actions .second:hover { background: color-mix(in srgb, var(--primary-color) 26%, transparent); }
+  .panel .actions button.primary { min-height: 44px; padding: 0 24px; font-weight: 600; color: var(--text-primary-color, #fff);
+    background: var(--primary-color); }
   .panel .actions button.primary:hover { background: color-mix(in srgb, var(--primary-color) 88%, var(--primary-text-color)); }
-  .panel .actions button.primary:disabled { opacity: .6; cursor: default; }
-  @container (max-width: 420px) { .panel .actions button.primary { flex: 1 1 0; } }
-  .panel .list { display: grid; gap: 2px; max-height: 220px; overflow-y: auto; margin: 0 -8px; }
-  .panel .list[hidden] { display: none; }
-  .panel .list button { display: grid; gap: 2px; text-align: left; border-radius: 12px; padding: 10px 12px; min-height: 48px; }
+  .panel .actions button:active { transform: scale(.97); }
+  .panel .actions button:disabled { opacity: .6; cursor: default; transform: none; }
+  .panel .actions:has(.primary:not([hidden])) :is(.cancel, .second) { min-height: 44px; }
+  /* On a phone the button that starts it takes the width; with a second thing to do, a row of its own. */
+  @container (max-width: 420px) {
+    .panel .actions button.primary { flex: 1 1 0; }
+    .panel .actions:has(.second:not([hidden])) button { flex: 1 1 0; }
+    .panel .actions:has(.second:not([hidden])) button.primary { flex-basis: 100%; order: -1; }
+    .panel .actions .undo { flex: 1 1 100%; margin: 0; text-align: left; min-height: 36px; }
+  }
+  /* Nothing to start, only to close: Close sits in the drawer's head, beside what it says. */
+  .panel:not(:has(.actions > :not(.cancel):not([hidden]))) > .msg { grid-column: 1; grid-row: 1; }
+  .panel:not(:has(.actions > :not(.cancel):not([hidden]))) > .actions { grid-column: 2; grid-row: 1; align-self: start; }
+  .panel:not(:has(.actions > :not(.cancel):not([hidden]))) .cancel { min-height: 36px; padding: 0 14px; font-size: 13px; }
+  /* Past cleanings: rows to play again. */
+  .panel .list { display: grid; gap: 6px; max-height: 232px; overflow-y: auto; }
+  .panel .list button { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; row-gap: 1px; align-items: center;
+    text-align: left; border-radius: 12px; padding: 8px 14px 8px 8px; min-height: 52px; background: var(--dv-fill); }
+  .panel .list button:hover { background: var(--dv-fill-hover); }
+  .panel .list button[data-start]::before { content: ""; grid-row: 1 / 3; width: 36px; height: 36px;
+    background: var(--primary-color); -webkit-mask: var(--dv-play) center / contain no-repeat; mask: var(--dv-play) center / contain no-repeat; }
   .panel .list button:disabled { color: var(--secondary-text-color); cursor: default; background: none; }
-  .panel .list .when { font-weight: 600; }
-  .panel .list .what { font-size: 12px; color: var(--secondary-text-color); }
+  .panel .list button:disabled::before { background: var(--disabled-text-color, #bdbdbd); }
+  .panel .list .when { font-weight: 600; align-self: end; }
+  .panel .list .when::first-letter { text-transform: uppercase; }
+  .panel .list .what { font-size: 12px; color: var(--secondary-text-color); align-self: start; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }
   /* The dock's actions: tiles to tap, the icon above what it does. */
-  .panel .list:has([data-station-entity]) { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 0; max-height: none; }
-  .panel .list [data-station-entity] { justify-items: center; align-content: center; gap: 6px; text-align: center; min-height: 84px;
-    padding: 12px; border-radius: 16px; background: var(--card-background-color, #fff); border: 1px solid var(--divider-color); }
-  .panel .list [data-station-entity]:hover { border-color: var(--primary-color); background: var(--card-background-color, #fff); }
-  .panel .list [data-station-entity][data-busy] { color: var(--primary-color); border-color: var(--primary-color); }
-  .panel .list .ico { font-size: 24px; line-height: 1; }
-  .panel button.coverage, .panel button.tune { justify-self: start; display: inline-flex; align-items: center; gap: 8px; min-height: 36px;
-    padding: 0 14px; background: var(--dv-track); }
-  .panel button[aria-pressed="true"] { color: var(--text-primary-color, #fff); background: var(--primary-color); }
-  .panel .tune svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
-  .panel .tune[aria-expanded="true"] { color: var(--primary-color); }
-  .panel .opts { display: grid; gap: 14px; }
-  .panel .opts[hidden] { display: none; }
+  .panel .list:has([data-station-entity]) { grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; max-height: none; overflow: visible; }
+  .panel .list [data-station-entity] { grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: center; row-gap: 8px;
+    text-align: center; min-height: 92px; padding: 12px 8px; border-radius: 16px; line-height: 1.25; background: var(--dv-fill); }
+  .panel .list [data-station-entity][data-busy] { background: var(--dv-tonal); box-shadow: inset 0 0 0 1.5px var(--primary-color); }
+  .panel .list [data-station-entity]:active { transform: scale(.97); }
+  .panel .list .ico { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; font-size: 20px; line-height: 1;
+    background: var(--dv-surface); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+  /* Chips: the coverage switch, and the settings an offer will clean with. */
+  .panel button.coverage, .panel button.tune { justify-self: start; display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
+    min-height: 36px; padding: 0 14px; font-size: 13px; background: var(--dv-fill); }
+  .panel button.coverage:hover, .panel button.tune:hover { background: var(--dv-fill-hover); }
+  .panel button.coverage::before { content: ""; width: 14px; height: 14px; border-radius: 50%; box-sizing: border-box;
+    border: 2px solid var(--secondary-text-color); }
+  .panel button.coverage[aria-pressed="true"] { color: var(--text-primary-color, #fff); background: var(--primary-color); }
+  .panel button.coverage[aria-pressed="true"]::before { border-color: currentColor; background: currentColor; box-shadow: inset 0 0 0 2px var(--primary-color); }
+  .panel .tune svg { width: 18px; height: 18px; fill: currentColor; flex: none; color: var(--secondary-text-color); }
+  .panel .tune span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .panel .tune::after { content: ""; flex: none; width: 6px; height: 6px; margin: -3px 2px 0 0; border: solid var(--secondary-text-color);
+    border-width: 0 2px 2px 0; transform: rotate(45deg); transition: transform .2s var(--dv-ease); }
+  .panel .tune[aria-expanded="true"] { background: var(--dv-tonal); }
+  .panel .tune[aria-expanded="true"]::after { transform: translateY(3px) rotate(225deg); }
+  .panel .opts { display: grid; gap: 10px; }
   /* A setting: its name over its options, beside them when the card is wide. */
   .opts .field { display: grid; gap: 6px; }
   @container (min-width: 520px) { .opts .field { grid-template-columns: 88px 1fr; align-items: center; gap: 12px; } }
-  .opts .name { font-size: 12px; font-weight: 500; color: var(--secondary-text-color); }
-  /* The options: a track with a thumb that slides to the one picked, as on a dial. */
-  .opts .row { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 4px; border-radius: 14px;
-    background: var(--dv-track); isolation: isolate; }
-  .opts .row::before { content: ""; position: absolute; z-index: -1; top: 4px; bottom: 4px; border-radius: 10px; background: var(--primary-color);
-    width: calc((100% - 8px) / var(--n, 1)); left: calc(4px + (100% - 8px) / var(--n, 1) * var(--i, 0));
-    box-shadow: 0 2px 6px color-mix(in srgb, var(--primary-color) 35%, transparent);
+  .opts .name { font-size: 13px; font-weight: 500; color: var(--secondary-text-color); }
+  /* The options: a track with a thumb that slides to the one picked, as on a dial. The thumb is a tint of the accent,
+     so the picked option's name stays in the text colour: easy to read on any theme. */
+  .opts .row { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 3px; border-radius: 14px;
+    background: var(--dv-fill); isolation: isolate; }
+  .opts .row::before { content: ""; position: absolute; z-index: -1; top: 3px; bottom: 3px; border-radius: 11px;
+    background: color-mix(in srgb, var(--primary-color) 24%, var(--dv-surface));
+    width: calc((100% - 6px) / var(--n, 1)); left: calc(3px + (100% - 6px) / var(--n, 1) * var(--i, 0));
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--primary-color) 70%, transparent), 0 1px 3px rgba(0, 0, 0, .14);
     transition: left .28s cubic-bezier(.3, 1.2, .4, 1); }
   .opts .row:not([style*="--i"])::before { opacity: 0; }
-  .opts .row button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; min-height: 48px;
-    padding: 6px 4px; border-radius: 10px; font-weight: 500; color: var(--secondary-text-color); background: none; }
+  .opts .row button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; min-height: 44px;
+    padding: 6px 4px; border-radius: 11px; font-size: 13px; font-weight: 500; color: var(--secondary-text-color); background: none; }
   .opts .row button:hover { background: none; }
-  .opts .row button[aria-checked="true"] { color: var(--text-primary-color, #fff); font-weight: 600; }
+  .opts .row button[aria-checked="true"] { color: var(--primary-text-color); font-weight: 600; }
   .opts .row button:disabled { opacity: .4; cursor: default; }
   .opts .row button:not(:disabled):not([aria-checked="true"]):hover { color: var(--primary-text-color); }
+  .opts .row button:focus-visible { outline-offset: -2px; }
   .opts .row span { line-height: 1.2; text-align: center; overflow-wrap: anywhere; }
   /* The level meter: one bar per step up to this one, rising, so the steps read at a glance from across the room. */
-  .opts .meter { display: flex; align-items: flex-end; gap: 3px; height: 16px; }
+  .opts .meter { display: flex; align-items: flex-end; gap: 3px; height: 14px; }
   .opts .meter i { width: 4px; border-radius: 2px; background: currentColor; opacity: .28; }
   .opts .meter i[data-on] { opacity: 1; }
-  .opts .note { margin: 0; font-size: 12px; color: var(--secondary-text-color); }
-  @media (prefers-reduced-motion: reduce) { .panel { animation: none; } .opts .row::before { transition: none; } }
-  .routines { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 12px; border-top: 1px solid var(--divider-color); }
-  .routines[hidden] { display: none; }
-  .routines button { font: inherit; font-size: 13px; font-weight: 500; color: var(--primary-text-color); background: none;
-    border: 1px solid var(--divider-color); border-radius: 999px; padding: 8px 14px; min-height: 36px; cursor: pointer; }
-  .routines button:hover { background: color-mix(in srgb, var(--primary-text-color) 8%, transparent); }
-  .routines button:disabled { color: var(--disabled-text-color, #bdbdbd); cursor: default; background: none; }
+  .opts [aria-checked="true"] .meter i[data-on] { background: var(--primary-color); }
+  .opts .note { margin: 0; font-size: 12px; line-height: 1.4; color: var(--secondary-text-color); }
+
+  /* The routines: one tap starts one. */
+  .routines { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--divider-color); }
+  .routines button { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 13px; font-weight: 500;
+    color: var(--primary-text-color); background: var(--dv-fill); border: 0; border-radius: 999px; padding: 0 16px 0 12px; min-height: 40px;
+    cursor: pointer; transition: background-color .15s, transform .15s var(--dv-ease); }
+  .routines button::before { content: ""; flex: none; width: 0; height: 0; border: solid transparent; border-width: 5px 0 5px 8px;
+    border-left-color: var(--primary-color); }
+  .routines button:hover { background: var(--dv-fill-hover); }
+  .routines button:active { transform: scale(.97); }
+  .routines button:disabled { color: var(--disabled-text-color, #bdbdbd); cursor: default; background: none; transform: none;
+    box-shadow: inset 0 0 0 1px var(--divider-color); }
+  .routines button:disabled::before { border-left-color: currentColor; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .panel, .chip::before, .status::before { animation: none !important; }
+    .opts .row::before, .panel .tune::after, button, .seg button::after { transition: none !important; }
+    button:active { transform: none !important; }
+  }
 `;
 
 /** Make node `a` the same as `b`, keeping a's nodes where they have the same shape; where not, b's replace them. */
@@ -316,9 +413,9 @@ class DreameVacuum3DCard extends HTMLElement {
     root.innerHTML = `
       <style>${STYLE}</style>
       <ha-card>
-        <div class="head"><div class="title"></div><div class="right"><div class="chip" role="status"></div>
+        <div class="head"><div class="about"><div class="title"></div><div class="chip" role="status"></div></div>
           <div class="ctl"><button type="button" data-cmd="toggle"><svg viewBox="0 0 24 24"><path></path></svg></button>
-          <button type="button" data-cmd="return_to_base"><svg viewBox="0 0 24 24"><path d="${ICONS.dock}"></path></svg></button></div></div></div>
+          <button type="button" data-cmd="return_to_base"><svg viewBox="0 0 24 24"><path d="${ICONS.dock}"></path></svg></button></div></div>
         <div class="viewport">
           <div class="seg views">
             <button type="button" data-view="3d"></button>
@@ -326,14 +423,16 @@ class DreameVacuum3DCard extends HTMLElement {
             <button type="button" data-follow></button>
           </div>
           <div class="seg zoom">
-            <button type="button" data-zoom="in">+</button>
-            <button type="button" data-zoom="out">−</button>
-            <button type="button" data-download>⤓</button>
-            <button type="button" data-zone><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.zone}"></path></svg></button>
-            <button type="button" data-point><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.point}"></path></svg></button>
-            <button type="button" data-history><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.history}"></path></svg></button>
-            <button type="button" data-station hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.station}"></path></svg></button>
-            <button type="button" data-settings hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="${ICONS.settings}"></path></svg></button>
+            <button type="button" data-zoom="in">${svg('plus')}</button>
+            <button type="button" data-zoom="out">${svg('minus')}</button>
+            <button type="button" data-download>${svg('download')}</button>
+          </div>
+          <div class="seg tools">
+            <button type="button" data-zone>${svg('zone')}</button>
+            <button type="button" data-point>${svg('point')}</button>
+            <button type="button" data-history aria-pressed="false">${svg('history')}</button>
+            <button type="button" data-station aria-pressed="false" hidden>${svg('station')}</button>
+            <button type="button" data-settings aria-pressed="false" hidden>${svg('settings')}</button>
           </div>
           <div class="status"></div>
         </div>
@@ -357,7 +456,7 @@ class DreameVacuum3DCard extends HTMLElement {
     this._els = { title: $('.title'), chip: $('.chip'), viewport: $('.viewport'), status: $('.status'), panel: $('.panel'),
       msg: $('.panel .msg'), clean: $('.panel .clean'), cancel: $('.panel .cancel'), undo: $('.panel .undo'), routines: $('.routines'),
       list: $('.panel .list'), coverage: $('.panel .coverage'), opts: $('.panel .opts'), tune: $('.panel .tune'),
-      settings: $('[data-settings]'), station: $('[data-station]'), second: $('.panel .second') };
+      settings: $('[data-settings]'), history: $('[data-history]'), station: $('[data-station]'), second: $('.panel .second') };
     root.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => {
       this._view = b.dataset.view;
       this._follow = false;
@@ -375,7 +474,10 @@ class DreameVacuum3DCard extends HTMLElement {
     root.querySelector('[data-zone]').addEventListener('click', () => this._setZoneMode(!this._zoneMode));
     root.querySelector('[data-point]').addEventListener('click', () => this._setPointMode(!this._pointMode));
     this._els.second.addEventListener('click', () => this._second?.());
-    root.querySelector('[data-history]').addEventListener('click', () => this._showHistory());
+    this._els.history.addEventListener('click', () => {   // again closes the list; from a replay it goes back to the list
+      if (this._els.history.getAttribute('aria-pressed') === 'true' && !this._els.list.hidden) this._pick(null);
+      else this._showHistory();
+    });
     this._els.settings.addEventListener('click', () => {
       if (this._els.settings.getAttribute('aria-pressed') === 'true') this._pick(null);
       else this._showSettings();
@@ -487,19 +589,13 @@ class DreameVacuum3DCard extends HTMLElement {
     r.querySelector('[data-zoom="in"]').setAttribute('aria-label', this._t('zoomIn'));
     r.querySelector('[data-zoom="out"]').setAttribute('aria-label', this._t('zoomOut'));
     r.querySelector('[data-download]').setAttribute('aria-label', this._t('download'));
-    r.querySelector('[data-download]').title = this._t('download');
     r.querySelector('[data-history]').setAttribute('aria-label', this._t('history'));
-    r.querySelector('[data-history]').title = this._t('history');
     r.querySelector('[data-zone]').setAttribute('aria-label', this._t('zone'));
-    r.querySelector('[data-zone]').title = this._t('zone');
     r.querySelector('[data-zone]').setAttribute('aria-pressed', String(!!this._zoneMode));
     r.querySelector('[data-point]').setAttribute('aria-label', this._t('point'));
-    r.querySelector('[data-point]').title = this._t('point');
     r.querySelector('[data-point]').setAttribute('aria-pressed', String(!!this._pointMode));
     r.querySelector('[data-station]').setAttribute('aria-label', this._t('station'));
-    r.querySelector('[data-station]').title = this._t('station');
     r.querySelector('[data-settings]').setAttribute('aria-label', this._t('settings'));
-    r.querySelector('[data-settings]').title = this._t('settings');
     r.querySelector('[data-cmd="return_to_base"]').setAttribute('aria-label', this._t('dock'));
     r.querySelector('[data-cmd="return_to_base"]').title = this._t('dock');
   }
@@ -522,6 +618,7 @@ class DreameVacuum3DCard extends HTMLElement {
     if (st?.attributes.battery_level != null) parts.push(`${st.attributes.battery_level} %`);
     this._els.chip.textContent = parts.join(' · ');
     this._els.chip.dataset.active = String(['cleaning', 'returning'].includes(st?.state));
+    this._els.chip.dataset.warn = String(failing || st?.state === 'error');
     this._scene?.setCleaning(st?.state === 'cleaning');
     this._scene?.setBadge(badge && doing ? `${badge} ${doing}` : null, failing || st?.state === 'error');
     // Where it stopped for an error (a warning while it goes on cleaning isn't where it got stuck).
@@ -769,6 +866,7 @@ class DreameVacuum3DCard extends HTMLElement {
   _status(text) {
     this._els.status.textContent = text;
     this._els.status.hidden = !text;
+    this._els.status.dataset.wait = String(!!text && text === this._t('waiting'));
   }
 
   _subscribe() {
@@ -1002,6 +1100,7 @@ class DreameVacuum3DCard extends HTMLElement {
     panel.hidden = false;
     clean.hidden = true;
     cancel.textContent = this._t('close');
+    this._els.history.setAttribute('aria-pressed', 'true');
     const seq = this._seq;
     let cleanings;
     try {
@@ -1128,6 +1227,7 @@ class DreameVacuum3DCard extends HTMLElement {
       this._els.tune.hidden = true;
       this._els.settings.setAttribute('aria-pressed', 'false');
       this._els.station.setAttribute('aria-pressed', 'false');
+      this._els.history.setAttribute('aria-pressed', 'false');
       this._stationOpen = false;
     }
     if (id == null && this._zoneMode) {
