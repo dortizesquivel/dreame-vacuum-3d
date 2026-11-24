@@ -688,6 +688,7 @@ test('on a low card the settings open under the map, leaving the map and its but
   await page.evaluate(() => { const { card } = window.demo; card.setConfig({ ...card._config, model: undefined, height: 240 }); });
   const card = page.locator('dreame-vacuum-3d-card');
   await card.locator('[data-settings]').click();
+  await card.locator('.panel').evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));   // opened
   const [view, panel] = [await card.locator('.viewport').boundingBox(), await card.locator('.panel').boundingBox()];
   expect(panel.y).toBeGreaterThanOrEqual(view.y + view.height - 1);
   await expect(card.locator('[data-settings]')).toHaveAttribute('aria-pressed', 'true');
@@ -841,6 +842,7 @@ test('at the lowest height the left column fits the card, and the settings open 
     expect(box.y + box.height).toBeLessThanOrEqual(view.y + view.height);
   }
   await card.locator('[data-settings]').click();
+  await card.locator('.panel').evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));   // opened
   const panel = await card.locator('.panel').boundingBox();
   expect(panel.y).toBeGreaterThanOrEqual(view.y + view.height - 1);   // under the map, not over it
   const three = card.locator('.opts [data-key="repeats"] [data-option="3"]');
