@@ -121,11 +121,15 @@ const STYLE = `
   .about { display: grid; gap: 2px; min-width: 0; }
   .title { font-size: 16px; font-weight: 500; line-height: 1.3; color: var(--primary-text-color); min-width: 0; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap; }
-  /* A block, not a flex box, so a long status ends in an ellipsis on a narrow card instead of pushing the buttons out. */
-  .chip { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 1.4;
+  /* On a narrow card what it is doing ends in an ellipsis; the battery always shows. */
+  .chip { display: flex; align-items: center; min-width: 0; white-space: nowrap; font-size: 13px; line-height: 1.4;
     color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
-  .chip:empty { display: none; }
-  .chip::before { content: ""; display: inline-block; vertical-align: 1px; margin-right: 7px; width: 8px; height: 8px; border-radius: 50%;
+  .chip[hidden] { display: none; }
+  .chip .what { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .chip .bat { flex: none; }
+  .chip .bat:empty { display: none; }
+  .chip .what:not(:empty) + .bat::before { content: "·"; margin: 0 .4em; }
+  .chip::before { content: ""; flex: none; margin-right: 7px; width: 8px; height: 8px; border-radius: 50%;
     background: var(--secondary-text-color); opacity: .6; }
   .chip[data-active="true"]::before { background: var(--primary-color); opacity: 1; animation: dv-pulse 2s ease-out infinite; }
   .chip[data-warn="true"] { color: var(--error-color, #db4437); }
@@ -172,10 +176,10 @@ const STYLE = `
   .seg svg { width: 20px; height: 20px; fill: currentColor; }
   .views { top: 10px; right: 10px; }
   /* The tools, down the left: what to do on the map. On a low card they give up some height, so all stay in the card. */
-  .tools { top: 10px; left: 10px; flex-direction: column; max-height: calc(100% - 20px); }
+  .tools { top: 10px; left: 10px; flex-direction: column; max-height: calc(100% - 76px); }
   .tools button { padding: 0; width: 40px; flex: 0 1 40px; min-height: 0; }
-  /* Moving about the map: small, in the far corner. */
-  .zoom { bottom: 10px; right: 10px; }
+  /* Moving about the map: small, under the tools, away from the dock (most docks sit by a wall, not under the tools). */
+  .zoom { bottom: 10px; left: 10px; }
   .zoom button { padding: 0; width: 36px; color: var(--secondary-text-color); }
   .zoom button:hover { color: var(--primary-text-color); }
   /* What a tool is for, beside it: for a mouse over it or the keyboard on it. */
@@ -184,7 +188,7 @@ const STYLE = `
     color: var(--dv-surface); background: var(--primary-text-color); box-shadow: 0 2px 8px rgba(0, 0, 0, .2);
     pointer-events: none; opacity: 0; visibility: hidden; transform: translateY(-50%); transition: opacity .12s .25s, visibility 0s .25s; }
   .tools button::after { left: calc(100% + 12px); }
-  .zoom button::after { top: auto; bottom: calc(100% + 12px); right: 0; transform: none; }
+  .zoom button::after { top: auto; bottom: calc(100% + 12px); left: 0; transform: none; }
   .seg button[aria-pressed="true"]::after { display: none; }   /* its drawer says it now */
   .tools button:focus-visible::after, .zoom button:focus-visible::after { opacity: 1; visibility: visible; }
   @media (hover: hover) { .tools button:hover::after, .zoom button:hover::after { opacity: 1; visibility: visible; } }
@@ -615,8 +619,14 @@ class DreameVacuum3DCard extends HTMLElement {
     if (st) parts.push(doing ?? format(st));
     const room = this._map?.rooms?.[this._map.room]?.name;
     if (room) parts.push(room);
-    if (st?.attributes.battery_level != null) parts.push(`${st.attributes.battery_level} %`);
-    this._els.chip.textContent = parts.join(' · ');
+    const battery = st?.attributes.battery_level != null ? `${st.attributes.battery_level} %` : '';
+    const chip = this._els.chip;
+    if (!chip.firstChild) chip.append(Object.assign(document.createElement('span'), { className: 'what' }),
+      Object.assign(document.createElement('span'), { className: 'bat' }));
+    chip.firstChild.textContent = parts.join(' · ');
+    chip.lastChild.textContent = battery;
+    chip.setAttribute('aria-label', [...parts, battery].filter(Boolean).join(', '));
+    chip.hidden = !parts.length && !battery;
     this._els.chip.dataset.active = String(['cleaning', 'returning'].includes(st?.state));
     this._els.chip.dataset.warn = String(failing || st?.state === 'error');
     this._scene?.setCleaning(st?.state === 'cleaning');
